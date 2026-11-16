@@ -15,5 +15,35 @@
   "review": {
     "cmd": "kiro-run {workdir} {task} claude-sonnet-5.5 medium",
     "timeoutSec": 900
+  },
+  "answers": {
+    "login": {
+      "choice": "B",
+      "date": "2026-11-16"
+    },
+    "personal": {
+      "choice": "B",
+      "date": "2026-11-16"
+    },
+    "db": {
+      "choice": "B",
+      "date": "2026-11-16"
+    },
+    "external": {
+      "choice": "B",
+      "date": "2026-11-16"
+    },
+    "team": {
+      "choice": "B",
+      "date": "2026-11-16"
+    },
+    "reviewer": {
+      "choice": "A",
+      "date": "2026-11-16"
+    },
+    "deploy": {
+      "choice": "B",
+      "date": "2026-11-16"
+    }
   }
 }
