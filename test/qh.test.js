@@ -621,6 +621,14 @@ test('init in a new folder creates rules and a test-free draft without failing',
   assert.strictEqual(fs.existsSync(path.join(root, '.quality/probe.mjs')), false);
 });
 
+test('express only in devDependencies is a test tool, not the app: no probe draft', () => {
+  const root = project({ 'package.json': JSON.stringify({ scripts: { test: 'node --test' }, devDependencies: { express: '^5' } }) });
+  const r = qh(root, ['init', root]);
+  assert.strictEqual(r.status, 0);
+  assert.match(r.stdout, /express=아니오/);
+  assert.strictEqual(fs.existsSync(path.join(root, '.quality/probe.mjs')), false);
+});
+
 test('init outside a git repository is an environment problem', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-nogit-'));
   const r = qh(dir, ['init', dir]);
