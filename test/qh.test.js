@@ -456,6 +456,20 @@ test('with external services, a change to integration code needs a failure-case 
   assert.doesNotMatch(policyOf(root), /연동 실패 테스트/);
 });
 
+test('touching a risk area asks the person a task question; a "changes it" answer makes the ADR mandatory', () => {
+  const root = repo({ ...BASIC, risks: { db: { paths: ['migrations/**'] } } });
+  const card = (extra) => write(root, '.quality/tasks/work.md', `${DECLARED}${extra}`);
+  write(root, 'migrations/002.sql', 'ALTER TABLE t ADD c TEXT;');
+  card('');
+  const d = stopDecision(qh(root, ['hook', 'stop'], '{}'));
+  assert.match(d.reason, /작업 질문\(db, migrations\/002\.sql\): "이 작업이 이미 쌓인 데이터를 바꾸거나 지우나요\?"/);
+  card('ADR 불필요: 컬럼 추가만 함\n작업 질문 db: B 새 컬럼만\n');
+  assert.deepStrictEqual(statusJson(root).taskQuestions, []);
+  assert.doesNotMatch(policyOf(root), /ADR/);
+  card('ADR 불필요: 컬럼 추가만 함\n작업 질문 db: A 기존 값 옮김\n');
+  assert.match(policyOf(root), /ADR: .*작업 질문에서 db 변경 있음이라 ADR 불필요는 안 됨/);
+});
+
 // ---------- init ----------
 
 function project(files) {

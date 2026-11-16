@@ -252,7 +252,7 @@ function assess(root, phase = 'stop') {
   const config = loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
-  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
+  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
   if (env.length) return { config, ...out };
   const base = git(root, ['merge-base', config.baseRef, 'HEAD']);
   const changed = changedFiles(root, base);
@@ -273,6 +273,7 @@ function assess(root, phase = 'stop') {
     policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : [],
     structure: changed.length ? structureProblems(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
+    taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     configChanges: criteria,
     review: reviewStatus(root, now),
@@ -292,6 +293,7 @@ function triage(a) {
   const human = [
     ...a.undeclared.map((r) => `${r}: 접근 수준 미선언 → 누가 접근할 수 있는지 사용자에게 묻고, 답을 받은 뒤 ${ACCESS_FILE}의 routes에 적기`),
     ...a.decisions.map((d) => `작업 카드: ${d}`),
+    ...a.taskQuestions,
     ...a.configChanges.map((c) => `기준 변경(사람 확인 필요): ${c}`),
   ];
   const env = [...a.env, ...a.checks.filter((c) => c.state === '환경 오류').map((c) => `검사 ${c.name}: ${c.detail.join(' ')}`)];
@@ -389,7 +391,7 @@ function cmdPr(root) {
   const t = triage(a);
   const setup = doctor(root);
   console.log(`\n${formatStatus(a)}\n${formatDoctor(setup)}`);
-  const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || t.env.length || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
+  const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
@@ -458,7 +460,8 @@ function cmdRoutesBaseline(root, args) {
 }
 
 function hookSessionStart(root) {
-  console.log(`${formatStatus(assess(root))}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
+  const unasked = loadConfig(root)?.answers ? '' : '\n(qh) 프로젝트 질문에 아직 답하지 않았다 → 사용자에게 알리고, 원하면 .quality/qh/lib/ask-guide.md대로 질문 세션을 연다.';
+  console.log(`${formatStatus(assess(root))}${unasked}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
   return EXIT.ok;
 }
 
