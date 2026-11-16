@@ -6,74 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-
-const QH = path.join(__dirname, '..', 'bin', 'qh.js');
-
-// A stand-in code map on PATH: logs its arguments, and builds/installs like the real one
-// would (an index file, an .mcp.json entry for the current folder).
-const MAP_STUB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-map-'));
-const MAP_LOG = path.join(MAP_STUB_DIR, 'calls.log');
-fs.writeFileSync(path.join(MAP_STUB_DIR, 'code-review-graph'), `#!/bin/sh
-echo "$@" >> "${MAP_LOG}"
-case "$1" in
-  build) mkdir -p .code-review-graph && : > .code-review-graph/graph.db ;;
-  install) printf '{"mcpServers":{"code-review-graph":{"cwd":"%s"}}}' "$PWD" > .mcp.json ;;
-esac
-`, { mode: 0o755 });
-const TEST_ENV = { ...process.env, PATH: `${MAP_STUB_DIR}:${process.env.PATH}` };
-
-function sh(cwd, cmd, args) {
-  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')}: ${r.stderr}`);
-  return r.stdout.trim();
-}
-
-function repo(config, files = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-core-'));
-  sh(root, 'git', ['init', '-q', '-b', 'main']);
-  sh(root, 'git', ['config', 'user.email', 't@example.invalid']);
-  sh(root, 'git', ['config', 'user.name', 't']);
-  write(root, '.quality/config.json', JSON.stringify(config));
-  write(root, 'src/a.js', '1');
-  for (const [rel, body] of Object.entries(files)) write(root, rel, body);
-  sh(root, 'git', ['add', '-A']);
-  sh(root, 'git', ['commit', '-qm', 'init']);
-  sh(root, 'git', ['checkout', '-qb', 'work']);
-  return root;
-}
-
-function write(root, rel, body) {
-  fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
-  fs.writeFileSync(path.join(root, rel), body);
-}
-
-function qh(root, args, input) {
-  return spawnSync(process.execPath, [QH, ...args], { cwd: root, encoding: 'utf8', input, env: TEST_ENV });
-}
-
-function statusJson(root) {
-  const r = qh(root, ['status', '--json']);
-  assert.strictEqual(r.status, 0, r.stderr);
-  return JSON.parse(r.stdout);
-}
-
-// Stop blocks with exit 0 + {"decision":"block"} on stdout: Claude Code documents it,
-// and Kiro Stop hooks in practice rely on it (non-zero exits only warn the user there).
-function stopDecision(r) {
-  assert.strictEqual(r.status, 0, r.stderr);
-  return r.stdout.trim() ? JSON.parse(r.stdout) : null;
-}
-
-const stateOf = (s, name) => s.checks.find((c) => c.name === name)?.state;
-
-// Always-on rules want tests and docs with every code change, or a reason in the card.
-const DECLARED = '테스트 불필요: 상수 하나만 바꿈\n문서 영향 없음: 사용자에게 안 보임\n';
-
-const BASIC = {
-  baseRef: 'main',
-  checks: { unit: { cmd: 'node -e "process.exit(0)"' } },
-  common: ['unit'],
-};
+const { MAP_LOG, sh, repo, write, qh, statusJson, stopDecision, stateOf, DECLARED, BASIC } = require('./helpers');
 
 test('tree hash covers untracked files, skips ignored files and evidence, and leaves the real index alone', () => {
   const root = repo(BASIC, { '.gitignore': 'ignored.txt\n' });
@@ -139,56 +72,6 @@ test('a risk path adds its checks and requires its docs to change in the same wo
   assert.deepStrictEqual(s.checks.map((c) => c.name).sort(), ['authz', 'unit']);
   assert.deepStrictEqual(s.risks, [{ risk: 'authz', files: ['src/routes/t.js'] }]);
   assert.deepStrictEqual(s.docsMissing, [{ risk: 'authz', doc: 'docs/permissions.md' }]);
-});
-
-test('stop blocks while a required check has no current evidence, and allows after it passes', () => {
-  const root = repo(BASIC);
-  write(root, 'src/a.js', '2');
-  write(root, '.quality/tasks/work.md', DECLARED);
-  const blocked = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
-  assert.strictEqual(blocked.decision, 'block');
-  assert.match(blocked.reason, /unit.*미실행/);
-  qh(root, ['check']);
-  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{}')), null);
-});
-
-test('stop does not block again when the agent changed nothing since the last block', () => {
-  const root = repo(BASIC);
-  write(root, 'src/a.js', '2');
-  write(root, '.quality/tasks/work.md', DECLARED);
-  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}')).decision, 'block');
-  const repeat = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
-  assert.notStrictEqual(repeat?.decision, 'block', 'same tree, same items: the agent could not fix it, so stop looping');
-  assert.match(repeat.systemMessage, /unit.*미실행/);
-  write(root, 'src/a.js', '3');
-  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}')).decision, 'block', 'a new change is checked again');
-});
-
-test('stop runs built-in checks itself and blocks on their failures', () => {
-  const root = repo(
-    {
-      baseRef: 'main',
-      checks: { sql: { builtin: 'sql-prepare', migrations: 'migrations/*.sql', src: ['src/**/*.js'] } },
-      common: ['sql'],
-    },
-    { 'migrations/001.sql': 'CREATE TABLE t (a TEXT);' },
-  );
-  write(root, 'src/a.js', "db.prepare('INSERT INTO t (b) VALUES (?)');");
-  const d = stopDecision(qh(root, ['hook', 'stop'], '{}'));
-  assert.match(d.reason, /src\/a\.js:1 .*no column named b/);
-});
-
-test('human decisions and base changes turn the agent back once, not on the repeat stop', () => {
-  const root = repo(BASIC);
-  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, checks: { unit: { cmd: 'true' } } }));
-  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 관리자는 모든 회사를 보나?\n- [x] 끝난 질문\n');
-  write(root, 'docs/decisions.md', '- 2026-11-16 · unit을 true로 · 예시 · 없음\n');
-  qh(root, ['check']);
-  const first = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}'));
-  assert.match(first.reason, /관리자는 모든 회사를 보나/);
-  assert.doesNotMatch(first.reason, /끝난 질문/);
-  assert.match(first.reason, /checks\.unit\.cmd/);
-  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}')), null);
 });
 
 test('a check that runs out of time is reported to the person, not handed to the agent to fix', () => {

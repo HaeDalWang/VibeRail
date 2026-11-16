@@ -461,36 +461,46 @@ const warningLine = (a) => {
   return files.length ? `qh 경고(막지 않음): 만진 파일에 원래 있던 중복 — ${files.join(', ')} (자세히: qh status)` : null;
 };
 
-// AI-fix items block until the agent changes something: a repeat stop on the same tree with
-// the same items is let through with a note to the user (the harness does not cap repeats).
-// Human and environment items turn the agent back only once (stop_hook_active false).
+// The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
+// It does not rely on stop_hook_active (Claude Code does not cap repeats; Kiro may not send it).
+// - AI-fix items block again only after the tree changed, and at most MAX_SAME_BLOCKS times in a row.
+// - Questions for the person and environment errors are handed back once per distinct content.
+// Anything not handed back goes to the user as a systemMessage.
+// ponytail: fixed cap of 5 same-item blocks, make it config if a project needs more retries.
+const MAX_SAME_BLOCKS = 5;
+const STOP_STATE = 'stop-state.json';
+
 function hookStop(root) {
-  const raw = readStdin();
-  const input = parseJson(raw) || {};
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
-  fs.writeFileSync(path.join(root, EVIDENCE_DIR, 'last-hook-input.json'), raw || '{}');
-  const isRepeat = input.stop_hook_active === true;
+  fs.writeFileSync(path.join(root, EVIDENCE_DIR, 'last-hook-input.json'), readStdin() || '{}');
   const config = loadConfig(root);
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
   const t = triage(a);
   const warn = warningLine(a);
+  const aiPart = t.aiFix.map((x) => `- ${x}`).join('\n');
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${t.env.map((x) => `- ${x}`).join('\n')}` : '';
-  if (t.aiFix.length || ((humanPart || envPart) && !isRepeat)) require('../lib/measure').logStop(root, t);
-  const aiPart = t.aiFix.map((x) => `- ${x}`).join('\n');
-  const lastBlockFile = path.join(root, EVIDENCE_DIR, 'last-stop-block.json');
-  const thisBlock = JSON.stringify({ tree: a.treeHash, aiPart });
-  if (t.aiFix.length && isRepeat && fs.existsSync(lastBlockFile) && fs.readFileSync(lastBlockFile, 'utf8') === thisBlock) {
-    process.stdout.write(`${JSON.stringify({ systemMessage: [`qh: 에이전트가 고치지 못한 채 멈춤 (바뀐 것 없음, 다시 막지 않음)\n${aiPart}`, warn].filter(Boolean).join('\n') })}\n`);
-    return EXIT.ok;
+  const askPart = `${humanPart}${envPart}`;
+
+  const stateFile = path.join(root, EVIDENCE_DIR, STOP_STATE);
+  const last = (fs.existsSync(stateFile) && parseJson(fs.readFileSync(stateFile, 'utf8'))) || {};
+  const isSameAi = aiPart !== '' && aiPart === last.aiPart;
+  const isStuck = isSameAi && (last.tree === a.treeHash || last.count >= MAX_SAME_BLOCKS);
+  const isNewAsk = askPart !== '' && askPart !== last.askPart;
+  if ((aiPart && !isStuck) || isNewAsk) {
+    const count = !aiPart ? 0 : isSameAi ? last.count + 1 : 1;
+    fs.writeFileSync(stateFile, JSON.stringify({ tree: a.treeHash, aiPart, count, askPart }));
+    require('../lib/measure').logStop(root, t);
+    return block(aiPart ? `qh: 끝내기 전에 고칠 일\n${aiPart}${askPart}` : `qh: 검사는 통과.${askPart}`, warn);
   }
-  if (t.aiFix.length) {
-    fs.writeFileSync(lastBlockFile, thisBlock);
-    return block(`qh: 끝내기 전에 고칠 일\n${aiPart}${humanPart}${envPart}`, warn);
-  }
-  if ((humanPart || envPart) && !isRepeat) return block(`qh: 검사는 통과.${humanPart}${envPart}`, warn);
-  if (warn) process.stdout.write(`${JSON.stringify({ systemMessage: warn })}\n`);
+  fs.writeFileSync(stateFile, JSON.stringify({ tree: last.tree, aiPart, count: aiPart ? last.count : 0, askPart }));
+  const notes = [
+    aiPart && `qh: 에이전트가 고치지 못한 채 멈춤 (같은 문제로 다시 막지 않음, 자세히: qh status)\n${aiPart}`,
+    askPart && `qh: 사람이 판단할 일 (에이전트에게 이미 전함)\n${[...t.human, ...t.env].map((x) => `- ${x}`).join('\n')}`,
+    warn,
+  ].filter(Boolean);
+  if (notes.length) process.stdout.write(`${JSON.stringify({ systemMessage: notes.join('\n') })}\n`);
   return EXIT.ok;
 }
 
