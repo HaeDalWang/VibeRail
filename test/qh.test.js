@@ -680,7 +680,7 @@ test('measure adds a row per run, backfills past weeks without touching the repo
   const r = qh(root, ['measure', '--backfill', '2']);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   const page = r.stdout.match(/결과지: (.+)/)[1];
-  assert.match(fs.readFileSync(page, 'utf8'), /품질 측정 결과/);
+  assert.match(fs.readFileSync(page, 'utf8'), /품질 리포트/);
   const rows = metricsRows(root);
   assert.deepStrictEqual(rows.map((x) => [x.backfill, x.duplicated_lines]), [['1', '12'], ['', '0']], 'one past week (the copy), then now');
   assert.strictEqual(rows[1].feat_median_files_60d, '2');
