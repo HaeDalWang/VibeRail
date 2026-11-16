@@ -413,6 +413,22 @@ test('an old copy blocks once its file is touched, and a decision-log line allow
   assert.doesNotMatch(structureOf(root), /중복/);
 });
 
+test('with duplicates "grown", an old copy in a touched file warns, and a new copy blocks', () => {
+  const config = { ...BASIC, structure: { duplicates: 'grown' } };
+  const root = repo(config, { 'src/mail.js': BLOCK('a'), 'src/old.js': BLOCK('b') });
+  write(root, 'src/old.js', `${BLOCK('b')}// touched\n`);
+  const s = statusJson(root);
+  assert.doesNotMatch(s.structure.join('\n'), /중복/, 'a copy the file already had does not block');
+  assert.match(s.structureWarnings.join('\n'), /중복\(원래 있던 것, 막지 않음\): src\/old\.js/);
+  const stop = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}'));
+  assert.doesNotMatch(stop.reason, /중복/, 'the warning is not handed to the agent to fix');
+  assert.match(stop.systemMessage, /qh 경고\(막지 않음\): .*src\/old\.js/);
+  write(root, 'src/old.js', `${BLOCK('b')}\nfunction more() {}\n${BLOCK('c')}`);
+  assert.match(structureOf(root), /중복: src\/old\.js.*이 파일 중복 6줄 → 12줄/);
+  write(root, 'src/new.js', BLOCK('d'));
+  assert.match(structureOf(root), /중복: src\/new\.js.*0줄 → 6줄/, 'a new file starts from zero');
+});
+
 test('short or import-only similarities are not duplicates', () => {
   const imports = Array.from({ length: 8 }, (_, i) => `import { thing${i} } from './mod${i}.js'`).join('\n');
   const root = repo(BASIC, { 'src/x.js': `${imports}\n}\n}\n` });

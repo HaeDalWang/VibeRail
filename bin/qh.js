@@ -12,7 +12,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
 const { policyProblems, relatedTests } = require('../lib/policy');
-const { structureProblems, duplicateTotal } = require('../lib/structure');
+const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
 
@@ -273,10 +273,11 @@ function repoToolResult(root, tree, structure) {
 
 // Structure ratchet: file-local checks on the changed files every time; repository-wide tools at PR only.
 function structureResult(root, { changed, base, phase, tree, structure }) {
-  if (!changed.length) return { problems: [], env: [] };
+  if (!changed.length) return { problems: [], warnings: [], env: [] };
   const shape = codeShapeProblems(root, { changed, base, structure });
   const repo = phase === 'pr' ? repoToolResult(root, tree, structure) : { problems: [], env: [] };
-  return { problems: [...structureProblems(root, { changed, base, structure }), ...shape.problems, ...repo.problems], env: [...shape.env, ...repo.env] };
+  const own = structureFindings(root, { changed, base, structure });
+  return { problems: [...own.problems, ...shape.problems, ...repo.problems], warnings: own.warnings, env: [...shape.env, ...repo.env] };
 }
 
 function reviewStatus(root, now) {
@@ -313,6 +314,7 @@ function assess(root, phase = 'stop', baseRef) {
     policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : [],
     structure: shape.problems,
     structureEnv: shape.env,
+    structureWarnings: shape.warnings,
     decisions: taskDecisions(card.text),
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
@@ -353,6 +355,7 @@ function formatStatus(a) {
   if (t.aiFix.length) out.push('AI가 고칠 일', ...t.aiFix.map((x) => `  - ${x}`));
   if (t.human.length) out.push('사람이 판단할 일', ...t.human.map((x) => `  - ${x}`));
   if (t.env.length) out.push('환경 오류 (코드를 고치지 말고 사용자에게 보고)', ...t.env.map((x) => `  - ${x}`));
+  if (a.structureWarnings?.length) out.push('경고 (막지 않음)', ...a.structureWarnings.map((x) => `  - ${x}`));
   return out.join('\n');
 }
 
@@ -447,10 +450,16 @@ function readStdin() {
 
 // exit 0 + JSON on stdout: Claude Code documents this as Stop decision control, and
 // a Kiro Stop hook used in practice relies on it (there a non-zero exit only warns the user; 추정).
-function block(reason) {
-  process.stdout.write(`${JSON.stringify({ decision: 'block', reason })}\n`);
+// systemMessage: shown to the user, not to the agent (warnings are not the agent's to fix).
+function block(reason, systemMessage) {
+  process.stdout.write(`${JSON.stringify({ decision: 'block', reason, ...(systemMessage ? { systemMessage } : {}) })}\n`);
   return EXIT.ok;
 }
+
+const warningLine = (a) => {
+  const files = [...new Set((a.structureWarnings || []).map((w) => w.match(/: (\S+?):\d+ ↔/)?.[1]).filter(Boolean))];
+  return files.length ? `qh 경고(막지 않음): 만진 파일에 원래 있던 중복 — ${files.join(', ')} (자세히: qh status)` : null;
+};
 
 // AI-fix items block every time (the harness caps repeats). Human and environment
 // items turn the agent back only once (stop_hook_active false) so it can ask or report.
@@ -462,12 +471,15 @@ function hookStop(root) {
   const isRepeat = input.stop_hook_active === true;
   const config = loadConfig(root);
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
-  const t = triage(assess(root));
+  const a = assess(root);
+  const t = triage(a);
+  const warn = warningLine(a);
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${t.env.map((x) => `- ${x}`).join('\n')}` : '';
   if (t.aiFix.length || ((humanPart || envPart) && !isRepeat)) require('../lib/measure').logStop(root, t);
-  if (t.aiFix.length) return block(`qh: 끝내기 전에 고칠 일\n${t.aiFix.map((x) => `- ${x}`).join('\n')}${humanPart}${envPart}`);
-  if ((humanPart || envPart) && !isRepeat) return block(`qh: 검사는 통과.${humanPart}${envPart}`);
+  if (t.aiFix.length) return block(`qh: 끝내기 전에 고칠 일\n${t.aiFix.map((x) => `- ${x}`).join('\n')}${humanPart}${envPart}`, warn);
+  if ((humanPart || envPart) && !isRepeat) return block(`qh: 검사는 통과.${humanPart}${envPart}`, warn);
+  if (warn) process.stdout.write(`${JSON.stringify({ systemMessage: warn })}\n`);
   return EXIT.ok;
 }
 
