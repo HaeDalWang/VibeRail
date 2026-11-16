@@ -1,0 +1,19 @@
+{
+  "baseRef": "origin/main",
+  "checks": {
+    "test": {
+      "cmd": "npm test",
+      "on": [
+        "pr"
+      ]
+    }
+  },
+  "common": [
+    "test"
+  ],
+  "risks": {},
+  "review": {
+    "cmd": "kiro-run {workdir} {task} claude-sonnet-5.5 medium",
+    "timeoutSec": 900
+  }
+}
