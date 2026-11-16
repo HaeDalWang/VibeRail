@@ -693,6 +693,20 @@ test('measure adds a row per run, backfills past weeks without touching the repo
   assert.strictEqual(qh(root, ['measure', '--backfill', 'x']).status, 1);
 });
 
+test('measure judges copies as a share of code and leaves out accepted copies and dot-folder docs', () => {
+  const root = repo(BASIC);
+  write(root, 'src/mail.js', BLOCK('a'));
+  write(root, 'src/copy.js', BLOCK('b'));
+  write(root, 'docs/decisions.md', '# 결정 로그\n- 중복 허용: src/copy.js · 외부 계약이라 따로 둔다\n');
+  write(root, '.agents/skill/README.md', '[x](./missing.md)\n');
+  commitAt(root, 'chore: accepted copy', 0);
+  qh(root, ['measure']);
+  const [row] = metricsRows(root);
+  assert.strictEqual(row.duplicated_lines, '6', 'only the copy in mail.js counts');
+  assert.strictEqual(Number(row.duplicated_pct), Math.round((6 / Number(row.code_lines)) * 10000) / 100);
+  assert.strictEqual(row.dead_doc_links, '0', 'copied-in skills are not the project docs');
+});
+
 test('a Stop that turns the agent back is counted by reason in the next measurement', () => {
   const root = repo(BASIC);
   write(root, 'src/a.js', '2');
