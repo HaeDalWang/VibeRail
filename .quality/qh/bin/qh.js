@@ -461,8 +461,9 @@ const warningLine = (a) => {
   return files.length ? `qh 경고(막지 않음): 만진 파일에 원래 있던 중복 — ${files.join(', ')} (자세히: qh status)` : null;
 };
 
-// AI-fix items block every time (the harness caps repeats). Human and environment
-// items turn the agent back only once (stop_hook_active false) so it can ask or report.
+// AI-fix items block until the agent changes something: a repeat stop on the same tree with
+// the same items is let through with a note to the user (the harness does not cap repeats).
+// Human and environment items turn the agent back only once (stop_hook_active false).
 function hookStop(root) {
   const raw = readStdin();
   const input = parseJson(raw) || {};
@@ -477,7 +478,17 @@ function hookStop(root) {
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${t.env.map((x) => `- ${x}`).join('\n')}` : '';
   if (t.aiFix.length || ((humanPart || envPart) && !isRepeat)) require('../lib/measure').logStop(root, t);
-  if (t.aiFix.length) return block(`qh: 끝내기 전에 고칠 일\n${t.aiFix.map((x) => `- ${x}`).join('\n')}${humanPart}${envPart}`, warn);
+  const aiPart = t.aiFix.map((x) => `- ${x}`).join('\n');
+  const lastBlockFile = path.join(root, EVIDENCE_DIR, 'last-stop-block.json');
+  const thisBlock = JSON.stringify({ tree: a.treeHash, aiPart });
+  if (t.aiFix.length && isRepeat && fs.existsSync(lastBlockFile) && fs.readFileSync(lastBlockFile, 'utf8') === thisBlock) {
+    process.stdout.write(`${JSON.stringify({ systemMessage: [`qh: 에이전트가 고치지 못한 채 멈춤 (바뀐 것 없음, 다시 막지 않음)\n${aiPart}`, warn].filter(Boolean).join('\n') })}\n`);
+    return EXIT.ok;
+  }
+  if (t.aiFix.length) {
+    fs.writeFileSync(lastBlockFile, thisBlock);
+    return block(`qh: 끝내기 전에 고칠 일\n${aiPart}${humanPart}${envPart}`, warn);
+  }
   if ((humanPart || envPart) && !isRepeat) return block(`qh: 검사는 통과.${humanPart}${envPart}`, warn);
   if (warn) process.stdout.write(`${JSON.stringify({ systemMessage: warn })}\n`);
   return EXIT.ok;
