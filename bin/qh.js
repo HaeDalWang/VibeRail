@@ -11,6 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
+const { policyProblems } = require('../lib/policy');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
@@ -194,11 +195,14 @@ function describeResult(ev) {
   return out;
 }
 
-function taskDecisions(root) {
+function taskCard(root) {
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  const file = path.join(root, '.quality', 'tasks', `${branch}.md`);
-  if (!fs.existsSync(file)) return [];
-  const text = fs.readFileSync(file, 'utf8');
+  const rel = path.join('.quality', 'tasks', `${branch}.md`);
+  const file = path.join(root, rel);
+  return { rel, text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
+}
+
+function taskDecisions(text) {
   const section = text.split(/^## /m).find((s) => s.startsWith('판단 필요'));
   if (!section) return [];
   return [...section.matchAll(/^- \[ \] (.+)$/gm)].map((m) => m[1].trim());
@@ -247,13 +251,15 @@ function assess(root, phase = 'stop') {
   const config = loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
-  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], decisions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
+  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], decisions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
   if (env.length) return { config, ...out };
   const base = git(root, ['merge-base', config.baseRef, 'HEAD']);
   const changed = changedFiles(root, base);
   const req = requirements(config, changed, phase);
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
+  const card = taskCard(root);
+  const criteria = changed.length ? configChanges(root, base, config) : [];
   return {
     config,
     ...out,
@@ -263,9 +269,10 @@ function assess(root, phase = 'stop') {
     later: req.later,
     risks: req.risks,
     docsMissing: req.docsMissing,
-    decisions: taskDecisions(root),
+    policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel }) : [],
+    decisions: taskDecisions(card.text),
     undeclared,
-    configChanges: configChanges(root, base, config),
+    configChanges: criteria,
     review: reviewStatus(root, now),
   };
 }
@@ -279,6 +286,7 @@ function triage(a) {
     if (c.state === '이전 상태에서 통과') aiFix.push(`검사 ${c.name}: 이전 상태에서 통과 → 그 뒤 코드가 바뀌었으니 \`qh check ${c.name}\` 재실행`);
   }
   for (const d of a.docsMissing) aiFix.push(`문서 미갱신: ${d.doc} (위험 ${d.risk}의 연동 문서) → 같은 작업에서 갱신`);
+  aiFix.push(...a.policy);
   const human = [
     ...a.undeclared.map((r) => `${r}: 접근 수준 미선언 → 누가 접근할 수 있는지 사용자에게 묻고, 답을 받은 뒤 ${ACCESS_FILE}의 routes에 적기`),
     ...a.decisions.map((d) => `작업 카드: ${d}`),

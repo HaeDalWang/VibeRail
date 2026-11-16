@@ -66,6 +66,9 @@ function stopDecision(r) {
 
 const stateOf = (s, name) => s.checks.find((c) => c.name === name)?.state;
 
+// Always-on rules want tests and docs with every code change, or a reason in the card.
+const DECLARED = '테스트 불필요: 상수 하나만 바꿈\n문서 영향 없음: 사용자에게 안 보임\n';
+
 const BASIC = {
   baseRef: 'main',
   checks: { unit: { cmd: 'node -e "process.exit(0)"' } },
@@ -141,6 +144,7 @@ test('a risk path adds its checks and requires its docs to change in the same wo
 test('stop blocks while a required check has no current evidence, and allows after it passes', () => {
   const root = repo(BASIC);
   write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', DECLARED);
   const blocked = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
   assert.strictEqual(blocked.decision, 'block');
   assert.match(blocked.reason, /unit.*미실행/);
@@ -166,6 +170,7 @@ test('human decisions and base changes turn the agent back once, not on the repe
   const root = repo(BASIC);
   write(root, '.quality/config.json', JSON.stringify({ ...BASIC, checks: { unit: { cmd: 'true' } } }));
   write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 관리자는 모든 회사를 보나?\n- [x] 끝난 질문\n');
+  write(root, 'docs/decisions.md', '- 2026-11-16 · unit을 true로 · 예시 · 없음\n');
   qh(root, ['check']);
   const first = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}'));
   assert.match(first.reason, /관리자는 모든 회사를 보나/);
@@ -207,17 +212,18 @@ test('pr fails while a person still has to decide, even when every check passes'
   const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync('{out}/result.json','[]')\"" } });
   assert.strictEqual(qh(root, ['init', root]).status, 0, 'pr also runs doctor, so qh must be set up');
   write(root, 'src/a.js', '2');
-  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 열린 질문\n');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [ ] 열린 질문\n`);
   const r = qh(root, ['pr']);
   assert.strictEqual(r.status, 1);
   assert.match(r.stdout, /열린 질문/);
-  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [x] 열린 질문\n');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] 열린 질문\n`);
   assert.strictEqual(qh(root, ['pr']).status, 0);
 });
 
 test('a PR-only check is neither run nor demanded at Stop, but is required by the PR status', () => {
   const root = repo({ baseRef: 'main', checks: { unit: { cmd: 'true' }, slow: { cmd: 'true', on: ['pr'] } }, common: ['unit', 'slow'] });
   write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', DECLARED);
   qh(root, ['check']);
   const stop = statusJson(root);
   assert.deepStrictEqual(stop.checks.map((c) => c.name), ['unit']);
@@ -262,6 +268,75 @@ test('routes --baseline refuses to overwrite an access table a person may have e
   const r = qh(root, ['routes', '--baseline', '--levels', 'public,member']);
   assert.strictEqual(r.status, 1);
   assert.match(r.stdout, /덮어쓰지 않는다/);
+});
+
+// ---------- always-on rules ----------
+
+const policyOf = (root) => statusJson(root).policy.join('\n');
+
+test('a code change without a test change blocks until a test changes or the card gives a reason', () => {
+  const root = repo(BASIC);
+  write(root, 'src/a.js', '2');
+  assert.match(policyOf(root), /TDD: 코드\(src\/a\.js\)/);
+  write(root, 'test/a.test.js', 'x');
+  assert.doesNotMatch(policyOf(root), /TDD/);
+  fs.rmSync(path.join(root, 'test'), { recursive: true });
+  write(root, '.quality/tasks/work.md', '테스트 불필요: x\n');
+  assert.match(policyOf(root), /TDD/, 'a reason too short to say anything does not count');
+  write(root, '.quality/tasks/work.md', '- 테스트 불필요: 주석만 고침\n');
+  assert.doesNotMatch(policyOf(root), /TDD/);
+});
+
+test('a code change without a doc change needs "문서 영향 없음: 이유"; a changed doc satisfies it', () => {
+  const root = repo(BASIC);
+  write(root, 'src/a.js', '2');
+  assert.match(policyOf(root), /문서 영향/);
+  write(root, 'docs/usage.md', 'x');
+  assert.doesNotMatch(policyOf(root), /문서 영향/);
+});
+
+test('a test-only or doc-only change asks for neither tests nor docs', () => {
+  const root = repo(BASIC);
+  write(root, 'src/a.test.js', 'x');
+  write(root, 'README.md', 'x');
+  assert.deepStrictEqual(statusJson(root).policy, []);
+});
+
+test('a risky change needs an ADR or "ADR 불필요: 이유", and a criteria change needs a decision log line', () => {
+  const root = repo({ ...BASIC, risks: { db: { paths: ['migrations/**'] } } });
+  write(root, 'migrations/002.sql', 'ALTER TABLE t ADD c TEXT;');
+  assert.match(policyOf(root), /ADR: 위험 영역\(db\)/);
+  write(root, 'docs/adr/0001-add-c.md', '# c');
+  assert.doesNotMatch(policyOf(root), /ADR/);
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, risks: { db: { paths: ['migrations/**', 'db/**'] } } }));
+  assert.match(policyOf(root), /결정 로그/);
+  write(root, 'docs/decisions.md', '- 2026-11-16 · db/도 위험 영역 · 쿼리가 거기 있음 · 폴더 이동 시\n');
+  assert.doesNotMatch(policyOf(root), /결정 로그/);
+});
+
+test('secrets in changed files block without being printed; an allow marker and env templates pass', () => {
+  const root = repo(BASIC, { 'src/old.js': `const k = 'AKIA${'A'.repeat(16)}'\n` });
+  const key = `ghp_${'a'.repeat(36)}`;
+  write(root, 'src/a.test.js', `const t = '${key}'\nconst db = 'postgres://u:pw123@localhost/x'\n`);
+  write(root, 'config/.env', 'X=1\n');
+  write(root, '.env.example', 'X=\n');
+  const p = policyOf(root);
+  assert.match(p, /비밀값 의심: src\/a\.test\.js:1 \(GitHub 토큰\)/);
+  assert.doesNotMatch(p, /a\.test\.js:2/, 'a local database URL is not a leak');
+  assert.match(p, /비밀값 파일: config\/\.env/);
+  assert.doesNotMatch(p, /\.env\.example|old\.js/, 'templates and untouched files are not scanned');
+  assert.ok(!p.includes(key));
+  write(root, 'src/a.test.js', `const t = '${key}' // qh:allow-secret 테스트용 가짜\n`);
+  assert.doesNotMatch(policyOf(root), /a\.test\.js/);
+});
+
+test('init starts the decision log once and never overwrites it', () => {
+  const root = project({ 'README.md': 'x\n', 'docs/decisions.md': '- mine\n' });
+  qh(root, ['init', root]);
+  assert.strictEqual(fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8'), '- mine\n');
+  const fresh = project({ 'README.md': 'x\n' });
+  qh(fresh, ['init', fresh]);
+  assert.match(fs.readFileSync(path.join(fresh, 'docs/decisions.md'), 'utf8'), /^- \d{4}-\d{2}-\d{2} · qh로 품질 기준/m);
 });
 
 // ---------- init ----------
