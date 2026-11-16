@@ -651,3 +651,55 @@ test('a broken config is reported at Stop as a setup problem, not as code to fix
   assert.match(d.reason, /환경 오류[\s\S]*설정: common의 "lint"이 checks에 없다/);
   assert.doesNotMatch(d.reason, /고칠 일/);
 });
+
+// ---------- measure ----------
+
+const metricsRows = (root) => {
+  const [head, ...rest] = fs.readFileSync(path.join(root, '.quality/metrics.csv'), 'utf8').trim().split('\n');
+  const keys = head.split(',');
+  return rest.map((l) => Object.fromEntries(l.split(',').map((v, i) => [keys[i], v])));
+};
+function commitAt(root, message, secondsAgo) {
+  const when = `@${Math.floor(Date.now() / 1000) - secondsAgo} +0000`;
+  sh(root, 'git', ['add', '-A']);
+  const r = spawnSync('git', ['commit', '-qm', message], { cwd: root, env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } });
+  assert.strictEqual(r.status, 0, String(r.stderr));
+}
+
+test('measure adds a row per run, backfills past weeks without touching the repository, and keeps evidence current', () => {
+  const root = repo(BASIC);
+  write(root, 'src/mail.js', BLOCK('a'));
+  write(root, 'src/copy.js', BLOCK('b'));
+  commitAt(root, 'chore: copy', 21 * 86400);
+  fs.rmSync(path.join(root, 'src/copy.js'));
+  write(root, 'src/b.js', '1');
+  commitAt(root, 'feat: drop the copy', 0);
+  const head = sh(root, 'git', ['rev-parse', 'HEAD']);
+  qh(root, ['check', 'unit']);
+
+  const r = qh(root, ['measure', '--backfill', '2']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const page = r.stdout.match(/결과지: (.+)/)[1];
+  assert.match(fs.readFileSync(page, 'utf8'), /품질 측정 결과/);
+  const rows = metricsRows(root);
+  assert.deepStrictEqual(rows.map((x) => [x.backfill, x.duplicated_lines]), [['1', '12'], ['', '0']], 'one past week (the copy), then now');
+  assert.strictEqual(rows[1].feat_median_files_60d, '2');
+  assert.strictEqual(sh(root, 'git', ['rev-parse', 'HEAD']), head);
+  assert.strictEqual(sh(root, 'git', ['status', '--short', '--', '.', ':!.quality/evidence']), '?? .quality/metrics.csv', 'only the history file is new (evidence is gitignored by init)');
+  assert.strictEqual(stateOf(statusJson(root), 'unit'), '통과', 'writing a measurement does not make evidence stale');
+
+  qh(root, ['measure']);
+  assert.strictEqual(metricsRows(root).length, 3, 'rows are added, never replaced');
+  assert.strictEqual(qh(root, ['measure', '--backfill', 'x']).status, 1);
+});
+
+test('a Stop that turns the agent back is counted by reason in the next measurement', () => {
+  const root = repo(BASIC);
+  write(root, 'src/a.js', '2');
+  assert.ok(stopDecision(qh(root, ['hook', 'stop'], '{}')));
+  qh(root, ['measure']);
+  const [row] = metricsRows(root);
+  assert.strictEqual(row.stop_blocks_30d, '1');
+  assert.strictEqual(row.block_tdd, '1');
+  assert.strictEqual(row.block_docs, '1');
+});

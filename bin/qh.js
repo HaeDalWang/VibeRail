@@ -18,6 +18,7 @@ const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
 const ACCESS_FILE = '.quality/access.json';
+const { METRICS_FILE } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
 const BASELINE_EXAMPLES = 3;
@@ -52,7 +53,8 @@ function treeHash(root) {
   const env = { ...process.env, GIT_INDEX_FILE: index };
   try {
     git(root, ['add', '-A'], env);
-    git(root, ['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', EVIDENCE_DIR], env);
+    // Measurements are a record about the code, not part of it: writing one keeps evidence current.
+    git(root, ['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', EVIDENCE_DIR, METRICS_FILE], env);
     return git(root, ['write-tree'], env);
   } finally {
     fs.rmSync(index, { force: true });
@@ -443,6 +445,7 @@ function hookStop(root) {
   const t = triage(assess(root));
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${t.env.map((x) => `- ${x}`).join('\n')}` : '';
+  if (t.aiFix.length || ((humanPart || envPart) && !isRepeat)) require('../lib/measure').logStop(root, t);
   if (t.aiFix.length) return block(`qh: 끝내기 전에 고칠 일\n${t.aiFix.map((x) => `- ${x}`).join('\n')}${humanPart}${envPart}`);
   if ((humanPart || envPart) && !isRepeat) return block(`qh: 검사는 통과.${humanPart}${envPart}`);
   return EXIT.ok;
@@ -489,6 +492,7 @@ const USAGE = `사용: qh <명령>
   check [이름…]        필요한 검사 실행 (이름을 주면 그것만)
   answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
+  measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지(로컬 HTML) 경로를 알려 줌
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
@@ -516,6 +520,17 @@ function main(argv) {
       return EXIT.failed;
     }
     console.log(r.log.length ? `저장: .quality/config.json answers, docs/decisions.md에 ${r.log.length}줄\n${r.log.join('\n')}` : '바뀐 답 없음');
+    return EXIT.ok;
+  }
+  if (cmd === 'measure') {
+    const at = rest.indexOf('--backfill');
+    const weeks = at >= 0 ? Number(rest[at + 1]) : 0;
+    if (at >= 0 && !(Number.isInteger(weeks) && weeks > 0)) {
+      console.log('사용: qh measure [--backfill <주 수>]');
+      return EXIT.failed;
+    }
+    const r = require('../lib/measure').measure(root, { weeks });
+    console.log(`측정: ${r.added}줄 추가 → ${METRICS_FILE}\n결과지: ${r.page}\n브라우저로 연다 (파일은 이 컴퓨터에만 있다).`);
     return EXIT.ok;
   }
   if (cmd === 'ask') {
