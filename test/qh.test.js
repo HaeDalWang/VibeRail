@@ -389,6 +389,23 @@ test('a big file may not grow, a new root file needs a reason, a changed doc may
   assert.doesNotMatch(st, /nope\.md|a\.md 가|x\.invalid/);
 });
 
+// ---------- questions ----------
+
+test('ask writes the question page outside the repository, recommends from the code, and keeps saved answers', () => {
+  const root = repo({ ...BASIC, answers: { team: { choice: 'A', reason: '<둘이서>' } } }, { 'package.json': JSON.stringify({ dependencies: { pg: '^8' } }) });
+  const r = qh(root, ['ask']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const file = r.stdout.match(/질문 화면: (\S+)/)[1];
+  assert.ok(!fs.realpathSync(file).startsWith(fs.realpathSync(root)), 'the page never lands in the repository');
+  const html = fs.readFileSync(file, 'utf8');
+  assert.strictEqual(html.match(/class="card"/g).length, 7);
+  assert.match(html, /id="q-db" [^>]*data-rec="A"/);
+  assert.match(html, /권장안: A<\/b> — package\.json에 pg/);
+  assert.match(html, /name="team" value="A"[^>]* checked/);
+  assert.match(html, /&lt;둘이서&gt;/);
+  assert.doesNotMatch(html, /<둘이서>/);
+});
+
 // ---------- init ----------
 
 function project(files) {

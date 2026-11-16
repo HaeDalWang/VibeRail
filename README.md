@@ -55,6 +55,7 @@ node .quality/qh/bin/qh.js doctor
 | 명령 | 하는 일 |
 |---|---|
 | `qh init [경로]` | 설치·연결 |
+| `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
 | `qh doctor` | 설치·설정 전체 점검 |
 | `qh check [이름…]` | 필요한 검사 실행 |
 | `qh status [--json] [--pr]` | 상태표 |
@@ -65,7 +66,7 @@ node .quality/qh/bin/qh.js doctor
 
 만드는 중이다. 다음에 만들 것:
 
-- 프로젝트별로 검사를 고르는 질문 화면(`qh ask`)
+- 질문 답 저장(`qh answer`)과 답에 따라 검사 켜기
 
 ## 개발
 
