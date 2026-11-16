@@ -406,6 +406,24 @@ test('ask writes the question page outside the repository, recommends from the c
   assert.doesNotMatch(html, /<둘이서>/);
 });
 
+test('answer checks every line before saving, then stores answers and logs each change once', () => {
+  const root = repo(BASIC);
+  const bad = qh(root, ['answer'], 'qh 답\nlogin=A\ndb=Z\nteam=A\n');
+  assert.strictEqual(bad.status, 1);
+  assert.match(bad.stdout, /읽을 수 없는 줄: "db=Z"[\s\S]*협업: 권장안\(B\)과 다르게 골랐는데 변경 사유가 없다/);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8')).answers, undefined);
+  const block = 'qh 답\nlogin=B\nteam=A 사유: 둘이서 개발\n';
+  assert.strictEqual(qh(root, ['answer'], block).status, 0);
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8'));
+  assert.strictEqual(config.answers.team.choice, 'A');
+  assert.strictEqual(config.answers.team.reason, '둘이서 개발');
+  const log = fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8');
+  assert.match(log, /질문 협업: A 팀 협업 개발 · 둘이서 개발/);
+  assert.match(log, /질문 로그인: B 로그인 기능 없음 · 권장안/);
+  assert.match(qh(root, ['answer'], block).stdout, /바뀐 답 없음/);
+  assert.doesNotMatch(policyOf(root), /결정 로그/, 'the saved answers carry their own decision-log lines');
+});
+
 // ---------- init ----------
 
 function project(files) {

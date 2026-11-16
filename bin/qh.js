@@ -465,6 +465,7 @@ function hookSessionStart(root) {
 const USAGE = `사용: qh <명령>
   init [프로젝트 경로]   qh를 프로젝트 .quality/qh/에 설치하고 hook·규칙·설정 초안을 붙임
   check [이름…]        필요한 검사 실행 (이름을 주면 그것만)
+  answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
@@ -486,6 +487,15 @@ function main(argv) {
   }
   if (cmd === 'review') return runReview(root, loadConfig(root), rest.includes('--base') ? rest[rest.indexOf('--base') + 1] : undefined);
   if (cmd === 'pr') return cmdPr(root);
+  if (cmd === 'answer') {
+    const r = require('../lib/ask').answer(root, readStdin());
+    if (r.errors.length) {
+      console.log(['저장하지 않음:', ...r.errors.map((e) => `  - ${e}`)].join('\n'));
+      return EXIT.failed;
+    }
+    console.log(r.log.length ? `저장: .quality/config.json answers, docs/decisions.md에 ${r.log.length}줄\n${r.log.join('\n')}` : '바뀐 답 없음');
+    return EXIT.ok;
+  }
   if (cmd === 'ask') {
     const file = require('../lib/ask').ask(root, loadConfig(root));
     console.log(`질문 화면: ${file}\n브라우저로 열어 고른 뒤 "답 복사" → 에이전트 창에 붙여 넣는다 (파일은 이 컴퓨터에만 있다).`);
