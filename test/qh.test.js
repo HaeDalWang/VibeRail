@@ -188,6 +188,20 @@ test('a check that runs out of time is reported to the person, not handed to the
   assert.match(s.checks[0].detail[0], /시간 초과 .*테스트를 고치지 말고 사용자에게/);
 });
 
+test('a "{tests}" check runs only the tests of this work, and is not required when there are none', () => {
+  const ran = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qh-ran-')), 'ran.txt');
+  const echo = `node -e "require('fs').writeFileSync(${JSON.stringify(ran).replace(/"/g, "'")}, process.argv.slice(1).join(' '))"`;
+  const config = { ...BASIC, checks: { quick: { cmd: `${echo} {tests}`, on: ['stop'] } }, common: ['quick'] };
+  const root = repo(config, { 'src/auth.js': '1', 'test/auth.test.js': 'x', 'test/authz.test.js': 'x', 'test/other.test.js': 'x' });
+  write(root, 'README.md', 'x');
+  assert.deepStrictEqual(statusJson(root).checks, [], 'no code changed, nothing to run');
+  write(root, 'src/auth.js', '2');
+  write(root, 'test/other.test.js', 'y');
+  qh(root, ['check']);
+  assert.strictEqual(fs.readFileSync(ran, 'utf8'), 'test/auth.test.js test/other.test.js');
+  assert.strictEqual(stateOf(statusJson(root), 'quick'), '통과');
+});
+
 test('stop exits 1 with a warning when qh itself breaks, never blocking', () => {
   const root = repo(BASIC);
   write(root, '.quality/config.json', '{ broken');

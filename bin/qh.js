@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems } = require('../lib/policy');
+const { policyProblems, relatedTests } = require('../lib/policy');
 const { structureProblems } = require('../lib/structure');
 
 const QH_HOME = path.join(__dirname, '..');
@@ -110,7 +110,11 @@ function envProblems(root, config) {
 // the slow ones (a test database); Stop neither runs nor demands them.
 const runsIn = (def, phase) => (def?.on || PHASES).includes(phase);
 
-function requirements(config, changed, phase) {
+const TESTS_SLOT = '{tests}';
+const workTests = (root, changed) => relatedTests(root, changed, lines(git(root, ['ls-files'])));
+const shellQuote = (f) => `'${f.replace(/'/g, "'\\''")}'`;
+
+function requirements(config, changed, phase, root) {
   if (changed.length === 0) return { names: [], later: [], risks: [], docsMissing: [] };
   const names = new Set(config.common || []);
   const risks = [];
@@ -123,8 +127,11 @@ function requirements(config, changed, phase) {
     for (const doc of def.docs || []) if (!changed.includes(doc)) docsMissing.push({ risk, doc });
   }
   const all = [...names];
-  const now = all.filter((n) => !config.checks?.[n] || runsIn(config.checks[n], phase));
-  return { names: now, later: all.filter((n) => !now.includes(n)), risks, docsMissing };
+  // A "{tests}" check with no test of this work to run has nothing to prove.
+  const hasTests = all.some((n) => config.checks?.[n]?.cmd?.includes(TESTS_SLOT)) && workTests(root, changed).length > 0;
+  const isEmptySlot = (n) => config.checks?.[n]?.cmd?.includes(TESTS_SLOT) && !hasTests;
+  const now = all.filter((n) => !isEmptySlot(n) && (!config.checks?.[n] || runsIn(config.checks[n], phase)));
+  return { names: now, later: all.filter((n) => !now.includes(n) && !isEmptySlot(n)), risks, docsMissing };
 }
 
 // ---------- running checks ----------
@@ -144,8 +151,13 @@ function spawnCheck(root, def, timeoutSec) {
   return spawnSync('sh', ['-c', def.cmd], opts);
 }
 
-function runCheck(root, name, def) {
-  if (!def) throw new EnvError(`config에 없는 검사: ${name}`);
+function runCheck(root, name, check) {
+  if (!check) throw new EnvError(`config에 없는 검사: ${name}`);
+  let def = check;
+  if (check.cmd?.includes(TESTS_SLOT)) {
+    const base = git(root, ['merge-base', loadConfig(root).baseRef, 'HEAD']);
+    def = { ...check, cmd: check.cmd.replaceAll(TESTS_SLOT, workTests(root, changedFiles(root, base)).map(shellQuote).join(' ')) };
+  }
   const hash = treeHash(root);
   const base = { check: name, cmd: def.cmd || `builtin:${def.builtin}`, treeHash: hash, startedAt: new Date().toISOString() };
   const missing = def.builtin ? null : toolExists(root, def.cmd);
@@ -258,7 +270,7 @@ function assess(root, phase = 'stop') {
   if (env.length) return { config, ...out };
   const base = git(root, ['merge-base', config.baseRef, 'HEAD']);
   const changed = changedFiles(root, base);
-  const req = requirements(config, changed, phase);
+  const req = requirements(config, changed, phase, root);
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root);
