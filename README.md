@@ -30,6 +30,14 @@ AI 에이전트(Claude Code·Kiro)와 개발하는 프로젝트에 품질 문지
   - 큰 파일: 800줄을 넘은 코드 파일은 더 늘릴 수 없다.
   - 루트 파일: 저장소 맨 위에 새 파일을 만들려면 결정 로그에 이유를 남긴다.
   - 죽은 링크: 바뀐 문서에 없는 파일을 가리키는 링크가 있으면 막는다.
+- **설정으로 켜는 구조 래칫** (`.quality/config.json`의 `structure`, 키가 없으면 꺼짐)
+  - `flatRoots: ["src/widgets"]`: 그 폴더 바로 아래 새 파일을 막는다. 하위 폴더에 둔다. 예외는 결정 로그 `루트 파일: 경로 · 이유`. 결과지에 "정리 대상 폴더 맨 위 파일" 지표가 붙는다.
+  - `noGrow: ["DEPLOY.md"]`: 그 문서의 줄 수가 늘면 막는다. 예외는 `문서 증가 허용: 경로 · 이유`.
+  - `forbidden: ["docs/plans/"]`: 그 아래 새 파일을 막는다.
+  - `patterns: [{ "name", "regex", "in": "docs"|"comments", "exclude": ["docs/reports/"], "fix" }]`: 바뀐 파일에서 매치 수가 늘면 막는다. docs는 `.md`의 코드 블록 밖, comments는 코드 주석만(문자열은 안 셈).
+  - `backtickRefs: true` 또는 `["lib"]`: 바뀐 문서의 백틱 안 경로(`` `src/x.js` ``)도 죽은 링크로 본다. 목록은 맨 위 폴더 말고 더 찾아볼 기준 폴더.
+  - `functions: { "maxLines", "componentMaxLines", "complexity", "maxDepth", "maxParams", "maxNestedCallbacks" }`: 바뀐 JS 파일에서 한도를 넘는 함수가 base보다 늘면 막는다. 이미 넘은 것은 그대로 둔다. 컴포넌트·훅(대문자·`useX` 이름)은 `componentMaxLines`. 프로젝트의 ESLint(`node_modules/eslint`)로 읽는다. 주석 패턴도 같다.
+  - `unused`·`cycles`·`similar: true`: 저장소 전체를 knip(안 쓰는 파일·의존성·export)·dependency-cruiser(순환 참조)·jscpd `--similarity`(이름만 바꾼 복사 함수)로 본다. 느려서 PR에서만 돈다. `qh baseline`이 지금 항목을 `.quality/baseline.json`에 "기존"으로 적고, PR은 거기 없는 새 항목을 막는다. 기준선에 항목이 늘면 사람 확인으로 올라간다. 도구는 프로젝트에 설치돼 있어야 한다(qh가 설치하지 않음).
 - **답에 따라 켜지는 검사** (`qh ask`로 고른 답, 안 고른 질문은 권장안)
   - 답이 요구하는 설정·문서가 없으면 `qh doctor`가 실패를 낸다. PR이 막힌다. 예: "로그인 기능 있음"인데 권한 검사가 없음, "운영 배포 대상"인데 `docs/operations.md`가 없음.
   - 개인정보 취급함: 바뀐 로그 줄에 이메일·전화번호·비밀번호 같은 이름이 들어가면 막는다. 오탐이면 그 줄에 `qh:allow-pii`.

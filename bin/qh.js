@@ -13,6 +13,8 @@ const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
 const { policyProblems, relatedTests } = require('../lib/policy');
 const { structureProblems, duplicateTotal } = require('../lib/structure');
+const { codeShapeProblems } = require('../lib/code-shape');
+const repoTools = require('../lib/repo-tools');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
@@ -259,7 +261,22 @@ function configChanges(root, base, config) {
     const sections = Map.groupBy(keys, (k) => k.split('.').slice(0, 2).join('.'));
     return [...sections].map(([section, ks]) => `${section}: ${ks.length}개 항목 바뀜 → ${diffHint}`);
   }
-  return keys.map((k) => `${k}: ${a[k] ?? '(없음)'} → ${b[k] ?? '(삭제)'}`);
+  return [...keys.map((k) => `${k}: ${a[k] ?? '(없음)'} → ${b[k] ?? '(삭제)'}`), ...repoTools.baselineChanges(root, base)];
+}
+
+// Whole-repository tools take seconds to minutes; `qh pr` assesses three times on one tree.
+const repoToolRuns = new Map();
+function repoToolResult(root, tree, structure) {
+  if (!repoToolRuns.has(tree)) repoToolRuns.set(tree, repoTools.repoToolProblems(root, structure));
+  return repoToolRuns.get(tree);
+}
+
+// Structure ratchet: file-local checks on the changed files every time; repository-wide tools at PR only.
+function structureResult(root, { changed, base, phase, tree, structure }) {
+  if (!changed.length) return { problems: [], env: [] };
+  const shape = codeShapeProblems(root, { changed, base, structure });
+  const repo = phase === 'pr' ? repoToolResult(root, tree, structure) : { problems: [], env: [] };
+  return { problems: [...structureProblems(root, { changed, base, structure }), ...shape.problems, ...repo.problems], env: [...shape.env, ...repo.env] };
 }
 
 function reviewStatus(root, now) {
@@ -282,6 +299,7 @@ function assess(root, phase = 'stop') {
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root);
   const criteria = changed.length ? configChanges(root, base, config) : [];
+  const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
     config,
     ...out,
@@ -292,7 +310,8 @@ function assess(root, phase = 'stop') {
     risks: req.risks,
     docsMissing: req.docsMissing,
     policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : [],
-    structure: changed.length ? structureProblems(root, { changed, base }) : [],
+    structure: shape.problems,
+    structureEnv: shape.env,
     decisions: taskDecisions(card.text),
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
@@ -317,7 +336,7 @@ function triage(a) {
     ...a.taskQuestions,
     ...a.configChanges.map((c) => `기준 변경(사람 확인 필요): ${c}`),
   ];
-  const env = [...a.env, ...a.checks.filter((c) => c.state === '환경 오류').map((c) => `검사 ${c.name}: ${c.detail.join(' ')}`)];
+  const env = [...a.env, ...(a.structureEnv || []), ...a.checks.filter((c) => c.state === '환경 오류').map((c) => `검사 ${c.name}: ${c.detail.join(' ')}`)];
   return { aiFix, human, env };
 }
 
@@ -481,6 +500,23 @@ function cmdRoutesBaseline(root, args) {
   return EXIT.ok;
 }
 
+// Records today's tool findings as "already there". Grown entries reach a person through configChanges.
+function cmdBaseline(root) {
+  const structure = loadConfig(root).structure;
+  if (!repoTools.enabled(structure).length) {
+    console.log(`config structure에 켜진 도구(${repoTools.KINDS.join('·')})가 없다. 기록할 것이 없다.`);
+    return EXIT.failed;
+  }
+  try {
+    const counts = repoTools.writeBaseline(root, structure);
+    console.log(`${repoTools.BASELINE_FILE}: ${Object.entries(counts).map(([k, n]) => `${k} ${n}건`).join(', ')}을 "기존"으로 기록. 커밋한다 (늘어난 항목은 PR에서 사람이 확인).`);
+    return EXIT.ok;
+  } catch (err) {
+    if (err instanceof repoTools.ToolError) throw new EnvError(err.message);
+    throw err;
+  }
+}
+
 function hookSessionStart(root) {
   const unasked = loadConfig(root)?.answers ? '' : '\n(qh) 프로젝트 질문에 아직 답하지 않았다 → 사용자에게 알리고, 원하면 .quality/qh/lib/ask-guide.md대로 질문 세션을 연다.';
   console.log(`${formatStatus(assess(root))}${unasked}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
@@ -498,6 +534,7 @@ const USAGE = `사용: qh <명령>
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
   status [--json] [--pr]  상태표 (--pr: PR 기준)
   routes --baseline --levels a,b,c  현재 동작으로 권한 표 첫 버전 만들기
+  baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록
   hook session-start | hook stop`;
 
 function main(argv) {
@@ -506,6 +543,7 @@ function main(argv) {
   const root = findRoot(process.cwd());
   if (cmd === 'routes' && rest.includes('--baseline')) return cmdRoutesBaseline(root, rest);
   if (cmd === 'check') return cmdCheck(root, rest);
+  if (cmd === 'baseline') return cmdBaseline(root);
   if (cmd === 'doctor') {
     const problems = doctor(root);
     console.log(formatDoctor(problems));
