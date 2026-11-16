@@ -37,7 +37,7 @@ AI 에이전트(Claude Code·Kiro)와 개발하는 프로젝트에 품질 문지
   - `patterns: [{ "name", "regex", "in": "docs"|"comments", "exclude": ["docs/reports/"], "fix" }]`: 바뀐 파일에서 매치 수가 늘면 막는다. docs는 `.md`의 코드 블록 밖, comments는 코드 주석만(문자열은 안 셈).
   - `backtickRefs: true` 또는 `["lib"]`: 바뀐 문서의 백틱 안 경로(`` `src/x.js` ``)도 죽은 링크로 본다. 목록은 맨 위 폴더 말고 더 찾아볼 기준 폴더. 켜면 파일을 지우거나 옮길 때 그 파일을 가리키던 다른 문서도 본다.
   - `functions: { "maxLines", "componentMaxLines", "complexity", "maxDepth", "maxParams", "maxNestedCallbacks" }`: 바뀐 JS 파일에서 한도를 넘는 함수가 base보다 늘면 막는다. 이미 넘은 것은 그대로 둔다. 컴포넌트·훅(대문자·`useX` 이름)은 `componentMaxLines`(`componentDirs: ["src/"]`를 주면 그 아래만). 프로젝트의 ESLint(`node_modules/eslint`)로 읽는다. 주석 패턴도 같다(구문 분석이 안 되는 파일은 파일 전체에서 센다).
-  - `unused`·`cycles`·`similar: true`: 저장소 전체를 knip(안 쓰는 파일·의존성·export)·dependency-cruiser(순환 참조)·jscpd `--similarity`(이름만 바꾼 복사 함수)로 본다. 느려서 PR에서만 돈다. `qh baseline`이 지금 항목을 `.quality/baseline.json`에 "기존"으로 적고, PR은 거기 없는 새 항목을 막는다. 기준선에 항목이 늘면 사람 확인으로 올라간다. 도구는 프로젝트에 설치돼 있어야 한다(qh가 설치하지 않음).
+  - `unused`·`cycles`·`similar: true`: 저장소 전체를 knip(안 쓰는 파일·의존성·export)·dependency-cruiser(순환 참조)·jscpd `--similarity`(이름만 바꾼 복사 함수)로 본다. 느려서 PR에서만 돈다. `qh baseline`이 지금 항목을 `.quality/baseline.json`에 "기존"으로 적고, PR은 거기 없는 새 항목을 막는다. 기준선에 항목이 늘면 사람 확인으로 올라간다. 도구는 프로젝트에 설치돼 있어야 한다(qh가 설치하지 않음). `unused`는 knip이 못 보는 CommonJS 모듈 객체 사용(`ns.fn()`)을 프로젝트 ESLint로 읽어 빼므로 ESLint도 필요하다.
 - **답에 따라 켜지는 검사** (`qh ask`로 고른 답, 안 고른 질문은 권장안)
   - 답이 요구하는 설정·문서가 없으면 `qh doctor`가 실패를 낸다. PR이 막힌다. 예: "로그인 기능 있음"인데 권한 검사가 없음, "운영 배포 대상"인데 `docs/operations.md`가 없음.
   - 개인정보 취급함: 바뀐 로그 줄에 이메일·전화번호·비밀번호 같은 이름이 들어가면 막는다. 오탐이면 그 줄에 `qh:allow-pii`.
@@ -81,7 +81,7 @@ node .quality/qh/bin/qh.js doctor
 | `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
 | `qh doctor` | 설치·설정 전체 점검 |
 | `qh check [이름…]` | 필요한 검사 실행 |
-| `qh status [--json] [--pr]` | 상태표 |
+| `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다 |
 | `qh pr` | PR 직전 판정 (검사 전부 + 점검 + AI 리뷰) |
 | `qh routes --baseline --levels a,b,c` | 지금 앱 동작으로 권한 표 첫 버전 만들기 |
 | `qh measure [--backfill 주]` | 지금 상태를 재서 `.quality/metrics.csv`에 한 줄 더하고 결과지(로컬 HTML)를 만든다. `--backfill 8`은 지난 8주를 소급해 qh 전 흐름도 남긴다 |

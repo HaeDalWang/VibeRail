@@ -13,7 +13,7 @@ const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
 const { policyProblems, relatedTests } = require('../lib/policy');
 const { structureProblems, duplicateTotal } = require('../lib/structure');
-const { codeShapeProblems } = require('../lib/code-shape');
+const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
 
 const QH_HOME = path.join(__dirname, '..');
@@ -286,8 +286,9 @@ function reviewStatus(root, now) {
   return { state: ev.treeHash === now ? '완료' : '이전 상태에서 완료', findings: ev.findings };
 }
 
-function assess(root, phase = 'stop') {
-  const config = loadConfig(root);
+// baseRef: compare against this ref instead of config.baseRef (a CI run that knows the merge target).
+function assess(root, phase = 'stop', baseRef) {
+  const config = baseRef ? { ...loadConfig(root), baseRef } : loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
   const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
@@ -512,7 +513,7 @@ function cmdBaseline(root) {
     console.log(`${repoTools.BASELINE_FILE}: ${Object.entries(counts).map(([k, n]) => `${k} ${n}건`).join(', ')}을 "기존"으로 기록. 커밋한다 (늘어난 항목은 PR에서 사람이 확인).`);
     return EXIT.ok;
   } catch (err) {
-    if (err instanceof repoTools.ToolError) throw new EnvError(err.message);
+    if (err instanceof repoTools.ToolError || err instanceof ToolMissing) throw new EnvError(err.message);
     throw err;
   }
 }
@@ -532,7 +533,7 @@ const USAGE = `사용: qh <명령>
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
-  status [--json] [--pr]  상태표 (--pr: PR 기준)
+  status [--json] [--pr] [--base ref]  상태표 (--pr: PR 기준, --base: config.baseRef 대신 비교할 ref)
   routes --baseline --levels a,b,c  현재 동작으로 권한 표 첫 버전 만들기
   baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록
   hook session-start | hook stop`;
@@ -577,7 +578,7 @@ function main(argv) {
     return EXIT.ok;
   }
   if (cmd === 'status') {
-    const a = assess(root, rest.includes('--pr') ? 'pr' : 'stop');
+    const a = assess(root, rest.includes('--pr') ? 'pr' : 'stop', rest.includes('--base') ? rest[rest.indexOf('--base') + 1] : undefined);
     const { config, ...rest2 } = a;
     console.log(rest.includes('--json') ? JSON.stringify(rest2) : formatStatus(a));
     return EXIT.ok;

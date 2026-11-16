@@ -100,6 +100,25 @@ test('deleting a file a document points at blocks, even when that document is un
   assert.doesNotMatch(st, /old-dead/, 'old dead references in untouched documents are not this work\'s');
 });
 
+test('the files qh init writes have no dead backtick paths when backtickRefs is on', () => {
+  const root = repo(undefined, { 'package.json': '{}' });
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8'));
+  write(root, '.quality/config.json', JSON.stringify({ ...config, structure: { backtickRefs: true } }));
+  assert.doesNotMatch(structureOf(root), /죽은 링크/);
+});
+
+test('status --base compares against that ref instead of config.baseRef', () => {
+  const root = repo({ forbidden: ['docs/plans/'] });
+  write(root, 'docs/plans/x.md', 'x');
+  commit(root);
+  assert.match(structureOf(root), /금지 위치: docs\/plans\/x\.md/);
+  const r = qh(root, ['status', '--json', '--base', 'HEAD']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.deepStrictEqual(JSON.parse(r.stdout).structure, []);
+  assert.strictEqual(JSON.parse(r.stdout).baseRef, 'HEAD');
+});
+
 test('a new file under a forbidden folder blocks', () => {
   const root = repo({ forbidden: ['docs/plans/'] });
   write(root, 'docs/plans/x.md', 'x');
@@ -158,6 +177,12 @@ test('the component limit applies only under componentDirs when set', () => {
   assert.match(st, /server\/Job\.js — 긴 함수 0개 → 1개 \(Job 17줄\(한도 10\)\)/);
 });
 
+test('a .jsx component is read too (JSX syntax, flat config file match)', () => {
+  const root = repo(LIMITS, {}, { eslint: true });
+  write(root, 'src/Card.jsx', `export function Card() {\n${body(25)}\n  return <div className="card">x</div>;\n}\n`);
+  assert.match(structureOf(root), /함수 모양: src\/Card\.jsx — 긴 함수 0개 → 1개 \(Card 28줄\(한도 20\)\)/);
+});
+
 test('callbacks nested past the limit block, and test files are not held to function limits', () => {
   const root = repo(LIMITS, {}, { eslint: true });
   write(root, 'src/cb.js', 'a(() => { b(() => { c(() => { d(); }); }); });\n');
@@ -214,7 +239,7 @@ const START = {
 };
 
 function toolRepo() {
-  const root = repo(TOOLS, START, { bins: FAKE });
+  const root = repo(TOOLS, START, { bins: FAKE, eslint: true });
   assert.strictEqual(qh(root, ['baseline']).status, 0);
   commit(root);
   sh(root, 'git', ['checkout', '-q', 'main']);
@@ -273,12 +298,24 @@ test('cycle groups are strongly connected modules, a self-import included', () =
   assert.deepStrictEqual(cycleGroups(report, ['a', 'b', 'c', 'd', 'e']), [['a', 'b', 'c'], ['d']]);
 });
 
-test('namespace use marks names, and any other use of the namespace marks the whole file', () => {
-  const root = repo(undefined, { 'src/svc.js': '', 'src/x.js': "const svc = require('./svc');\nsvc.run(); svc?.stop(); svc['go']();\n", 'src/y.js': "const m = require('./svc.js');\nhandle(m);\n" });
-  const one = namespaceUses(root, ['src/svc.js', 'src/x.js'], new Set(['src/svc.js'])).get('src/svc.js');
-  assert.deepStrictEqual([...one.names].sort(), ['go', 'run', 'stop']);
-  assert.strictEqual(one.whole, false);
-  assert.strictEqual(namespaceUses(root, ['src/svc.js', 'src/y.js'], new Set(['src/svc.js'])).get('src/svc.js').whole, true);
+test('namespace use marks names, and any other use of the module marks the whole file', () => {
+  const files = {
+    'src/svc.js': '',
+    'src/x.js': "const svc = require('./svc');\nsvc.run(); svc?.stop(); svc['go']();\nrequire('./svc').once();\nfunction f(svc) { return svc; }\n",
+    'src/y.js': "const m = require('./svc.js');\nhandle(m);\n",
+    'src/call.js': "require('./svc')(app, ctx);\n",
+    'src/reexport.js': "module.exports = require('./svc');\n",
+    'src/lazy.js': "let mod;\nconst get = () => mod || require('./svc');\n",
+    'src/effect.js': "require('./svc');\n",
+    'src/broken.js': "const svc = require('./svc');\nsvc.run( {\n",
+  };
+  const root = repo(undefined, files, { eslint: true });
+  const use = (...importers) => namespaceUses(root, ['src/svc.js', ...importers], new Set(['src/svc.js'])).get('src/svc.js');
+  const one = use('src/x.js');
+  assert.deepStrictEqual([...one.names].sort(), ['go', 'once', 'run', 'stop']);
+  assert.strictEqual(one.whole, false, 'a parameter with the same name is another variable');
+  for (const f of ['src/y.js', 'src/call.js', 'src/reexport.js', 'src/lazy.js', 'src/broken.js']) assert.strictEqual(use(f).whole, true, f);
+  assert.strictEqual(use('src/effect.js'), undefined, 'a side-effect require uses nothing');
 });
 
 // ---------- measure ----------
