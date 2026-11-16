@@ -188,6 +188,18 @@ test('a check that runs out of time is reported to the person, not handed to the
   assert.match(s.checks[0].detail[0], /시간 초과 .*테스트를 고치지 말고 사용자에게/);
 });
 
+test('a quoted or env-prefixed command finds its tool, a missing tool is an env error', () => {
+  const ok = '-e "process.exit(0)"';
+  const checks = { quoted: { cmd: `${JSON.stringify(process.execPath)} ${ok}` }, prefixed: { cmd: `FOO=1 node ${ok}` }, missing: { cmd: '"qh-no-such-tool" x' } };
+  const root = repo({ ...BASIC, checks, common: Object.keys(checks) });
+  write(root, 'src/a.js', '2');
+  qh(root, ['check']);
+  const s = statusJson(root);
+  assert.strictEqual(stateOf(s, 'quoted'), '통과');
+  assert.strictEqual(stateOf(s, 'prefixed'), '통과');
+  assert.strictEqual(stateOf(s, 'missing'), '환경 오류');
+});
+
 test('a "{tests}" check runs only the tests of this work, and is not required when there are none', () => {
   const ran = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qh-ran-')), 'ran.txt');
   const echo = `node -e "require('fs').writeFileSync(${JSON.stringify(ran).replace(/"/g, "'")}, process.argv.slice(1).join(' '))"`;
@@ -406,6 +418,16 @@ test('short or import-only similarities are not duplicates', () => {
   const root = repo(BASIC, { 'src/x.js': `${imports}\n}\n}\n` });
   write(root, 'src/y.js', `${imports}\n}\n}\n`);
   assert.doesNotMatch(structureOf(root), /중복/);
+});
+
+test('init and pr report the repository-wide duplicate total without blocking on it', () => {
+  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync('{out}/result.json','[]')\"" } }, { 'src/mail.js': BLOCK('a'), 'src/copy.js': BLOCK('b') });
+  assert.match(qh(root, ['init', root]).stdout, /중복 합계\(참고, 막지 않음\): 12줄 · src\/(mail|copy)\.js 6/);
+  write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', DECLARED);
+  const r = qh(root, ['pr']);
+  assert.match(r.stdout, /중복 합계\(참고, 막지 않음\): 12줄/);
+  assert.strictEqual(r.status, 0, r.stdout);
 });
 
 test('a big file may not grow, a new root file needs a reason, a changed doc may not link to nothing', () => {

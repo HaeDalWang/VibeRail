@@ -12,7 +12,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
 const { policyProblems, relatedTests } = require('../lib/policy');
-const { structureProblems } = require('../lib/structure');
+const { structureProblems, duplicateTotal } = require('../lib/structure');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
@@ -136,8 +136,13 @@ function requirements(config, changed, phase, root) {
 
 // ---------- running checks ----------
 
+// The command word the shell runs: past VAR=value prefixes, without its quotes.
+const COMMAND_WORD = /^\s*(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s+)*(?:"([^"]+)"|'([^']+)'|(\S+))/;
+
 function toolExists(root, cmd) {
-  const tool = cmd.trim().split(/\s+/)[0];
+  const m = cmd.match(COMMAND_WORD);
+  const tool = m && (m[1] || m[2] || m[3]);
+  if (!tool || tool.includes('$')) return null; // only the shell can resolve it; let the run say
   const r = spawnSync('sh', ['-c', 'command -v "$1" >/dev/null', '_', tool], { cwd: root });
   return r.status === 0 ? null : tool;
 }
@@ -404,7 +409,7 @@ function cmdPr(root) {
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  console.log(`\n${formatStatus(a)}\n${formatDoctor(setup)}`);
+  console.log(`\n${formatStatus(a)}\n${formatDoctor(setup)}\n${duplicateTotal(root)}`);
   const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
