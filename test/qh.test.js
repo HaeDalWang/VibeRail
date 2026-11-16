@@ -152,6 +152,18 @@ test('stop blocks while a required check has no current evidence, and allows aft
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{}')), null);
 });
 
+test('stop does not block again when the agent changed nothing since the last block', () => {
+  const root = repo(BASIC);
+  write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', DECLARED);
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}')).decision, 'block');
+  const repeat = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
+  assert.notStrictEqual(repeat?.decision, 'block', 'same tree, same items: the agent could not fix it, so stop looping');
+  assert.match(repeat.systemMessage, /unit.*미실행/);
+  write(root, 'src/a.js', '3');
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}')).decision, 'block', 'a new change is checked again');
+});
+
 test('stop runs built-in checks itself and blocks on their failures', () => {
   const root = repo(
     {
