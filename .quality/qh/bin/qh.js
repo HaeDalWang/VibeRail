@@ -11,7 +11,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems, relatedTests } = require('../lib/policy');
+const { policyProblems, relatedTests, DECISIONS_FILE } = require('../lib/policy');
+const { createHash } = require('node:crypto');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
@@ -249,10 +250,33 @@ function readJsonAt(root, rev, file) {
   }
 }
 
+// The criteria as they are now; a person's confirmation is bound to it.
+function criteriaFingerprint(root) {
+  const read = (f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : '');
+  return createHash('sha256').update(`${read(CONFIG_FILE)}\n${read(ACCESS_FILE)}`).digest('hex').slice(0, 12);
+}
+
+const isCriteriaConfirmed = (root) => {
+  const file = path.join(root, DECISIONS_FILE);
+  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${criteriaFingerprint(root)}`);
+};
+
+// In words a non-developer can answer "is this what you want?" about.
+function criteriaSummary(root, config) {
+  const routes = Object.keys(readJsonAt(root, null, ACCESS_FILE).routes || {}).length;
+  const parts = [`켜진 검사: ${Object.keys(config.checks || {}).join(', ') || '없음'}`];
+  if (Object.keys(config.risks || {}).length) parts.push(`지키는 위험 영역: ${Object.keys(config.risks).join(', ')}`);
+  if (routes) parts.push(`권한 표 경로 ${routes}개`);
+  return parts.join(' · ');
+}
+
 // What the gate measures against (checks, risks, the access table) changed in this work.
+// A person who confirmed this exact version (qh confirm) is not asked again.
 function configChanges(root, base, config) {
-  const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인`;
-  if (!git(root, ['ls-tree', '--name-only', base, CONFIG_FILE])) return [`qh 첫 설치: 기준(${base.slice(0, 7)})에 ${CONFIG_FILE}이 없다. 설정·권한 표 전체를 한 번 본다 → ${diffHint}`];
+  if (isCriteriaConfirmed(root)) return [];
+  const confirm = '사용자가 이대로 쓰겠다고 하면 `qh confirm` 실행';
+  const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
+  if (!git(root, ['ls-tree', '--name-only', base, CONFIG_FILE])) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
   const a = flatten({ ...readJsonAt(root, base, CONFIG_FILE), access: readJsonAt(root, base, ACCESS_FILE) });
   const b = flatten({ ...config, access: readJsonAt(root, null, ACCESS_FILE) });
   const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k]).sort();
@@ -440,6 +464,22 @@ function cmdPr(root) {
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
 
+// Only after the person said yes: binds their confirmation to this exact version of the criteria.
+function cmdConfirm(root) {
+  const fp = criteriaFingerprint(root);
+  if (isCriteriaConfirmed(root)) {
+    console.log(`이미 확인됨 (기준 확인: ${fp})`);
+    return EXIT.ok;
+  }
+  const file = path.join(root, DECISIONS_FILE);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const line = `- ${new Date().toISOString().slice(0, 10)} · 기준 확인: ${fp} · 사용자가 품질 기준(설정·권한 표)을 확인함 · 설정이나 권한 표가 바뀌면`;
+  fs.writeFileSync(file, `${prev}${prev && !prev.endsWith('\n') ? '\n' : ''}${line}\n`);
+  console.log(`기록: ${DECISIONS_FILE}에 "${line}"`);
+  return EXIT.ok;
+}
+
 function readStdin() {
   try {
     return fs.readFileSync(0, 'utf8');
@@ -479,7 +519,7 @@ function hookStop(root) {
   const t = triage(a);
   const warn = warningLine(a);
   const aiPart = t.aiFix.map((x) => `- ${x}`).join('\n');
-  const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
+  const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 파일 경로·명령·커밋 해시·qh 같은 도구 이름 없이, 무엇을 정하는지와 고르면 어떻게 되는지를 쉬운 말로):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${t.env.map((x) => `- ${x}`).join('\n')}` : '';
   const askPart = `${humanPart}${envPart}`;
 
@@ -568,6 +608,7 @@ const USAGE = `사용: qh <명령>
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
   status [--json] [--pr] [--base ref]  상태표 (--pr: PR 기준, --base: config.baseRef 대신 비교할 ref)
   routes --baseline --levels a,b,c  현재 동작으로 권한 표 첫 버전 만들기
+  confirm              사용자가 지금 품질 기준(설정·권한 표)을 확인했다고 결정 로그에 기록 (바뀌면 다시 물음)
   baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록
   hook session-start | hook stop`;
 
@@ -578,6 +619,7 @@ function main(argv) {
   if (cmd === 'routes' && rest.includes('--baseline')) return cmdRoutesBaseline(root, rest);
   if (cmd === 'check') return cmdCheck(root, rest);
   if (cmd === 'baseline') return cmdBaseline(root);
+  if (cmd === 'confirm') return cmdConfirm(root);
   if (cmd === 'doctor') {
     const problems = doctor(root);
     console.log(formatDoctor(problems));
