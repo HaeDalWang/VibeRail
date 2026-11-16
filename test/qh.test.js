@@ -179,6 +179,15 @@ test('human decisions and base changes turn the agent back once, not on the repe
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}')), null);
 });
 
+test('a check that runs out of time is reported to the person, not handed to the agent to fix', () => {
+  const root = repo({ ...BASIC, checks: { unit: { cmd: 'node -e "setTimeout(()=>{},5000)"', timeoutSec: 1 } } });
+  write(root, 'src/a.js', '2');
+  qh(root, ['check', 'unit']);
+  const s = statusJson(root);
+  assert.strictEqual(stateOf(s, 'unit'), '환경 오류');
+  assert.match(s.checks[0].detail[0], /시간 초과 .*테스트를 고치지 말고 사용자에게/);
+});
+
 test('stop exits 1 with a warning when qh itself breaks, never blocking', () => {
   const root = repo(BASIC);
   write(root, '.quality/config.json', '{ broken');
@@ -330,6 +339,17 @@ test('secrets in changed files block without being printed; an allow marker and 
   assert.doesNotMatch(policyOf(root), /a\.test\.js/);
 });
 
+test('re-running init over an older install never offers to delete the whole install', () => {
+  const root = project({ 'README.md': 'x\n' });
+  qh(root, ['init', root]);
+  fs.rmSync(path.join(root, '.quality/qh/lib/ask-guide.md'));
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', 'older qh']);
+  const out = qh(root, ['init', root]).stdout;
+  assert.match(out, /rm -rf [^\n]*\.quality\/qh\/lib\/ask-guide\.md/);
+  assert.doesNotMatch(out, /rm -rf (\S+ )*\.quality\/qh( |$)/m);
+});
+
 test('init starts the decision log once and never overwrites it', () => {
   const root = project({ 'README.md': 'x\n', 'docs/decisions.md': '- mine\n' });
   qh(root, ['init', root]);
@@ -380,11 +400,13 @@ test('a big file may not grow, a new root file needs a reason, a changed doc may
   write(root, 'src/big.js', `${big}\nconst more = 1;`);
   write(root, 'notes.js', 'x');
   write(root, '.prettierrc', '{}');
+  fs.symlinkSync(path.join(root, 'src'), path.join(root, 'shared_modules'));
   write(root, 'docs/a.md', '[ok](a.md) [web](https://x.invalid/y) [gone](../src/missing.js)\n```\n[code](nope.md)\n```\n');
   const st = structureOf(root);
   assert.match(st, /큰 파일: src\/big\.js가 802줄\(기준 801/);
   assert.match(st, /루트 파일: .*notes\.js/);
   assert.doesNotMatch(st, /\.prettierrc/, 'top-level dotfiles are tool settings');
+  assert.doesNotMatch(st, /shared_modules/, 'a link to a folder is not a file');
   assert.match(st, /죽은 링크: docs\/a\.md:1 → \.\.\/src\/missing\.js/);
   assert.doesNotMatch(st, /nope\.md|a\.md 가|x\.invalid/);
 });

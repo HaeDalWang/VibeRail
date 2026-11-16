@@ -176,6 +176,8 @@ function checkStatus(root, name, now) {
   const ev = readEvidence(root, name);
   if (!ev) return { name, state: '미실행' };
   if (ev.envError) return { name, state: '환경 오류', detail: [ev.envError] };
+  // A slow suite is not a code bug: the agent must not "fix" tests to make them faster.
+  if (ev.timedOut) return { name, state: '환경 오류', detail: [`시간 초과 (로그: ${ev.logPath}) → 테스트를 고치지 말고 사용자에게: 이 검사의 timeoutSec를 늘리거나, 오래 걸리면 on을 ["pr"]로`] };
   const isCurrent = ev.treeHash === now;
   const detail = describeResult(ev);
   if (ev.exit !== 0) return { name, state: '실패', isCurrent, detail, logPath: ev.logPath };
@@ -501,7 +503,7 @@ function main(argv) {
   }
   if (cmd === 'ask') {
     const file = require('../lib/ask').ask(root, loadConfig(root));
-    console.log(`질문 화면: ${file}\n브라우저로 열어 고른 뒤 "답 복사" → 에이전트 창에 붙여 넣는다 (파일은 이 컴퓨터에만 있다).`);
+    console.log(`질문 화면: ${file}\n브라우저로 열어 고른 뒤 "프롬프트 복사" → 에이전트 창에 붙여 넣는다 (파일은 이 컴퓨터에만 있다).`);
     return EXIT.ok;
   }
   if (cmd === 'status') {
