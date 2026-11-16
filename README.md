@@ -4,6 +4,81 @@ AI 에이전트(Claude Code·Kiro)와 개발하는 프로젝트에 품질 문지
 
 명령 이름은 `qh`다.
 
+## 퀵스타트 (복사해서 붙여 넣기)
+
+터미널(맥: `터미널` 앱)을 열고 아래를 순서대로 붙여 넣는다. `#`로 시작하는 줄은 설명이라 붙여 넣어도 아무 일도 하지 않는다.
+
+**0. 준비물 확인**
+
+```sh
+node -v         # v24 이상이면 된다
+git --version   # 버전이 나오면 된다
+```
+
+`node`가 없거나 24보다 낮으면 [nodejs.org](https://nodejs.org)에서 LTS를 받아 설치한 뒤 터미널을 새로 연다.
+
+**1. VibeRail 받기 (컴퓨터에 한 번만)**
+
+```sh
+git clone https://github.com/HaeDalWang/VibeRail.git ~/VibeRail
+```
+
+**2. 내 프로젝트에 설치**
+
+`~/내-프로젝트`를 실제 프로젝트 폴더 경로로 바꿔서 붙여 넣는다. 프로젝트는 git 저장소여야 한다.
+
+```sh
+cd ~/내-프로젝트
+node ~/VibeRail/bin/qh.js init .
+```
+
+끝에 `qh doctor: 실패 0`이 나오면 설치된 것이다. 경고 "프로젝트 질문에 아직 답하지 않았다"는 3번에서 없어진다.
+
+**3. 설치한 파일 저장(커밋)**
+
+```sh
+git add -A
+git commit -m "chore: qh 설치"
+```
+
+**4. 프로젝트 질문에 답하기 (3분)**
+
+Claude Code나 Kiro를 이 프로젝트에서 열고 이렇게 말한다.
+
+```text
+qh 질문 세션 열어줘
+```
+
+에이전트가 질문 화면 파일 경로를 알려 준다. 그 파일을 브라우저로 연다(맥: 터미널에 `open 경로`, 또는 에이전트에게 "열어줘"). 답을 고르고 "프롬프트 복사"를 눌러 에이전트 창에 붙여 넣으면, 고른 답에 맞는 검사가 켜진다. 모르는 질문은 추천안 그대로 두면 된다.
+
+**5. 끝. 평소처럼 에이전트와 작업한다**
+
+에이전트가 응답을 끝낼 때마다 qh가 검사한다. 기준을 벗어나면 에이전트가 스스로 돌아가서 고친다. 사람이 정해야 할 것만 에이전트가 물어본다.
+
+**6. 품질 리포트 보기 (가끔, 예: 매주)**
+
+```sh
+node .quality/qh/bin/qh.js measure
+```
+
+리포트가 `.quality/reports/날짜-커밋.html`에 쌓인다. 맥에서는 `open .quality/reports/`로 폴더를 열어 가장 최근 파일을 브라우저로 본다. 리포트 한 장에 처음부터 지금까지의 변화가 함께 나온다.
+
+설치 전 흐름도 남기고 싶으면 처음 한 번만 `node .quality/qh/bin/qh.js measure --backfill 8`(지난 8주 소급)을 돌린다.
+
+### 이럴 때는
+
+| 상황 | 할 일 |
+|---|---|
+| 에이전트가 "qh: 끝내기 전에 고칠 일"을 받고 다시 일한다 | 정상이다. 기다린다. |
+| 에이전트가 "사용자에게 물어볼 것"을 묻는다 | 답한다. 권한·데이터 삭제처럼 사람이 정해야 하는 일이다. |
+| "환경 오류"가 나온다 | 코드 문제가 아니다. 메시지에 적힌 도구 설치나 설정을 한다. 모르겠으면 메시지를 에이전트에게 붙여 넣고 "이거 해결해줘". |
+| 지금 상태가 궁금하다 | `node .quality/qh/bin/qh.js status` |
+| 설치가 제대로 됐는지 보고 싶다 | `node .quality/qh/bin/qh.js doctor` |
+| PR을 올리기 전 | `node .quality/qh/bin/qh.js pr` — 마지막 줄이 `qh pr: 통과`면 올린다. AI 리뷰는 `.quality/config.json`의 `review.cmd`로 돈다(기본값은 `kiro-run`). 그 도구가 없으면 환경 오류가 나니, 쓰는 리뷰 명령으로 바꾸거나 에이전트에게 "qh 리뷰 명령 맞춰줘"라고 한다. |
+| 지우고 싶다 | `init` 출력 끝의 "되돌리기" 줄을 그대로 붙여 넣는다. |
+
+`init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나, 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 설치돼 있으면 함께 연결한다.
+
 ## 하는 일
 
 - **증거로 판정**: 검사 결과를 그 검사를 실행한 작업 트리 해시에 묶어 둔다. 실행한 뒤 코드가 바뀌었으면 통과로 치지 않는다.
@@ -50,28 +125,6 @@ AI 에이전트(Claude Code·Kiro)와 개발하는 프로젝트에 품질 문지
 - **내장 검사**
   - 권한 표(`route-access`): Express 5 라우트마다 접근 수준을 선언하고, 낮은 권한으로 요청했을 때 거부되는지 확인한다.
   - SQL 검사(`sql-prepare`): 코드 안의 SQL을 빈 테스트 DB에서 PREPARE해 본다.
-
-## 설치
-
-Node 24 이상, git 저장소가 필요하다.
-
-```sh
-node /path/to/VibeRail/bin/qh.js init /path/to/project
-cd /path/to/project
-node .quality/qh/bin/qh.js doctor
-```
-
-`init`이 하는 일:
-
-- qh를 `.quality/qh/`에 복사한다.
-- Claude Code·Kiro hook, `AGENTS.md` 규칙 블록, 설정 초안(`.quality/config.json`)을 붙인다.
-- 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))를 붙인다.
-
-`init`이 지키는 것:
-
-- 사람이 쓴 파일은 덮어쓰지 않는다.
-- 커밋하지 않은 변경이 있는 파일을 바꿔야 하면 멈춘다.
-- 같은 규칙이나 hook이 이미 두 곳에 있으면 멈춘다.
 
 ## 명령
 
