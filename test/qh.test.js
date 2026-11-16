@@ -193,6 +193,21 @@ test('a first install (no config on the base) is one base-change line, not one p
   assert.match(s.configChanges[0], /qh 첫 설치/);
 });
 
+test('a person confirms the criteria once with qh confirm, and a later change asks again', () => {
+  const root = repo(BASIC);
+  sh(root, 'git', ['checkout', '-q', 'main']);
+  sh(root, 'git', ['rm', '-q', '.quality/config.json']);
+  sh(root, 'git', ['commit', '-qm', 'no qh yet']);
+  sh(root, 'git', ['checkout', '-q', '-B', 'work']);
+  write(root, '.quality/config.json', JSON.stringify(BASIC));
+  assert.match(statusJson(root).configChanges[0], /켜진 검사: unit.*qh confirm/, 'the person is shown what is on, in plain words');
+  assert.strictEqual(qh(root, ['confirm']).status, 0);
+  assert.deepStrictEqual(statusJson(root).configChanges, []);
+  assert.match(fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8'), /기준 확인: [0-9a-f]{12}/);
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, common: [] }));
+  assert.strictEqual(statusJson(root).configChanges.length, 1, 'what was confirmed changed: ask again');
+});
+
 test('routes --baseline refuses to overwrite an access table a person may have edited', () => {
   const root = repo(BASIC, { '.quality/access.json': '{"levels":["public","member"],"routes":{}}' });
   const r = qh(root, ['routes', '--baseline', '--levels', 'public,member']);

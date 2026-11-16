@@ -17,3 +17,7 @@
 - Claude Code가 block 반복에 상한을 두는지: 문서 확인 안 함. gureumi 로그로 8회 이상 반복만 확인.
 
 ADR 불필요: 훅 반복 처리 한 군데 수정, 구조 변경 아님
+
+## 추가: 기준 확인 기록 (qh confirm)
+- 사람이 확인한 품질 기준은 지문(설정+권한 표 해시)으로 결정 로그에 남아 다시 묻지 않음, 바뀌면 다시 물음 → test/qh.test.js "a person confirms the criteria once with qh confirm..."
+- 사람에게 묻는 문장은 쉬운 말로 (훅 지시문, lib/ask-guide.md "기준 확인")
