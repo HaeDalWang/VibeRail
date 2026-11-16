@@ -270,7 +270,7 @@ function assess(root, phase = 'stop') {
     later: req.later,
     risks: req.risks,
     docsMissing: req.docsMissing,
-    policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel }) : [],
+    policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : [],
     structure: changed.length ? structureProblems(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
     undeclared,

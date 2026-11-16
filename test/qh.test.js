@@ -424,6 +424,38 @@ test('answer checks every line before saving, then stores answers and logs each 
   assert.doesNotMatch(policyOf(root), /결정 로그/, 'the saved answers carry their own decision-log lines');
 });
 
+test('doctor fails when an answer asks for something the project does not have yet', () => {
+  const root = repo({ ...BASIC, answers: { login: { choice: 'A' }, reviewer: { choice: 'C', reason: '혼자 실험 중' }, deploy: { choice: 'A' } } });
+  const out = qh(root, ['doctor']).stdout;
+  assert.match(out, /답 "로그인 기능 있음" → 권한 검사\(route-access\)가 없다/);
+  assert.match(out, /답 "로그인 기능 있음" → 위험 영역 auth가 없다/);
+  assert.match(out, /docs\/operations\.md가 없다/);
+  assert.doesNotMatch(out, /review\.cmd가 없다/, 'review skipped by answer');
+  assert.doesNotMatch(out, /DB 변경 있음/, 'unanswered questions fall back to the recommendation (B here)');
+  assert.doesNotMatch(out, /질문에 아직 답하지 않았다/);
+});
+
+test('with personal data, a changed log line naming a personal field blocks unless marked', () => {
+  const root = repo({ ...BASIC, answers: { personal: { choice: 'A' } } });
+  write(root, 'src/a.js', 'console.log("signup", user.email)\nconsole.log("count", n)\n');
+  const p = policyOf(root);
+  assert.match(p, /개인정보 로그: src\/a\.js:1/);
+  assert.doesNotMatch(p, /a\.js:2/);
+  write(root, 'src/a.js', 'console.log("signup", user.email) // qh:allow-pii 테스트 계정\n');
+  assert.doesNotMatch(policyOf(root), /개인정보 로그/);
+  const off = repo(BASIC);
+  write(off, 'src/a.js', 'console.log(user.email)\n');
+  assert.doesNotMatch(policyOf(off), /개인정보 로그/, 'off until the project says it keeps personal data');
+});
+
+test('with external services, a change to integration code needs a failure-case test or a reason', () => {
+  const root = repo({ ...BASIC, risks: { external: { paths: ['src/pay/**'] } }, answers: { external: { choice: 'A' } } });
+  write(root, 'src/pay/charge.js', 'module.exports = 2');
+  assert.match(policyOf(root), /연동 실패 테스트/);
+  write(root, 'src/pay/charge.test.js', "test('charge rejects on timeout', () => {})");
+  assert.doesNotMatch(policyOf(root), /연동 실패 테스트/);
+});
+
 // ---------- init ----------
 
 function project(files) {
@@ -525,7 +557,7 @@ test('init sets up the code map without its own rule copy, and doctor then only 
   const calls = fs.readFileSync(MAP_LOG, 'utf8');
   assert.match(calls, /^install -y --no-instructions --platform claude-code/m);
   assert.match(calls, /^build /m);
-  assert.match(r.stdout, /qh doctor: 실패 1, 경고 0\n.*probe\.mjs에 아직 채우지 않은/);
+  assert.match(r.stdout, /qh doctor: 실패 1, 경고 1\n.*probe\.mjs에 아직 채우지 않은[\s\S]*질문에 아직 답하지 않았다/);
 });
 
 test('doctor flags a second qh Stop hook and a code map that serves another folder', () => {
