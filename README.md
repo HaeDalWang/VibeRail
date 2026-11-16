@@ -42,6 +42,8 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 
 ## 하는 일
 
+전체 구조와 흐름 그림: [docs/architecture.md](docs/architecture.md)
+
 - **증거로 판정**: 검사 결과를 그 검사를 실행한 작업 트리 해시에 묶어 둔다. 실행한 뒤 코드가 바뀌었으면 통과로 치지 않는다.
 - **턴마다 막음**: Stop hook이 빠른 검사를 돌린다. 결과는 세 가지로 나눈다.
   - `AI가 고칠 일`: 에이전트를 되돌린다.
