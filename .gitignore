@@ -5,3 +5,7 @@ node_modules/
 # 코드 지도 MCP 설정: 내 절대 경로가 들어가 로컬에만 둔다
 .mcp.json
 .kiro/settings/mcp.json
+# 측정 결과는 로컬에만
+.quality/metrics.csv
+.quality/reports/
+*.bak
