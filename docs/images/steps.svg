@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 230" font-family="-apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">
+  <rect width="960" height="230" rx="16" fill="#f6f7f9"/>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2f5fd0"/></marker></defs>
+  <g>
+    <rect x="30" y="30" width="260" height="170" rx="14" fill="#fff" stroke="#c9cfd9"/>
+    <circle cx="70" cy="70" r="22" fill="#2f5fd0"/><text x="70" y="78" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">1</text>
+    <text x="104" y="78" font-size="22" font-weight="700" fill="#1d2330">붙여 넣기</text>
+    <rect x="54" y="108" width="212" height="34" rx="6" fill="#eef2fb" stroke="#2f5fd0" stroke-dasharray="4 3"/>
+    <text x="160" y="131" text-anchor="middle" font-size="14" fill="#2f5fd0">⌘V  한 줄</text>
+    <text x="160" y="176" text-anchor="middle" font-size="15" fill="#5d6676">설치는 AI가 한다</text>
+  </g>
+  <path d="M298 115H340" stroke="#2f5fd0" stroke-width="3" marker-end="url(#a)"/>
+  <g>
+    <rect x="350" y="30" width="260" height="170" rx="14" fill="#fff" stroke="#c9cfd9"/>
+    <circle cx="390" cy="70" r="22" fill="#2f5fd0"/><text x="390" y="78" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">2</text>
+    <text x="424" y="78" font-size="22" font-weight="700" fill="#1d2330">고르기</text>
+    <circle cx="384" cy="118" r="8" fill="none" stroke="#5d6676" stroke-width="2"/><text x="400" y="123" font-size="14" fill="#1d2330">로그인 있음</text>
+    <circle cx="500" cy="118" r="8" fill="#23854d"/><text x="516" y="123" font-size="14" fill="#1d2330">없음 (추천)</text>
+    <text x="480" y="176" text-anchor="middle" font-size="15" fill="#5d6676">모르면 그대로 둔다</text>
+  </g>
+  <path d="M618 115H660" stroke="#2f5fd0" stroke-width="3" marker-end="url(#a)"/>
+  <g>
+    <rect x="670" y="30" width="260" height="170" rx="14" fill="#fff" stroke="#c9cfd9"/>
+    <circle cx="710" cy="70" r="22" fill="#2f5fd0"/><text x="710" y="78" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">3</text>
+    <text x="744" y="78" font-size="22" font-weight="700" fill="#1d2330">평소처럼</text>
+    <rect x="694" y="104" width="212" height="40" rx="18" fill="#eef2fb"/>
+    <text x="800" y="129" text-anchor="middle" font-size="14" fill="#1d2330">"회원 목록 만들어줘"</text>
+    <text x="800" y="176" text-anchor="middle" font-size="15" fill="#5d6676">검사는 알아서 돈다</text>
+  </g>
+</svg>

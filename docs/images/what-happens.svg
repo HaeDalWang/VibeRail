@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" font-family="-apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">
+  <rect width="960" height="420" rx="16" fill="#f6f7f9"/>
+  <defs>
+    <marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2f5fd0"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#c2412d"/></marker>
+  </defs>
+  <!-- 나 -->
+  <rect x="30" y="40" width="200" height="70" rx="35" fill="#fff" stroke="#1d2330" stroke-width="2"/>
+  <text x="130" y="70" text-anchor="middle" font-size="15" fill="#5d6676">나</text>
+  <text x="130" y="94" text-anchor="middle" font-size="16" font-weight="700" fill="#1d2330">"이거 만들어줘"</text>
+  <path d="M236 75H286" stroke="#2f5fd0" stroke-width="3" marker-end="url(#b)"/>
+  <!-- AI 작업 -->
+  <rect x="296" y="40" width="180" height="70" rx="12" fill="#fff" stroke="#c9cfd9" stroke-width="2"/>
+  <text x="386" y="70" text-anchor="middle" font-size="15" fill="#5d6676">AI</text>
+  <text x="386" y="94" text-anchor="middle" font-size="16" font-weight="700" fill="#1d2330">만든다</text>
+  <path d="M482 75H532" stroke="#2f5fd0" stroke-width="3" marker-end="url(#b)"/>
+  <!-- 검사 -->
+  <rect x="542" y="30" width="190" height="90" rx="12" fill="#eef2fb" stroke="#2f5fd0" stroke-width="2.5"/>
+  <text x="637" y="66" text-anchor="middle" font-size="15" fill="#2f5fd0" font-weight="700">VibeRail 검사</text>
+  <text x="637" y="92" text-anchor="middle" font-size="14" fill="#1d2330">"다 했어요" 직전에 매번</text>
+  <!-- 결과 3갈래 -->
+  <path d="M637 120V160H170V190M637 160V190M800 160V190M637 160H800" stroke="#2f5fd0" stroke-width="2.5" fill="none"/>
+  <rect x="40" y="195" width="260" height="190" rx="14" fill="#fff" stroke="#c2412d" stroke-width="2.5"/>
+  <text x="170" y="232" text-anchor="middle" font-size="18" font-weight="700" fill="#c2412d">기준을 어겼다</text>
+  <text x="170" y="268" text-anchor="middle" font-size="15" fill="#1d2330">복사한 코드, 빠진 테스트…</text>
+  <text x="170" y="304" text-anchor="middle" font-size="16" font-weight="700" fill="#1d2330">AI가 돌아가서 고친다</text>
+  <text x="170" y="350" text-anchor="middle" font-size="15" fill="#5d6676">나는 할 일 없음 · 고치면 다시 검사</text>
+  <rect x="350" y="195" width="260" height="190" rx="14" fill="#fff" stroke="#b07a12" stroke-width="2.5"/>
+  <text x="480" y="232" text-anchor="middle" font-size="18" font-weight="700" fill="#b07a12">사람이 정할 일</text>
+  <rect x="372" y="250" width="216" height="62" rx="12" fill="#fdf6e7"/>
+  <text x="480" y="276" text-anchor="middle" font-size="14" fill="#1d2330">"이미 쌓인 데이터를</text>
+  <text x="480" y="298" text-anchor="middle" font-size="14" fill="#1d2330">지우나요?"</text>
+  <text x="480" y="350" text-anchor="middle" font-size="15" fill="#5d6676">나는 답만 한다</text>
+  <rect x="660" y="195" width="260" height="190" rx="14" fill="#fff" stroke="#23854d" stroke-width="2.5"/>
+  <text x="790" y="232" text-anchor="middle" font-size="18" font-weight="700" fill="#23854d">통과</text>
+  <text x="790" y="268" text-anchor="middle" font-size="15" fill="#1d2330">AI: "다 했어요"</text>
+  <text x="790" y="304" text-anchor="middle" font-size="14" fill="#5d6676">원래 있던 문제는</text>
+  <text x="790" y="324" text-anchor="middle" font-size="14" fill="#5d6676">경고로 알려만 준다</text>
+  </svg>
