@@ -339,6 +339,56 @@ test('init starts the decision log once and never overwrites it', () => {
   assert.match(fs.readFileSync(path.join(fresh, 'docs/decisions.md'), 'utf8'), /^- \d{4}-\d{2}-\d{2} · qh로 품질 기준/m);
 });
 
+// ---------- structure ratchet ----------
+
+const structureOf = (root) => statusJson(root).structure.join('\n');
+const BLOCK = (msg) => `function send(user) {
+  if (!user.email) throw new Error('${msg}');
+  const body = { to: user.email, subject: 'hello', retries: 3 };
+  const res = mailer.post('/send', body, { timeout: 5000 });
+  if (res.status !== 200) log.warn('mail failed', res.status);
+  return res.data.messageId;
+}
+`;
+
+test('a copied block in a touched file blocks and points at the existing copy, even with different literals', () => {
+  const root = repo(BASIC, { 'src/mail.js': BLOCK('no email') });
+  write(root, 'src/signup.js', BLOCK('이메일 없음').replace('3', '5'));
+  assert.match(structureOf(root), /중복: src\/signup\.js:1 ↔ src\/mail\.js:1/);
+});
+
+test('an old copy blocks once its file is touched, and a decision-log line allows it', () => {
+  const root = repo(BASIC, { 'src/mail.js': BLOCK('a'), 'src/old.js': BLOCK('b'), 'src/other.js': BLOCK('c') });
+  write(root, 'src/a.js', '2');
+  assert.doesNotMatch(structureOf(root), /중복/, 'copies in untouched files are not this work\'s to fix');
+  write(root, 'src/old.js', `${BLOCK('b')}// touched\n`);
+  assert.match(structureOf(root), /중복: src\/old\.js/);
+  write(root, 'docs/decisions.md', '- 2026-11-16 · 중복 허용: src/old.js · 다음 달 삭제 예정 · 삭제 시\n');
+  assert.doesNotMatch(structureOf(root), /중복/);
+});
+
+test('short or import-only similarities are not duplicates', () => {
+  const imports = Array.from({ length: 8 }, (_, i) => `import { thing${i} } from './mod${i}.js'`).join('\n');
+  const root = repo(BASIC, { 'src/x.js': `${imports}\n}\n}\n` });
+  write(root, 'src/y.js', `${imports}\n}\n}\n`);
+  assert.doesNotMatch(structureOf(root), /중복/);
+});
+
+test('a big file may not grow, a new root file needs a reason, a changed doc may not link to nothing', () => {
+  const big = Array.from({ length: 801 }, (_, i) => `const v${i} = ${i};`).join('\n');
+  const root = repo(BASIC, { 'src/big.js': big, 'docs/a.md': 'x' });
+  write(root, 'src/big.js', `${big}\nconst more = 1;`);
+  write(root, 'notes.js', 'x');
+  write(root, '.prettierrc', '{}');
+  write(root, 'docs/a.md', '[ok](a.md) [web](https://x.invalid/y) [gone](../src/missing.js)\n```\n[code](nope.md)\n```\n');
+  const st = structureOf(root);
+  assert.match(st, /큰 파일: src\/big\.js가 802줄\(기준 801/);
+  assert.match(st, /루트 파일: .*notes\.js/);
+  assert.doesNotMatch(st, /\.prettierrc/, 'top-level dotfiles are tool settings');
+  assert.match(st, /죽은 링크: docs\/a\.md:1 → \.\.\/src\/missing\.js/);
+  assert.doesNotMatch(st, /nope\.md|a\.md 가|x\.invalid/);
+});
+
 // ---------- init ----------
 
 function project(files) {

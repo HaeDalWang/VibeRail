@@ -12,6 +12,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
 const { policyProblems } = require('../lib/policy');
+const { structureProblems } = require('../lib/structure');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
@@ -251,7 +252,7 @@ function assess(root, phase = 'stop') {
   const config = loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
-  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], decisions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
+  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
   if (env.length) return { config, ...out };
   const base = git(root, ['merge-base', config.baseRef, 'HEAD']);
   const changed = changedFiles(root, base);
@@ -270,6 +271,7 @@ function assess(root, phase = 'stop') {
     risks: req.risks,
     docsMissing: req.docsMissing,
     policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel }) : [],
+    structure: changed.length ? structureProblems(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
     undeclared,
     configChanges: criteria,
@@ -286,7 +288,7 @@ function triage(a) {
     if (c.state === '이전 상태에서 통과') aiFix.push(`검사 ${c.name}: 이전 상태에서 통과 → 그 뒤 코드가 바뀌었으니 \`qh check ${c.name}\` 재실행`);
   }
   for (const d of a.docsMissing) aiFix.push(`문서 미갱신: ${d.doc} (위험 ${d.risk}의 연동 문서) → 같은 작업에서 갱신`);
-  aiFix.push(...a.policy);
+  aiFix.push(...a.policy, ...a.structure);
   const human = [
     ...a.undeclared.map((r) => `${r}: 접근 수준 미선언 → 누가 접근할 수 있는지 사용자에게 묻고, 답을 받은 뒤 ${ACCESS_FILE}의 routes에 적기`),
     ...a.decisions.map((d) => `작업 카드: ${d}`),
