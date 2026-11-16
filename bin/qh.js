@@ -20,7 +20,7 @@ const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
 const ACCESS_FILE = '.quality/access.json';
-const { METRICS_FILE } = require('../lib/measure');
+const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
 const BASELINE_EXAMPLES = 3;
@@ -56,7 +56,7 @@ function treeHash(root) {
   try {
     git(root, ['add', '-A'], env);
     // Measurements are a record about the code, not part of it: writing one keeps evidence current.
-    git(root, ['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', EVIDENCE_DIR, METRICS_FILE], env);
+    git(root, ['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', EVIDENCE_DIR, METRICS_FILE, REPORTS_DIR], env);
     return git(root, ['write-tree'], env);
   } finally {
     fs.rmSync(index, { force: true });
@@ -541,7 +541,7 @@ const USAGE = `사용: qh <명령>
   check [이름…]        필요한 검사 실행 (이름을 주면 그것만)
   answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
-  measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지(로컬 HTML) 경로를 알려 줌
+  measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지를 .quality/reports/에 쌓음
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
@@ -581,7 +581,7 @@ function main(argv) {
       return EXIT.failed;
     }
     const r = require('../lib/measure').measure(root, { weeks });
-    console.log(`측정: ${r.added}줄 추가 → ${METRICS_FILE}\n결과지: ${r.page}\n브라우저로 연다 (파일은 이 컴퓨터에만 있다).`);
+    console.log(`측정: ${r.added}줄 추가 → ${METRICS_FILE}\n결과지: ${r.page}\n브라우저로 연다. 지난 결과지도 ${REPORTS_DIR}/에 날짜순으로 남는다.`);
     return EXIT.ok;
   }
   if (cmd === 'ask') {

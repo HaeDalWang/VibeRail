@@ -85,11 +85,11 @@ node .quality/qh/bin/qh.js doctor
 | `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다 |
 | `qh pr` | PR 직전 판정 (검사 전부 + 점검 + AI 리뷰) |
 | `qh routes --baseline --levels a,b,c` | 지금 앱 동작으로 권한 표 첫 버전 만들기 |
-| `qh measure [--backfill 주]` | 지금 상태를 재서 `.quality/metrics.csv`에 한 줄 더하고 결과지(로컬 HTML)를 만든다. `--backfill 8`은 지난 8주를 소급해 qh 전 흐름도 남긴다 |
+| `qh measure [--backfill 주]` | 지금 상태를 재서 `.quality/metrics.csv`에 한 줄 더하고 결과지(HTML)를 `.quality/reports/날짜-커밋.html`로 쌓는다. `--backfill 8`은 지난 8주를 소급해 qh 전 흐름도 남긴다 |
 
 ## 측정 결과지
 
-`qh measure`는 측정할 때마다 `.quality/metrics.csv`에 한 줄을 더하고(지우지 않음), 처음과 지금, 항목별 이력을 보여 주는 결과지를 만든다. 결과지는 이 컴퓨터에만 있다.
+`qh measure`는 측정할 때마다 `.quality/metrics.csv`에 한 줄을 더하고(지우지 않음), 처음과 지금, 항목별 이력을 보여 주는 결과지를 `.quality/reports/`에 날짜·커밋 이름으로 쌓는다(지우지 않음). 지난 결과지를 열어 그때 상태와 비교할 수 있다. 저장소에 올릴지는 프로젝트가 정한다(올리지 않으려면 `.gitignore`에 `.quality/reports/`).
 
 개선·악화를 매기는 지표는 네 개다. 결과지에 지표마다 뜻, 나빠지면 무엇이 나빠지는지, 받아들이는 법이 함께 나온다.
 

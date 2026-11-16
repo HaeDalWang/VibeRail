@@ -697,11 +697,12 @@ test('measure adds a row per run, backfills past weeks without touching the repo
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   const page = r.stdout.match(/결과지: (.+)/)[1];
   assert.match(fs.readFileSync(page, 'utf8'), /품질 리포트/);
+  assert.strictEqual(path.relative(fs.realpathSync(root), fs.realpathSync(page)), path.join('.quality', 'reports', `${new Date().toISOString().slice(0, 10)}-${head.slice(0, 7)}.html`), 'the page is kept in the project, named by date and commit');
   const rows = metricsRows(root);
   assert.deepStrictEqual(rows.map((x) => [x.backfill, x.duplicated_lines]), [['1', '12'], ['', '0']], 'one past week (the copy), then now');
   assert.strictEqual(rows[1].feat_median_files_60d, '2');
   assert.strictEqual(sh(root, 'git', ['rev-parse', 'HEAD']), head);
-  assert.strictEqual(sh(root, 'git', ['status', '--short', '--', '.', ':!.quality/evidence']), '?? .quality/metrics.csv', 'only the history file is new (evidence is gitignored by init)');
+  assert.strictEqual(sh(root, 'git', ['status', '--short', '--', '.', ':!.quality/evidence']), '?? .quality/metrics.csv\n?? .quality/reports/', 'only the history and its pages are new (evidence is gitignored by init)');
   assert.strictEqual(stateOf(statusJson(root), 'unit'), '통과', 'writing a measurement does not make evidence stale');
 
   qh(root, ['measure']);
