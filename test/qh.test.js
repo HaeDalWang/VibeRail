@@ -693,18 +693,37 @@ test('measure adds a row per run, backfills past weeks without touching the repo
   assert.strictEqual(qh(root, ['measure', '--backfill', 'x']).status, 1);
 });
 
-test('measure judges copies as a share of code and leaves out accepted copies and dot-folder docs', () => {
+test('measure judges copies as a share of code and leaves out accepted copies, vendored code and dot-folder docs', () => {
   const root = repo(BASIC);
   write(root, 'src/mail.js', BLOCK('a'));
   write(root, 'src/copy.js', BLOCK('b'));
   write(root, 'docs/decisions.md', '# 결정 로그\n- 중복 허용: src/copy.js · 외부 계약이라 따로 둔다\n');
   write(root, '.agents/skill/README.md', '[x](./missing.md)\n');
+  write(root, 'public/vendor/lib.js', BLOCK('a'));
   commitAt(root, 'chore: accepted copy', 0);
   qh(root, ['measure']);
   const [row] = metricsRows(root);
-  assert.strictEqual(row.duplicated_lines, '6', 'only the copy in mail.js counts');
+  assert.strictEqual(row.duplicated_lines, '6', 'only the copy in mail.js counts; a vendored copy is not ours');
   assert.strictEqual(Number(row.duplicated_pct), Math.round((6 / Number(row.code_lines)) * 10000) / 100);
   assert.strictEqual(row.dead_doc_links, '0', 'copied-in skills are not the project docs');
+});
+
+test('measure leaves out files accepted without tests and splits the page at the commit that added qh', () => {
+  const root = repo(BASIC);
+  write(root, 'src/glue.js', 'module.exports = 1;\n');
+  write(root, 'test/a.test.js', "require('../src/a');\n");
+  commitAt(root, 'chore: before qh', 14 * 86400);
+  write(root, 'src/glue.js', 'module.exports = 2;\n');
+  commitAt(root, 'chore: right before qh', 86400);
+  write(root, '.quality/qh/bin/qh.js', '// installed\n');
+  write(root, 'docs/decisions.md', '# 결정 로그\n- 테스트 없음 허용: src/glue.js · 상수만 내보낸다\n');
+  commitAt(root, 'chore: add qh', 0);
+  const r = qh(root, ['measure', '--backfill', '1']);
+  const rows = metricsRows(root);
+  assert.strictEqual(rows.at(-1).untested_pct, '0', 'src/a.js has its test, src/glue.js is accepted (50 without the line)');
+  const data = JSON.parse(fs.readFileSync(r.stdout.match(/결과지: (.+)/)[1], 'utf8').match(/const D=(\{.*?\});\n/)[1]);
+  assert.deepStrictEqual(data.rows.map((x) => x.withQh), [false, false, true], 'a past week, the commit right before qh (backfilled as the baseline), then now');
+  assert.ok(rows.every((x) => x.rules === '3'), 'each row says which counting rules made it');
 });
 
 test('a Stop that turns the agent back is counted by reason in the next measurement', () => {
