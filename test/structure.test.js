@@ -85,6 +85,21 @@ test('a listed document may not grow unless the decision log allows it', () => {
   assert.doesNotMatch(structureOf(root), /문서 증가/);
 });
 
+test('a listed document may not grow in bytes either, even on the same line count', () => {
+  const root = repo({ noGrow: ['AGENTS.md'] }, { 'AGENTS.md': 'short\n' });
+  write(root, 'AGENTS.md', 'a much longer line\n');
+  assert.match(structureOf(root), /문서 증가: AGENTS\.md가 1줄 → 1줄\(6 → 19바이트\)/);
+});
+
+test('deleting a file a document points at blocks, even when that document is untouched', () => {
+  const root = repo({ backtickRefs: true }, { 'src/gone.js': '1', 'docs/guide.md': 'run `src/gone.js` or [it](../src/gone.js); `src/old-dead.js`\n' });
+  fs.rmSync(path.join(root, 'src/gone.js'));
+  const st = structureOf(root);
+  assert.match(st, /죽은 링크: docs\/guide\.md:1 → `src\/gone\.js`/);
+  assert.match(st, /죽은 링크: docs\/guide\.md:1 → \.\.\/src\/gone\.js/);
+  assert.doesNotMatch(st, /old-dead/, 'old dead references in untouched documents are not this work\'s');
+});
+
 test('a new file under a forbidden folder blocks', () => {
   const root = repo({ forbidden: ['docs/plans/'] });
   write(root, 'docs/plans/x.md', 'x');
@@ -134,6 +149,15 @@ test('a file may not gain a function over a limit; one already over is kept', ()
   assert.match(st, /src\/new\.js — 분기가 많은 함수 0개 → 1개/);
 });
 
+test('the component limit applies only under componentDirs when set', () => {
+  const root = repo({ functions: { maxLines: 10, componentMaxLines: 20, componentDirs: ['src/'] } }, {}, { eslint: true });
+  write(root, 'src/Panel.js', `function Panel() {\n${body(15)}\n}\n`);
+  write(root, 'server/Job.js', `function Job() {\n${body(15).replaceAll('step', 'job')}\n}\n`);
+  const st = structureOf(root);
+  assert.doesNotMatch(st, /src\/Panel\.js/);
+  assert.match(st, /server\/Job\.js — 긴 함수 0개 → 1개 \(Job 17줄\(한도 10\)\)/);
+});
+
 test('callbacks nested past the limit block, and test files are not held to function limits', () => {
   const root = repo(LIMITS, {}, { eslint: true });
   write(root, 'src/cb.js', 'a(() => { b(() => { c(() => { d(); }); }); });\n');
@@ -149,6 +173,12 @@ test('a comment pattern counts comments only, not strings', () => {
   assert.doesNotMatch(structureOf(root), /주석 규칙/);
   write(root, 'src/t.js', '// TICKET-1\n/* TICKET-2 */\n');
   assert.match(structureOf(root), /주석 규칙 "코드 티켓": src\/t\.js에서 1개 → 2개/);
+});
+
+test('a file that does not parse is counted whole for comment patterns', () => {
+  const root = repo({ patterns: [{ name: '코드 티켓', regex: 'TICKET-\\d+', in: 'comments' }] }, {}, { eslint: true });
+  write(root, 'src/broken.js', 'function ( { // TICKET-1\n');
+  assert.match(structureOf(root), /주석 규칙 "코드 티켓": src\/broken\.js에서 0개 → 1개/);
 });
 
 test('function limits without ESLint in the project are an environment error, and doctor fails', () => {
