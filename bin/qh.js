@@ -466,8 +466,8 @@ const warningLine = (a) => {
 // - AI-fix items block again only after the tree changed, and at most MAX_SAME_BLOCKS times in a row.
 // - Questions for the person and environment errors are handed back once per distinct content.
 // Anything not handed back goes to the user as a systemMessage.
-// ponytail: fixed cap of 5 same-item blocks, make it config if a project needs more retries.
-const MAX_SAME_BLOCKS = 5;
+// ponytail: fixed cap of 2 same-item blocks, make it config if a project needs more retries.
+const MAX_SAME_BLOCKS = 2;
 const STOP_STATE = 'stop-state.json';
 
 function hookStop(root) {

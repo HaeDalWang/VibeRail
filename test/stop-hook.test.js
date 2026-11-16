@@ -33,11 +33,11 @@ test('stop gives up after repeated blocks on the same items even when the agent 
   const root = repo(BASIC);
   write(root, '.quality/tasks/work.md', DECLARED);
   const blocks = [];
-  for (let i = 0; i < 8; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     write(root, 'src/a.js', String(i));
     blocks.push(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'))?.decision === 'block');
   }
-  assert.deepStrictEqual(blocks, [true, true, true, true, true, false, false, false]);
+  assert.deepStrictEqual(blocks, [true, true, false, false, false]);
 });
 
 test('a question for the person is asked once, even without stop_hook_active in the hook input', () => {
