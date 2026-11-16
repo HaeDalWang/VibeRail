@@ -15,3 +15,4 @@
 - `.quality/config.json`·`.quality/access.json`(권한 표)·`.quality/probe.mjs`는 사용자에게 묻지 않고 바꾸지 않는다. 검사를 통과시키려고 기준을 낮추지 않는다.
 - qh가 `환경 오류`라고 하면 코드를 고치지 말고 사용자에게 그대로 보고한다.
 - PR을 올리기 전에 `qh pr`을 실행한다.
+- 사용자가 품질 리포트를 원하면 `qh measure`를 실행하고, 출력된 결과지 파일을 브라우저로 열어 준다(맥 `open`). 지난 결과지는 `.quality/reports/`에 있다.
