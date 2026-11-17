@@ -10,6 +10,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, duplicateProblems, formatDoctor, MAP_TOOL, MAP_DB } = require('./doctor');
 const { DECISIONS_FILE } = require('./policy');
+const { installSkills, shippedFiles, isInstalledSkill } = require('./skills-install');
 
 const INSTALL_DIR = '.quality/qh';
 const QH_CMD = 'node "$(git rev-parse --show-toplevel)/.quality/qh/bin/qh.js"';
@@ -91,7 +92,8 @@ function draftConfig(d) {
     checks.routes = { builtin: 'route-access', requests: false };
     checks.access = { builtin: 'route-access', ...(d.db === 'postgres' ? { on: ['pr'] } : {}) };
   }
-  const config = { baseRef: d.baseRef, checks, common: Object.keys(checks), risks: {} };
+  // Copies a file already had are shown as a warning (a deepening candidate); copies this work adds still block.
+  const config = { baseRef: d.baseRef, checks, common: Object.keys(checks), risks: {}, structure: { duplicates: 'grown' } };
   if (d.hasKiroRun) config.review = { cmd: 'kiro-run {workdir} {task} claude-sonnet-5.5 medium', timeoutSec: 900 };
   return `${JSON.stringify(config, null, 2)}\n`;
 }
@@ -143,6 +145,8 @@ function copyQh(qhHome, root, plan) {
       write(root, path.join(INSTALL_DIR, dir, f), fs.readFileSync(path.join(qhHome, dir, f), 'utf8'), plan);
     }
   }
+  // skills/ rides along so an init run from this copy installs the same skills.
+  for (const [rel, body] of shippedFiles(qhHome)) write(root, path.join(INSTALL_DIR, rel), body, plan);
   const { version } = JSON.parse(fs.readFileSync(path.join(qhHome, 'package.json'), 'utf8'));
   // Own package.json: the project may be "type": "module"; qh is CommonJS.
   write(root, path.join(INSTALL_DIR, 'package.json'), `${JSON.stringify({ name: 'qh', version, private: true, type: 'commonjs' }, null, 2)}\n`, plan);
@@ -228,12 +232,13 @@ function init(qhHome, target) {
   // Installing qh sets the project's criteria: the first line of its decision log.
   if (read(root, DECISIONS_FILE) === null) write(root, DECISIONS_FILE, draftDecisions(), plan);
   if ((d.express || d.db === 'postgres') && read(root, '.quality/probe.mjs') === null) write(root, '.quality/probe.mjs', draftProbe(d), plan);
+  installSkills(qhHome, (rel, body) => write(root, rel, body, plan), (rel) => read(root, rel));
   attachClaude(root, plan);
   attachKiro(root, plan);
   attachRules(qhHome, root, plan, notes);
   attachGitignore(root, plan);
   // qh's own copy may be refreshed freely; a person's file with uncommitted edits may not.
-  const dirty = [...plan].filter(([rel, w]) => !w.isNew && !rel.startsWith(`${INSTALL_DIR}/`) && git(root, ['status', '--porcelain', '--', rel]));
+  const dirty = [...plan].filter(([rel, w]) => !w.isNew && !rel.startsWith(`${INSTALL_DIR}/`) && !isInstalledSkill(qhHome, rel) && git(root, ['status', '--porcelain', '--', rel]));
   if (dirty.length) {
     console.log(`커밋 안 된 변경이 있는 파일을 바꿔야 해서 멈춤 (덮어쓰면 되돌릴 수 없다): ${dirty.map(([rel]) => rel).join(', ')}\n먼저 커밋하거나 치운 뒤 다시 실행.`);
     return 1;
@@ -250,8 +255,10 @@ function init(qhHome, target) {
 }
 
 function report(root, d, log, notes, mapDone, isFreshInstall) {
-  const created = log.filter((l) => l.isNew).map((l) => l.rel);
-  const changed = log.filter((l) => !l.isNew).map((l) => l.rel);
+  // One entry per installed skill folder, not per file.
+  const entry = (rel) => rel.replace(/^(\.claude\/skills\/[^/]+)\/.*/, '$1');
+  const created = [...new Set(log.filter((l) => l.isNew).map((l) => entry(l.rel)))];
+  const changed = [...new Set(log.filter((l) => !l.isNew).map((l) => entry(l.rel)))];
   const tracked = changed.filter((rel) => git(root, ['ls-files', '--error-unmatch', '--', rel]) !== null);
   const createdTop = [...new Set(created.map((rel) => (isFreshInstall && rel.startsWith(`${INSTALL_DIR}/`) ? INSTALL_DIR : rel)))];
   console.log(`qh init: ${root}`);

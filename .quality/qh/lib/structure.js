@@ -200,21 +200,28 @@ function bigFileProblems(root, changed, base, decisions) {
 // A link to a folder (a shared node_modules) is not a file someone put at the top.
 const isPlainFile = (root, f) => fs.existsSync(path.join(root, f)) && fs.statSync(path.join(root, f)).isFile();
 
+// The glossary files upstream's domain-modeling skill puts at the top (docs/agents/domain.md).
+const GLOSSARY_FILE = /^GLOSSARY(-MAP)?\.md$/;
+
 function rootFileProblems(root, changed, base, decisions) {
   const atBase = new Set((gitOut(root, ['ls-tree', '--name-only', base]) || '').split('\n'));
   return changed
     // Dotfiles and tool files (lock files, *.config.js) at the top are settings that have to live there.
-    .filter((f) => !f.includes('/') && !f.startsWith('.') && !TOOL_FILE.test(f) && !atBase.has(f) && isPlainFile(root, f) && !OWN_FILES.test(f))
+    .filter((f) => !f.includes('/') && !f.startsWith('.') && !TOOL_FILE.test(f) && !atBase.has(f) && isPlainFile(root, f) && !OWN_FILES.test(f) && !GLOSSARY_FILE.test(f))
     .filter((f) => !isAllowedBy(decisions, '루트 파일', f))
     .map((f) => `루트 파일: 저장소 맨 위에 새 파일 ${f} → 맞는 폴더로 옮기거나, 맨 위에 둘 이유를 ${DECISIONS_FILE}에 \`루트 파일: ${f} · ${reasonSlot('왜 맨 위여야 하는지')}\``);
 }
+
+// Prose the project owns. qh's copy, the skills qh installs and the agent docs it starts
+// from (upstream text that names paths a project makes later, like docs/adr) are not.
+const isDoc = (f) => /\.mdx?$/.test(f) && !/^(\.quality\/qh\/|\.claude\/skills\/|docs\/agents\/)/.test(f);
 
 // A malformed %-escape is a broken link, not a reason to crash.
 const safeDecode = (s) => { try { return decodeURI(s); } catch { return s; } };
 
 function deadLinkProblems(root, changed) {
   const out = [];
-  for (const f of changed.filter((x) => /\.mdx?$/.test(x) && !x.startsWith('.quality/qh/'))) {
+  for (const f of changed.filter(isDoc)) {
     const text = readText(root, f);
     if (text === null) continue;
     let isFence = false;
@@ -237,7 +244,6 @@ function deadLinkProblems(root, changed) {
 const atBaseText = (root, base, f) => gitOut(root, ['show', `${base}:${f}`]);
 const isNewFile = (root, base, f) => spawnSync('git', ['cat-file', '-e', `${base}:${f}`], { cwd: root }).status !== 0 && isPlainFile(root, f);
 const underAny = (f, dirs) => dirs.some((d) => f.startsWith(`${d.replace(/\/+$/, '')}/`));
-const isDoc = (f) => /\.mdx?$/.test(f) && !f.startsWith('.quality/qh/');
 
 // Lines outside fenced code blocks: [{ line, text }].
 function proseLines(text) {

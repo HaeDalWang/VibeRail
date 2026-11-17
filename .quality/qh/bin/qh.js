@@ -401,13 +401,14 @@ function assess(root, phase = 'stop', baseRef) {
     risks: req.risks,
     docsMissing: req.docsMissing,
     policy: [
-      ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
+      ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, base, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
       ...cardFormatProblems(card),
       ...(phase === 'pr' ? require('../lib/history-secrets').historySecretProblems(root, base) : []),
     ],
     structure: shape.problems,
     structureEnv: shape.env,
     structureWarnings: shape.warnings,
+    policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
@@ -686,7 +687,8 @@ function hookSessionStart(root) {
   const unasked = loadConfig(root)?.answers ? '' : '\n(qh) 프로젝트 질문에 아직 답하지 않았다 → 사용자에게 알리고, 원하면 .quality/qh/lib/ask-guide.md대로 질문 세션을 연다.';
   const pending = stopState.takePending(root);
   const left = pending ? `\n(qh) 지난 세션이 끝날 때 남은 품질 문제가 있었다(그 호스트는 알림을 보여 주지 않는다). 위 상태에 아직 남았으면 사용자에게 이렇게 전한다:\n${pending}` : '';
-  console.log(`${formatStatus(assess(root))}${unasked}${left}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
+  const cycle = require('../lib/cycle').cycleLines(root, taskCard(root).text).map((l) => `\n(qh) ${l}`).join('');
+  console.log(`${formatStatus(assess(root))}${unasked}${cycle}${left}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
   return EXIT.ok;
 }
 
@@ -695,6 +697,8 @@ const USAGE = `사용: qh <명령>
   check [이름…]        필요한 검사 실행 (이름을 주면 그것만)
   answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
+  cycle                카드가 어느 단계인지, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로
+  view interface <json> | view glossary  interface 선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
   measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지를 .quality/reports/에 쌓음
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
@@ -740,6 +744,11 @@ function main(argv) {
     console.log(`측정: ${r.added}줄 추가 → ${METRICS_FILE}\n결과지: ${r.page}\n브라우저로 연다. 지난 결과지도 ${REPORTS_DIR}/에 날짜순으로 남는다.`);
     return EXIT.ok;
   }
+  if (cmd === 'cycle') {
+    console.log(require('../lib/cycle').cycleLines(root, taskCard(root).text, { always: true }).join('\n'));
+    return EXIT.ok;
+  }
+  if (cmd === 'view') return require('../lib/view').run(root, rest, loadConfig(root));
   if (cmd === 'ask') {
     const file = require('../lib/ask').ask(root, loadConfig(root));
     console.log(`질문 화면: ${file}\n브라우저로 열어 고른 뒤 "프롬프트 복사" → 에이전트 창에 붙여 넣는다 (파일은 이 컴퓨터에만 있다).`);
