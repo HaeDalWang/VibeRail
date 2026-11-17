@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.quality/qh/bin/qh.js\" hook session-start",
+            "command": "[ -f \"$(git rev-parse --show-toplevel 2>/dev/null)/.quality/qh/bin/qh.js\" ] || exit 0; node \"$(git rev-parse --show-toplevel 2>/dev/null)/.quality/qh/bin/qh.js\" hook session-start",
             "timeout": 30
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.quality/qh/bin/qh.js\" hook stop",
+            "command": "[ -f \"$(git rev-parse --show-toplevel 2>/dev/null)/.quality/qh/bin/qh.js\" ] || exit 0; node \"$(git rev-parse --show-toplevel 2>/dev/null)/.quality/qh/bin/qh.js\" hook stop",
             "timeout": 120
           }
         ]

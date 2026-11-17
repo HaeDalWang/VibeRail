@@ -508,6 +508,23 @@ test('init installs qh into the project, keeps existing hooks and rules, and dra
   assert.match(r.stdout, /되돌리기 \(저장소 루트에서\): git checkout -- .*\.claude\/settings\.json/);
 });
 
+test('the installed hooks pass where the checkout has no qh (older-branch worktree, no git)', () => {
+  const root = project(ESM_EXPRESS);
+  qh(root, ['init', root]);
+  const settings = JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8'));
+  const kiro = JSON.parse(fs.readFileSync(path.join(root, '.kiro/hooks/qh.json'), 'utf8'));
+  const cmds = [settings.hooks.Stop[0].hooks[0].command, settings.hooks.SessionStart[1].hooks[0].command, ...kiro.hooks.map((h) => h.action.command)];
+  const bare = project({ 'a.txt': 'x\n' });
+  const noGit = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-nogit-'));
+  for (const cwd of [bare, noGit]) {
+    for (const c of cmds) {
+      const r = spawnSync('sh', ['-c', c], { cwd, input: '{}', encoding: 'utf8' });
+      assert.strictEqual(r.status, 0, `${c} in ${cwd}: ${r.stderr}`);
+      assert.strictEqual(r.stderr, '');
+    }
+  }
+});
+
 test('the installed copy runs inside a "type": "module" project', () => {
   const root = project(ESM_EXPRESS);
   qh(root, ['init', root]);
