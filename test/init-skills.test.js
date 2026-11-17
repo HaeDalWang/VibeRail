@@ -93,10 +93,10 @@ test('init creates the agent docs and .scratch only when missing, and no GLOSSAR
   assert.strictEqual(fs.readFileSync(path.join(root, 'docs/agents/triage-labels.md'), 'utf8'), 'edited\n', 're-init leaves the person\'s edit');
 });
 
-test('a new config draft sets structure.duplicates to "grown"; an existing config is left alone', () => {
+test('a new config draft needs no duplicates setting (existing copies never block); an existing config is left alone', () => {
   const root = project();
   qh(root, ['init', root]);
-  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8')).structure.duplicates, 'grown');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8')).structure?.duplicates, undefined);
   const old = project();
   write(old, '.quality/config.json', JSON.stringify({ baseRef: 'main', checks: {}, common: [] }));
   sh(old, 'git', ['add', '-A']);

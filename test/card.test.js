@@ -102,3 +102,11 @@ test('a check already failing on the base, allowed in the decision log, only war
   assert.notStrictEqual(d?.decision, 'block');
   assert.match(d.systemMessage, /이 작업 전부터 실패하던 것이라/);
 });
+
+test('a card section that ends the file with no newline after its heading reads as empty, not as its heading', () => {
+  const { section } = require('../lib/card');
+  assert.strictEqual(section('# 카드\n## 의도', '의도'), '');
+  assert.strictEqual(section('# 카드\n## 의도\n', '의도'), '');
+  assert.strictEqual(section('# 카드\n## 의도\n고칠 것\n', '의도'), '고칠 것');
+  assert.strictEqual(section('# 카드\n', '의도'), null);
+});

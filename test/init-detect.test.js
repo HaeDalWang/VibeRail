@@ -62,3 +62,32 @@ test('the next step after install says in plain words what to tell the agent', (
   assert.doesNotMatch(out, /qh 질문 세션/);
   assert.match(out, /에이전트에게 "품질 기준을 같이 정하자"라고 말한다/);
 });
+
+// ---------- AI review command (Kiro first, else Claude Code headless) ----------
+
+const { draftConfig } = require('../lib/init');
+const { spawnSync } = require('node:child_process');
+const { QH, TEST_ENV, repo, DECLARED, BASIC } = require('./helpers');
+const reviewOf = (d) => JSON.parse(draftConfig({ baseRef: 'main', ...d })).review;
+
+test('init fills a read-only Claude Code review command when kiro-run is absent but claude is there', () => {
+  assert.strictEqual(reviewOf({ hasKiroRun: false, hasClaude: false }), undefined);
+  assert.match(reviewOf({ hasKiroRun: true, hasClaude: true }).cmd, /^kiro-run \{workdir\} \{task\}/, 'Kiro stays first');
+  const { cmd } = reviewOf({ hasKiroRun: false, hasClaude: true });
+  assert.match(cmd, /^claude -p "\$\(cat \{task\}\)"/);
+  assert.match(cmd, / --tools Read,Grep,Glob /, 'no tool that edits files or runs commands');
+  assert.doesNotMatch(cmd, /bypassPermissions|acceptEdits|Edit|Write|Bash/);
+  assert.match(cmd, /> \{out\}\/result\.json$/);
+});
+
+test('the Claude Code review command turns the structured answer into result.json', () => {
+  const stub = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-claude-'));
+  const finding = { file: 'src/a.js', line: 1, rank: 1, severity: '중간', verdict: 'confirmed', checklist: '6', reason: '값이 바뀜', nextAction: '확인' };
+  fs.writeFileSync(path.join(stub, 'claude'), `#!/bin/sh\necho '${JSON.stringify({ type: 'result', structured_output: { findings: [finding] } })}'\n`, { mode: 0o755 });
+  const root = repo({ ...BASIC, review: reviewOf({ hasKiroRun: false, hasClaude: true }) });
+  write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', DECLARED);
+  const r = spawnSync(process.execPath, [QH, 'review'], { cwd: root, encoding: 'utf8', env: { ...TEST_ENV, PATH: `${stub}:${TEST_ENV.PATH}` } });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/evidence/review/result.json'), 'utf8')), [finding]);
+});

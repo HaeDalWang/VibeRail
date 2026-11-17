@@ -11,7 +11,7 @@ git clone https://github.com/HaeDalWang/VibeRail.git ~/VibeRail
 cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git commit -m "chore: qh 설치"
 ```
 
-`init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 있으면 함께 연결한다. 그다음 `node .quality/qh/bin/qh.js ask`로 질문 화면, `measure`로 리포트를 만든다. PR의 AI 리뷰는 `.quality/config.json`의 `review.cmd`(기본 `kiro-run`)로 돈다.
+`init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 있으면 함께 연결한다. 그다음 `node .quality/qh/bin/qh.js ask`로 질문 화면, `measure`로 리포트를 만든다. PR의 AI 리뷰는 `.quality/config.json`의 `review.cmd`로 돈다. `init`은 `kiro-run`이 있으면 그것을, 없고 `claude`가 있으면 Claude Code headless(`claude -p`, 읽기 도구 Read·Grep·Glob만, 답은 구조화 출력으로 받아 `result.json`에 씀)를 채운다.
 
 ## 하는 일
 
@@ -36,13 +36,12 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - 결정 로그: 품질 기준(config·권한 표)이 바뀌면 `docs/decisions.md`에 한 줄을 남긴다.
   - 비밀값: 바뀐 파일에서 키·토큰·`.env`를 찾는다. 찾은 값은 출력하지 않는다.
 - **구조 래칫** (이번 작업이 만진 파일만, Stop·PR 모두)
-  - 중복: 만진 파일에 복사된 덩어리가 있으면 막는다. `structure.duplicates: "grown"`(새 설정의 기본)이면 이 작업에서 늘어난 중복만 막고, 원래 있던 것은 경고로 보여 아키텍처 점검 입력이 된다. 기존 위치를 알려 준다. 예외는 `docs/decisions.md`에 `중복 허용: 파일 · 이유`를 쓸 때만 인정한다.
+  - 중복: 만진 파일의 중복 줄이 base보다 늘면 막는다(설정 없이 항상). 원래 있던 중복은 막지 않고 "아키텍처 점검 후보" 경고로만 보여 준다(ADR 0001, `qh status`, Stop에서는 사용자에게만 보이는 경고 줄). 기존 위치를 알려 준다. 옛 설정의 `structure.duplicates: "grown"`은 그대로 둬도 되고 아무것도 바꾸지 않는다. 예외는 `docs/decisions.md`에 `중복 허용: 파일 · 이유`를 쓸 때만 인정한다.
   - 중복 합계: `qh init`과 `qh pr`이 저장소 전체 중복 줄 수와 많은 파일 3개를 보여 준다. 참고용이고 막지 않는다.
   - 큰 파일: 800줄을 넘은 코드 파일은 더 늘릴 수 없다.
   - 루트 파일: 저장소 맨 위에 새 파일을 만들려면 결정 로그에 이유를 남긴다.
   - 죽은 링크: 바뀐 문서에 없는 파일을 가리키는 링크가 있으면 막는다.
 - **설정으로 켜는 구조 래칫** (`.quality/config.json`의 `structure`, 키가 없으면 꺼짐)
-  - `duplicates: "grown"`(`qh init`이 새로 만드는 설정에는 들어 있다): 중복이 이미 많은 저장소용. 만진 파일의 중복 줄이 base보다 늘 때만 막고, 원래 있던 중복은 경고로만 보여 준다(`qh status`, Stop에서는 사용자에게만 보이는 경고 줄).
   - `flatRoots: ["src/widgets"]`: 그 폴더 바로 아래 새 파일을 막는다. 하위 폴더에 둔다. 예외는 결정 로그 `루트 파일: 경로 · 이유`. 결과지에 "정리 대상 폴더 맨 위 파일" 지표가 붙는다.
   - `noGrow: ["DEPLOY.md"]`: 그 문서의 줄 수나 바이트가 늘면 막는다. 예외는 `문서 증가 허용: 경로 · 이유`.
   - `forbidden: ["docs/plans/"]`: 그 아래 새 파일을 막는다.
@@ -59,7 +58,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - `## interface 결정`: 내용이 있는데 `이유:` 줄이 없거나 5자 미만이면 막는다. `docs/decisions.md`에 더한 `아키텍처 점검: 날짜 · 후보 · 이유` 줄도 같다.
   - `## 테스트 위치(seam)`: 한 줄에 경로 하나. 있으면 TDD는 그 경로 아래·같은 이름의 테스트가 바뀌었는지로 판정하고, 없으면 기존 패키지 단위 판정.
   - 용어집: `GLOSSARY.md`가 있을 때 바뀐 코드에 새로 생긴 타입·클래스 이름이 거기 없으면 경고만 한다. `GLOSSARY.md`·`GLOSSARY-MAP.md`는 루트 파일 이유가 필요 없다.
-  - SessionStart와 `qh cycle`이 카드 단계(의도 → interface 결정 → 테스트 위치 → 완료)와 다음 결정을 한 줄로 보이고, 카드 3개 또는 7일마다 "아키텍처 점검 시기"를 알린다.
+  - SessionStart와 `qh cycle`이 카드 단계(의도 → interface 결정 → 테스트 위치 → 완료)와 다음 결정을 한 줄로 보이고, 카드 3개 또는 7일(기본값, 아래 `limits`)마다 "아키텍처 점검 시기"를 알린다.
 - **작업 질문** (위험 영역을 건드린 작업만)
   - 끝낼 때 qh가 짧은 질문 하나를 낸다(예: DB → "이미 쌓인 데이터를 바꾸거나 지우나요?"). 에이전트가 채팅으로 묻고, 답을 작업 카드에 `작업 질문 db: A 사유`로 적는다.
   - "변경 있음"(A)이면 ADR이 꼭 있어야 한다. `ADR 불필요`가 통하지 않는다.
@@ -67,6 +66,19 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 - **내장 검사**
   - 권한 표(`route-access`): Express 5 라우트마다 접근 수준을 선언하고, 낮은 권한으로 요청했을 때 거부되는지 확인한다.
   - SQL 검사(`sql-prepare`): 코드 안의 SQL을 빈 테스트 DB에서 PREPARE해 본다.
+
+## 기본값과 근거
+
+근거가 없는 값은 `.quality/config.json`의 `limits`로 바꾼다(양의 정수가 아니면 기본값).
+
+| 값 | 하는 일 | 근거 | 설정 키 |
+|---|---|---|---|
+| 800줄 | 이 줄 수를 넘은 코드 파일은 더 늘릴 수 없다 | 같은 값: [Qt Axivion `CodingStyle-LinesOfCodeInFile`의 기본 `max_value` 800](https://doc.qt.io/axivion/reference/analysis_configuration/CodingStyle-LinesOfCodeInFile.html). 참고로 [ESLint `max-lines` 기본은 300](https://eslint.org/docs/latest/rules/max-lines) | 없음(고정) |
+| 6줄 | 의미 있는 줄이 이만큼 이어서 같으면 중복 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값. 참고로 [jscpd 기본은 `--min-lines` 5, `--min-tokens` 50](https://unpkg.com/jscpd@5.1.0/README.md)인데, qh는 import·짧은 줄·데이터 줄을 빼고 세므로 같은 기준이 아니다 | `limits.duplicateLines` |
+| 8자 | 이보다 짧은 줄은 중복을 셀 때 뺀다 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값 | `limits.duplicateLineChars` |
+| 5자 | `테스트 불필요:`·`이유:`·허용 줄의 이유 최소 길이 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값 | `limits.reasonChars` (interface 선택 화면의 안내 문구는 아직 5로 고정) |
+| 카드 3개 / 7일 | 지난 아키텍처 점검 뒤 이만큼 지나면 점검 시기를 알린다 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(ADR 0001에서 정한 주기) | `limits.architectureCards` / `limits.architectureDays` |
+| 10초 | `qh doctor`가 Stop에서 도는 검사의 마지막 실행이 이보다 길면 경고 | 근거 없음(경고만 하고 막지 않는다) | 아직 없음(고정) |
 
 ## 명령
 

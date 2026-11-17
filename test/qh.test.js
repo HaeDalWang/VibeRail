@@ -313,18 +313,22 @@ test('a copied block in a touched file blocks and points at the existing copy, e
   assert.match(structureOf(root), /중복: src\/signup\.js:1 ↔ src\/mail\.js:1/);
 });
 
-test('an old copy blocks once its file is touched, and a decision-log line allows it', () => {
+test('an old copy in a touched file never blocks, and a decision-log line silences its warning', () => {
   const root = repo(BASIC, { 'src/mail.js': BLOCK('a'), 'src/old.js': BLOCK('b'), 'src/other.js': BLOCK('c') });
   write(root, 'src/a.js', '2');
-  assert.doesNotMatch(structureOf(root), /중복/, 'copies in untouched files are not this work\'s to fix');
+  assert.doesNotMatch(statusJson(root).structureWarnings.join('\n'), /중복/, 'copies in untouched files are not this work\'s to report');
   write(root, 'src/old.js', `${BLOCK('b')}// touched\n`);
-  assert.match(structureOf(root), /중복: src\/old\.js/);
+  assert.doesNotMatch(structureOf(root), /중복/, 'ADR 0001: an existing copy does not block, with no setting at all');
+  assert.match(statusJson(root).structureWarnings.join('\n'), /중복\(원래 있던 것, 막지 않음\): src\/old\.js.*아키텍처 점검 후보.*이 작업에서 고치지 않는다/);
   write(root, 'docs/decisions.md', '- 2026-11-16 · 중복 허용: src/old.js · 다음 달 삭제 예정 · 삭제 시\n');
-  assert.doesNotMatch(structureOf(root), /중복/);
+  assert.doesNotMatch(statusJson(root).structureWarnings.join('\n'), /중복/);
 });
 
-test('with duplicates "grown", an old copy in a touched file warns, and a new copy blocks', () => {
-  const config = { ...BASIC, structure: { duplicates: 'grown' } };
+test('an old copy in a touched file warns and a new copy blocks, with or without the old "grown" setting', () => {
+  for (const config of [BASIC, { ...BASIC, structure: { duplicates: 'grown' } }]) checkGrownOnly(config);
+});
+
+function checkGrownOnly(config) {
   const root = repo(config, { 'src/mail.js': BLOCK('a'), 'src/old.js': BLOCK('b') });
   write(root, 'src/old.js', `${BLOCK('b')}// touched\n`);
   const s = statusJson(root);
@@ -337,7 +341,7 @@ test('with duplicates "grown", an old copy in a touched file warns, and a new co
   assert.match(structureOf(root), /중복: src\/old\.js.*이 파일 중복 6줄 → 12줄/);
   write(root, 'src/new.js', BLOCK('d'));
   assert.match(structureOf(root), /중복: src\/new\.js.*0줄 → 6줄/, 'a new file starts from zero');
-});
+}
 
 test('short or import-only similarities are not duplicates', () => {
   const imports = Array.from({ length: 8 }, (_, i) => `import { thing${i} } from './mod${i}.js'`).join('\n');
