@@ -42,7 +42,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - 루트 파일: 저장소 맨 위에 새 파일을 만들려면 결정 로그에 이유를 남긴다.
   - 죽은 링크: 바뀐 문서에 없는 파일을 가리키는 링크가 있으면 막는다.
 - **설정으로 켜는 구조 래칫** (`.quality/config.json`의 `structure`, 키가 없으면 꺼짐)
-  - `duplicates: "grown"`: 중복이 이미 많은 저장소용. 만진 파일의 중복 줄이 base보다 늘 때만 막고, 원래 있던 중복은 경고로만 보여 준다(`qh status`, Stop에서는 사용자에게만 보이는 경고 줄).
+  - `duplicates: "grown"`(`qh init`이 새로 만드는 설정에는 들어 있다): 중복이 이미 많은 저장소용. 만진 파일의 중복 줄이 base보다 늘 때만 막고, 원래 있던 중복은 경고로만 보여 준다(`qh status`, Stop에서는 사용자에게만 보이는 경고 줄).
   - `flatRoots: ["src/widgets"]`: 그 폴더 바로 아래 새 파일을 막는다. 하위 폴더에 둔다. 예외는 결정 로그 `루트 파일: 경로 · 이유`. 결과지에 "정리 대상 폴더 맨 위 파일" 지표가 붙는다.
   - `noGrow: ["DEPLOY.md"]`: 그 문서의 줄 수나 바이트가 늘면 막는다. 예외는 `문서 증가 허용: 경로 · 이유`.
   - `forbidden: ["docs/plans/"]`: 그 아래 새 파일을 막는다.
@@ -54,6 +54,12 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - 답이 요구하는 설정·문서가 없으면 `qh doctor`가 실패를 낸다. PR이 막힌다. 예: "로그인 기능 있음"인데 권한 검사가 없음, "운영 배포 대상"인데 `docs/operations.md`가 없음.
   - 개인정보 취급함: 바뀐 로그 줄에 이메일·전화번호·비밀번호 같은 이름이 들어가면 막는다. 오탐이면 그 줄에 `qh:allow-pii`.
   - 외부 API 연동 있음: 위험 영역 `external`이 바뀌면 같은 작업의 테스트에 실패 상황(시간 초과·5xx·거절)이 있어야 한다. 필요 없으면 작업 카드에 `연동 실패 테스트 불필요: 이유`.
+- **작업 순환 (qh-cycle)** (ADR 0001) `qh init`이 Pocock skill 10개(`skills/vendor/mattpocock-skills/`, 고정 커밋 원문, 수정 금지·갱신은 `scripts/vendor-pocock.sh`)와 `qh-cycle` skill을 `.claude/skills/`에 그대로 설치한다(다시 init하면 덮어씀). `docs/agents/`의 세 문서와 `.scratch/`는 없을 때만 만든다. 작업 카드의 세 절이 순환을 움직인다.
+  - `## 의도`: 비어 있고 `grilling 불필요: 이유`도 없이 코드가 바뀌면 막는다. 이 제목이 있는 카드에만 적용(옛 카드는 그대로).
+  - `## interface 결정`: 내용이 있는데 `이유:` 줄이 없거나 5자 미만이면 막는다. `docs/decisions.md`에 더한 `아키텍처 점검: 날짜 · 후보 · 이유` 줄도 같다.
+  - `## 테스트 위치(seam)`: 한 줄에 경로 하나. 있으면 TDD는 그 경로 아래·같은 이름의 테스트가 바뀌었는지로 판정하고, 없으면 기존 패키지 단위 판정.
+  - 용어집: `GLOSSARY.md`가 있을 때 바뀐 코드에 새로 생긴 타입·클래스 이름이 거기 없으면 경고만 한다. `GLOSSARY.md`·`GLOSSARY-MAP.md`는 루트 파일 이유가 필요 없다.
+  - SessionStart와 `qh cycle`이 카드 단계(의도 → interface 결정 → 테스트 위치 → 완료)와 다음 결정을 한 줄로 보이고, 카드 3개 또는 7일마다 "아키텍처 점검 시기"를 알린다.
 - **작업 질문** (위험 영역을 건드린 작업만)
   - 끝낼 때 qh가 짧은 질문 하나를 낸다(예: DB → "이미 쌓인 데이터를 바꾸거나 지우나요?"). 에이전트가 채팅으로 묻고, 답을 작업 카드에 `작업 질문 db: A 사유`로 적는다.
   - "변경 있음"(A)이면 ADR이 꼭 있어야 한다. `ADR 불필요`가 통하지 않는다.
@@ -69,6 +75,9 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh init [경로]` | 설치·연결 |
 | `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
 | `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
+| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 도구를 넣지 않아 원본 글로 보인다 |
+| `qh view glossary` | `GLOSSARY.md`를 로컬 HTML로 만든다 |
+| `qh cycle` | 지금 카드의 단계, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로 |
 | `qh doctor` | 설치·설정 전체 점검 |
 | `qh check [이름…]` | 필요한 검사 실행 |
 | `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다 |

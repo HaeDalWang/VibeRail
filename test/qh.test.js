@@ -382,12 +382,25 @@ test('ask writes the question page outside the repository, recommends from the c
   const file = r.stdout.match(/질문 화면: (\S+)/)[1];
   assert.ok(!fs.realpathSync(file).startsWith(fs.realpathSync(root)), 'the page never lands in the repository');
   const html = fs.readFileSync(file, 'utf8');
-  assert.strictEqual(html.match(/class="card"/g).length, 7);
+  assert.strictEqual(html.match(/class="card"/g).length, 8);
   assert.match(html, /id="q-db" [^>]*data-rec="A"/);
   assert.match(html, /권장안: A<\/b> — package\.json에 pg/);
   assert.match(html, /name="team" value="A"[^>]* checked/);
   assert.match(html, /&lt;둘이서&gt;/);
   assert.doesNotMatch(html, /<둘이서>/);
+});
+
+test('level: ask offers A (개발을 잘 모름, recommended) and B (개발자); the answer lands in config.answers.level', () => {
+  const root = repo(BASIC);
+  const html = fs.readFileSync(qh(root, ['ask']).stdout.match(/질문 화면: (\S+)/)[1], 'utf8');
+  assert.match(html, /id="q-level" [^>]*data-rec="A"/);
+  assert.match(html, /A\. 개발을 잘 모름/);
+  assert.match(html, /B\. 개발자/);
+  assert.strictEqual(qh(root, ['answer'], 'qh 답\nlevel=A\n').status, 0);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8')).answers.level.choice, 'A');
+  assert.match(qh(root, ['answer'], 'qh 답\nlevel=B\n').stdout, /저장하지 않음[\s\S]*사용자 수준: 권장안\(A\)과 다르게[\s\S]*변경 사유/);
+  assert.strictEqual(qh(root, ['answer'], 'qh 답\nlevel=B 사유: 개발자라서\n').status, 0);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8')).answers.level.choice, 'B');
 });
 
 test('answer checks every line before saving, then stores answers and logs each change once', () => {
