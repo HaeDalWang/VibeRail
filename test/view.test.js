@@ -108,3 +108,9 @@ test('the glossary page says so when there is no GLOSSARY.md', () => {
   assert.strictEqual(r.status, 1);
   assert.match(r.stdout, /용어집이 아직 없다/);
 });
+
+test('the reason minimum on the interface screen follows config limits', () => {
+  const { html } = view({ ...BASIC, limits: { reasonChars: 12 } });
+  assert.match(html, /12자 이상/);
+  assert.doesNotMatch(html, /5자 이상/);
+});
