@@ -219,6 +219,13 @@ test('routes --baseline refuses to overwrite an access table a person may have e
 
 const policyOf = (root) => statusJson(root).policy.join('\n');
 
+test('vendored and minified code is not ours to test or document', () => {
+  const root = repo(BASIC);
+  write(root, 'vendor/lib.js', '2');
+  write(root, 'public/app.min.js', '2');
+  assert.doesNotMatch(policyOf(root), /TDD|문서 영향/);
+});
+
 test('a code change without a test change blocks until a test changes or the card gives a reason', () => {
   const root = repo(BASIC);
   write(root, 'src/a.js', '2');

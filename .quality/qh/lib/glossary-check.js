@@ -7,7 +7,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, VENDORED } = require('./policy');
+const { isOwnCode, TEST_FILE, TOOL_FILE } = require('./policy');
 const { addedLines } = require('./card');
 
 const GLOSSARY = 'GLOSSARY.md';
@@ -23,7 +23,7 @@ function glossaryWarnings(root, { changed, base }) {
   if (!fs.existsSync(file)) return [];
   const glossary = fs.readFileSync(file, 'utf8').toLowerCase();
   const found = new Map();
-  for (const f of changed.filter((x) => CODE_EXT.test(x) && !TEST_FILE.test(x) && !TOOL_FILE.test(x) && !OWN_FILES.test(x) && !VENDORED.test(x) && fs.existsSync(path.join(root, x)))) {
+  for (const f of changed.filter((x) => isOwnCode(x) && !TEST_FILE.test(x) && !TOOL_FILE.test(x) && fs.existsSync(path.join(root, x)))) {
     for (const line of addedLines(root, base, f)) {
       for (const m of line.matchAll(DECLARATION)) if (!found.has(m[1])) found.set(m[1], f);
     }
