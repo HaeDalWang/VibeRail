@@ -22,7 +22,13 @@ Claude Code나 Kiro에서 내 프로젝트를 연 다음에 붙여 넣으면 됩
 
 ![AI가 일을 끝내기 전에 매번 검사를 받는다](docs/images/what-happens.svg)
 
-## 4. "품질 리포트 보여줘"라고 하면
+## 4. AI가 안을 그림으로 보여 주면 하나 고르세요
+
+![설계안 고르기 화면](docs/images/design-choice.png)
+
+마음에 드는 안을 고르고 이유를 한 줄 적어 붙여 넣으면 됩니다.
+
+## 5. "품질 리포트 보여줘"라고 하면
 
 ![결과지: 설치 전과 지금](docs/images/report.png)
 
