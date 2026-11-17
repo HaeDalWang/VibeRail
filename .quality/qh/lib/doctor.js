@@ -4,7 +4,8 @@
 // Full mode (init end, PR) looks at every layer; light mode (each Stop) only at the
 // config, which is cheap. Each problem names the file and the fix.
 // Levels: 실패 = the gate is broken or rules are duplicated; 경고 = works, but slower or
-// weaker than decided (Stop under 10 s, the code map present).
+// weaker than decided (Stop under 10 s, the code map present: a fresh clone or CI has none).
+// isHuman: only a person may settle it (config, probe, access table, CLAUDE.md); the agent reports it.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -33,6 +34,7 @@ const json = (root, rel) => {
 };
 const fail = (msg, fix, isDuplicate = false) => ({ level: '실패', msg, fix, isDuplicate });
 const warn = (msg, fix) => ({ level: '경고', msg, fix });
+const ask = (problem) => ({ ...problem, isHuman: true });
 const isStringList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
 
 function configProblems(config) {
@@ -129,11 +131,11 @@ function ruleProblems(root) {
   const claude = read(root, 'CLAUDE.md');
   const blocks = agents === null ? 0 : agents.split(MARK_START).length - 1;
   if (blocks !== 1) out.push(fail(`AGENTS.md의 qh 규칙 블록이 ${blocks}개`, blocks ? '하나만 남긴다' : '`qh init` 다시 실행', blocks > 1));
-  if (claude === null || !claude.includes('@AGENTS.md')) out.push(fail('CLAUDE.md가 @AGENTS.md를 불러오지 않아 Claude Code가 qh 규칙을 못 본다', 'CLAUDE.md에 `@AGENTS.md` 한 줄'));
+  if (claude === null || !claude.includes('@AGENTS.md')) out.push(ask(fail('CLAUDE.md가 @AGENTS.md를 불러오지 않아 Claude Code가 qh 규칙을 못 본다', 'CLAUDE.md에 `@AGENTS.md` 한 줄')));
   else if (agents !== null) {
     const shared = new Set(paragraphs(agents));
     const dup = paragraphs(claude).filter((p) => shared.has(p));
-    if (dup.length) out.push(fail(`CLAUDE.md와 AGENTS.md에 같은 규칙 ${dup.length}단락 (CLAUDE.md가 AGENTS.md를 불러오므로 두 번 읽힘). 예: "${dup[0].slice(0, 60)}…"`, 'CLAUDE.md 쪽을 지운다', true));
+    if (dup.length) out.push(ask(fail(`CLAUDE.md와 AGENTS.md에 같은 규칙 ${dup.length}단락 (CLAUDE.md가 AGENTS.md를 불러오므로 두 번 읽힘). 예: "${dup[0].slice(0, 60)}…"`, 'CLAUDE.md 쪽을 지운다', true)));
   }
   return out;
 }
@@ -142,19 +144,19 @@ function probeProblems(root, config) {
   const needs = Object.values(config?.checks || {}).some((d) => d?.builtin);
   if (!needs) return [];
   const probe = read(root, PROBE_FILE);
-  if (probe === null) return [fail(`내장 검사가 있는데 ${PROBE_FILE}이 없다`, '`qh init`이 초안을 만든다')];
-  if (/throw todo\(/.test(probe)) return [fail(`${PROBE_FILE}에 아직 채우지 않은 부분(todo)이 있다`, '앱·로그인·DB 부분을 채운다')];
+  if (probe === null) return [ask(fail(`내장 검사가 있는데 ${PROBE_FILE}이 없다`, '`qh init`이 초안을 만든다'))];
+  if (/throw todo\(/.test(probe)) return [ask(fail(`${PROBE_FILE}에 아직 채우지 않은 부분(todo)이 있다`, '앱·로그인·DB 부분을 채운다'))];
   return [];
 }
 
 function mapProblems(root) {
-  if (spawnSync('sh', ['-c', `command -v ${MAP_TOOL}`]).status !== 0) return [fail(`코드 지도 도구(${MAP_TOOL})가 없다`, `\`uv tool install ${MAP_TOOL}\` 후 \`qh init\``)];
+  if (spawnSync('sh', ['-c', `command -v ${MAP_TOOL}`]).status !== 0) return [warn(`코드 지도 도구(${MAP_TOOL})가 없다`, `\`uv tool install ${MAP_TOOL}\` 후 \`qh init\``)];
   const out = [];
-  if (!fs.existsSync(path.join(root, MAP_DB))) out.push(fail('코드 지도 색인이 아직 없다', `\`${MAP_TOOL} build --repo .\``));
+  if (!fs.existsSync(path.join(root, MAP_DB))) out.push(warn('코드 지도 색인이 아직 없다', `\`${MAP_TOOL} build --repo .\``));
   const server = json(root, '.mcp.json')?.mcpServers?.[MAP_TOOL];
-  if (!server) out.push(fail('.mcp.json에 코드 지도 MCP 서버가 없다', `\`${MAP_TOOL} install --repo . -y --no-instructions\` (안내 블록은 qh 규칙이 대신한다)`));
+  if (!server) out.push(warn('.mcp.json에 코드 지도 MCP 서버가 없다', `\`${MAP_TOOL} install --repo . -y --no-instructions\` (안내 블록은 qh 규칙이 대신한다)`));
   else if (server.cwd && fs.realpathSync(root) !== (fs.existsSync(server.cwd) ? fs.realpathSync(server.cwd) : server.cwd)) {
-    out.push(fail(`.mcp.json의 코드 지도가 다른 폴더를 가리킨다 (${server.cwd})`, `cwd를 이 저장소로 고치거나 \`${MAP_TOOL} install --repo . -y --no-instructions\` (안내 블록은 qh 규칙이 대신한다) 다시 실행`));
+    out.push(warn(`.mcp.json의 코드 지도가 다른 폴더를 가리킨다 (${server.cwd})`, `cwd를 이 저장소로 고치거나 \`${MAP_TOOL} install --repo . -y --no-instructions\` (안내 블록은 qh 규칙이 대신한다) 다시 실행`));
   }
   return out;
 }
@@ -168,8 +170,10 @@ function answerProblems(root, config) {
   const checks = Object.values(config.checks || {});
   const hasBuiltin = (b) => checks.some((c) => c?.builtin === b);
   const hasRisk = (r) => isStringList(config.risks?.[r]?.paths) && config.risks[r].paths.length > 0;
-  const need = (isMissing, msg, fix) => isMissing && out.push(fail(`답 ${msg}`, fix));
-  const docs = (rel, label, what) => need(!fs.existsSync(path.join(root, rel)), `"${label}" → ${rel}가 없다`, `${what}을 적는 문서를 만든다`);
+  // Config, access table, risks and review.cmd are the person's; docs and CI the agent may write.
+  const need = (isMissing, msg, fix) => isMissing && out.push(ask(fail(`답 ${msg}`, fix)));
+  const write = (isMissing, msg, fix) => isMissing && out.push(fail(`답 ${msg}`, fix));
+  const docs = (rel, label, what) => write(!fs.existsSync(path.join(root, rel)), `"${label}" → ${rel}가 없다`, `${what}을 적는 문서를 만든다`);
   if (a.login === 'A') {
     need(!hasBuiltin('route-access'), '"로그인 기능 있음" → 권한 검사(route-access)가 없다', 'checks에 route-access 검사 추가 (Express가 아니면 사용자와 방법을 정한다)');
     need(!fs.existsSync(path.join(root, '.quality/access.json')), '"로그인 기능 있음" → 권한 표(.quality/access.json)가 없다', '`qh routes --baseline --levels …` 후 사람이 훑는다');
@@ -188,7 +192,7 @@ function answerProblems(root, config) {
   if (a.team === 'A') {
     const dir = path.join(root, '.github/workflows');
     const ci = fs.existsSync(dir) && fs.readdirSync(dir).some((f) => /qh\.js/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
-    need(!ci, '"팀 협업 개발" → CI에서 qh를 돌리지 않는다', '.github/workflows/에 `node .quality/qh/bin/qh.js check`를 PR마다 돌리는 단계');
+    write(!ci, '"팀 협업 개발" → CI에서 qh를 돌리지 않는다', '.github/workflows/에 `node .quality/qh/bin/qh.js check`를 PR마다 돌리는 단계');
   }
   if (a.deploy === 'A') docs('docs/operations.md', '운영 배포 대상', '배포 전 확인 목록과 장애 회고 방법');
   return out;
@@ -210,11 +214,12 @@ function stopSpeedProblems(root, config) {
 function doctor(root, { light = false } = {}) {
   const base = lightProblems(root);
   if (light) return base;
+  const human = base.map(ask);
   const config = json(root, '.quality/config.json') || null;
   const gitignore = read(root, '.gitignore') || '';
   return [
     ...(fs.existsSync(path.join(root, '.quality/qh/bin/qh.js')) ? [] : [fail('.quality/qh/에 qh가 설치되어 있지 않다', '`qh init`')]),
-    ...base,
+    ...human,
     ...claudeHookProblems(root),
     ...kiroHookProblems(root),
     ...ruleProblems(root),
@@ -222,7 +227,7 @@ function doctor(root, { light = false } = {}) {
     ...probeProblems(root, config),
     ...mapProblems(root),
     ...stopSpeedProblems(root, config),
-    ...(config ? structureConfigProblems(root, config.structure) : []),
+    ...(config ? structureConfigProblems(root, config.structure).map(ask) : []),
     ...(config ? answerProblems(root, config) : []),
   ];
 }

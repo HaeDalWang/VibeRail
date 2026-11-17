@@ -43,6 +43,8 @@ const readText = (root, f) => {
   return text.includes('\0') ? null : text;
 };
 
+const lineTotal = (text) => (text ? text.replace(/\n$/, '').split('\n').length : 0);
+
 function normalize(line) {
   return line
     .replace(/(["'`])(?:\\.|(?!\1).)*\1/g, 'S')
@@ -51,11 +53,14 @@ function normalize(line) {
     .replace(/\s+/g, '');
 }
 
+// Only keys and literal values (`{id:S,label:S}`, `[S,S],`): a text table, which every entry shares once literals are S.
+const isDataLine = (key) => /^[SN,;:{}[\]()]*$/.test(key.replace(/\w+:/g, '').replace(/\b(true|false|null)\b/g, 'N'));
+
 // Meaningful lines of one file: [{ line, key }], line numbers 1-based.
 function meaningful(text) {
   return text.split('\n').flatMap((raw, i) => {
     const key = normalize(raw);
-    return key.length >= MIN_LINE_CHARS && !SKIP_LINE.test(key) ? [{ line: i + 1, key }] : [];
+    return key.length >= MIN_LINE_CHARS && !SKIP_LINE.test(key) && !isDataLine(key) ? [{ line: i + 1, key }] : [];
   });
 }
 
@@ -166,16 +171,17 @@ function duplicateTotal(root, top = 3) {
   return total ? `중복 합계(참고, 막지 않음): ${total}줄 · ${perFile.slice(0, top).map(([f, c]) => `${f} ${c}`).join(', ')}` : '중복 합계(참고, 막지 않음): 0줄';
 }
 
-function bigFileProblems(root, changed, base) {
+// Moved, copied-in, minified and data (.sql) files are not this work growing code.
+function bigFileProblems(root, changed, base, decisions) {
+  const renamed = new Map((gitOut(root, ['diff', '-M', '--name-status', base]) || '').split('\n')
+    .map((l) => l.split('\t')).filter(([s]) => s?.startsWith('R')).map(([, from, to]) => [to, from]));
   const out = [];
-  for (const f of changed.filter((x) => CODE_EXT.test(x) && !OWN_FILES.test(x))) {
-    const text = readText(root, f);
-    if (text === null) continue;
-    const now = text.split('\n').length;
+  for (const f of changed.filter((x) => CODE_EXT.test(x) && !OWN_FILES.test(x) && !VENDORED.test(x) && !/\.min\.|\.sql$/.test(x))) {
+    if (decisions.split('\n').some((l) => l.includes('큰 파일 허용') && l.includes(f))) continue;
+    const now = lineTotal(readText(root, f));
     if (now <= MAX_FILE_LINES) continue;
-    const before = gitOut(root, ['show', `${base}:${f}`]);
-    const was = before === null ? 0 : before.split('\n').length;
-    if (now > was) out.push(`큰 파일: ${f}가 ${now}줄(기준 ${was || '없음'}, 한도 ${MAX_FILE_LINES}) → 늘리지 말고 기능별로 나눈다`);
+    const was = lineTotal(gitOut(root, ['show', `${base}:${renamed.get(f) || f}`]));
+    if (now > was) out.push(`큰 파일: ${f}가 ${now}줄(기준 ${was || '없음'}, 한도 ${MAX_FILE_LINES}) → 늘리지 말고 기능별로 나눈다. 나누면 더 나빠지는 파일이면 ${DECISIONS_FILE}에 \`큰 파일 허용: ${f} · 이유\``);
   }
   return out;
 }
@@ -192,6 +198,9 @@ function rootFileProblems(root, changed, base, decisions) {
     .map((f) => `루트 파일: 저장소 맨 위에 새 파일 ${f} → 맞는 폴더로 옮기거나, 맨 위에 둘 이유를 ${DECISIONS_FILE}에 \`루트 파일: ${f} · 이유\``);
 }
 
+// A malformed %-escape is a broken link, not a reason to crash.
+const safeDecode = (s) => { try { return decodeURI(s); } catch { return s; } };
+
 function deadLinkProblems(root, changed) {
   const out = [];
   for (const f of changed.filter((x) => /\.mdx?$/.test(x) && !x.startsWith('.quality/qh/'))) {
@@ -203,7 +212,7 @@ function deadLinkProblems(root, changed) {
       if (isFence) return;
       for (const [, target] of line.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
         if (/^([a-z]+:|#)/i.test(target)) continue;
-        const rel = decodeURI(target.split(/[#?]/)[0]);
+        const rel = safeDecode(target.split(/[#?]/)[0]);
         const file = rel.startsWith('/') ? path.join(root, rel) : path.join(root, path.dirname(f), rel);
         if (rel && !fs.existsSync(file)) out.push(`죽은 링크: ${f}:${i + 1} → ${target} 가 없다. 링크를 고치거나 지운다`);
       }
@@ -216,7 +225,6 @@ function deadLinkProblems(root, changed) {
 
 const atBaseText = (root, base, f) => gitOut(root, ['show', `${base}:${f}`]);
 const isNewFile = (root, base, f) => spawnSync('git', ['cat-file', '-e', `${base}:${f}`], { cwd: root }).status !== 0 && isPlainFile(root, f);
-const lineTotal = (text) => (text ? text.replace(/\n$/, '').split('\n').length : 0);
 const underAny = (f, dirs) => dirs.some((d) => f.startsWith(`${d.replace(/\/+$/, '')}/`));
 const isDoc = (f) => /\.mdx?$/.test(f) && !f.startsWith('.quality/qh/');
 
@@ -333,7 +341,7 @@ function structureFindings(root, { changed, base, structure = {} }) {
   const dup = duplicateFindings(root, changed, decisions, { base, grownOnly: structure.duplicates === 'grown' });
   const problems = [
     ...dup.problems,
-    ...bigFileProblems(root, changed, base),
+    ...bigFileProblems(root, changed, base, decisions),
     ...rootFileProblems(root, changed, base, decisions),
     ...deadRefProblems(root, changed, structure),
     ...(structure.backtickRefs ? goneRefProblems(root, changed, structure) : []),

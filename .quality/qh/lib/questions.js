@@ -99,7 +99,7 @@ const QUESTIONS = [
 // Task-stage questions (asked in the chat, only when this work touches a risk area).
 // The answer goes in the task card as `작업 질문 <risk>: A|B 사유`; A means the change
 // really alters that behaviour, so "ADR 불필요" no longer counts for it.
-const TASK_QUESTION_LINE = /^\s*(-\s*)?작업 질문 ([\w-]+):\s*([AB])\b/gm;
+const TASK_QUESTION_LINE = /^\s*(-\s*)?작업 질문 ([^\s:]+):\s*([AB])\b/gm;
 const TASK_QUESTIONS = {
   auth: ['이 작업이 누가 무엇을 볼 수 있는지 바꾸나요?', '권한 변경 있음', '권한 변경 없음'],
   db: ['이 작업이 이미 쌓인 데이터를 바꾸거나 지우나요?', '기존 데이터 변경 있음', '추가만 (기존 데이터 그대로)'],
