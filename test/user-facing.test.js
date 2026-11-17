@@ -125,7 +125,7 @@ test('the agent rules say how to write decisions, when allow lines may be writte
 test('the report page tells the person what to say to the agent, not a command', () => {
   const page = fs.readFileSync(path.join(LIB, 'measure-page.js'), 'utf8');
   assert.doesNotMatch(page, /qh measure --backfill/);
-  assert.match(page, /에이전트에게/);
+  assert.match(page, /AI에게/);
 });
 
 test('the agent rules show the declaration reason as a placeholder, not a pasteable word', () => {
