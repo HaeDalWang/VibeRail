@@ -273,6 +273,16 @@ test('loop: a listed ticket marked ready-for-human must leave the loop', () => {
   assert.doesNotMatch(stage(root), /사람 몫/);
 });
 
+test('loop: a person\'s ticket holds the round open until it is taken out, then review comes', () => {
+  const root = repo(BASIC);
+  ticket(root, T1, ['x']);
+  ticket(root, T2, [' '], 'ready-for-human');
+  loopCard(root, [T1, T2]);
+  assert.match(stage(root), /단계: 루프 진행 1\/2/);
+  loopCard(root, [T1, T2], [T1]);
+  assert.match(stage(root), /단계: 완료[^\n]*남은 티켓 1개/, 'taken out, the round is done and the person\'s ticket is left for the next decision');
+});
+
 test('loop: SessionStart shows the loop progress line', () => {
   const root = repo(BASIC);
   ticket(root, T1, ['x']);
