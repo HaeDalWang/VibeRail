@@ -210,3 +210,16 @@ test('doctor warns when no check runs the tests', () => {
   const tested = repo({ ...BASIC, checks: { test: { cmd: 'npm test' } }, common: ['test'] });
   assert.doesNotMatch(qh(tested, ['doctor']).stdout, /테스트를 돌리는 검사가 없다/);
 });
+
+test('doctor warns about a limits value it will ignore, and the Stop time limit follows limits.stopSeconds', () => {
+  const bad = qh(repo({ ...BASIC, limits: { reasonChars: 'five', stopSecond: 20 } }), ['doctor']).stdout;
+  assert.match(bad, /\[경고\] limits\.reasonChars/);
+  assert.match(bad, /\[경고\] limits\.stopSecond/);
+  assert.doesNotMatch(qh(repo({ ...BASIC, limits: { reasonChars: 12 } }), ['doctor']).stdout, /limits\./);
+  const slow = repo({ ...BASIC, checks: { test: { cmd: 'npm test' } }, common: ['test'] });
+  write(slow, '.quality/evidence/test.json', JSON.stringify({ startedAt: '2026-11-17T00:00:00Z', finishedAt: '2026-11-17T00:00:15Z' }));
+  assert.match(qh(slow, ['doctor']).stdout, /마지막 실행이 15초/);
+  const relaxed = repo({ ...BASIC, checks: { test: { cmd: 'npm test' } }, common: ['test'], limits: { stopSeconds: 30 } });
+  write(relaxed, '.quality/evidence/test.json', JSON.stringify({ startedAt: '2026-11-17T00:00:00Z', finishedAt: '2026-11-17T00:00:15Z' }));
+  assert.doesNotMatch(qh(relaxed, ['doctor']).stdout, /마지막 실행이 15초/);
+});

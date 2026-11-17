@@ -69,16 +69,16 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 
 ## 기본값과 근거
 
-근거가 없는 값은 `.quality/config.json`의 `limits`로 바꾼다(양의 정수가 아니면 기본값).
+근거가 없는 값은 `.quality/config.json`의 `limits`로 바꾼다(양의 정수가 아니거나 없는 키면 기본값을 쓰고 `qh doctor`가 경고한다).
 
 | 값 | 하는 일 | 근거 | 설정 키 |
 |---|---|---|---|
 | 800줄 | 이 줄 수를 넘은 코드 파일은 더 늘릴 수 없다 | 같은 값: [Qt Axivion `CodingStyle-LinesOfCodeInFile`의 기본 `max_value` 800](https://doc.qt.io/axivion/reference/analysis_configuration/CodingStyle-LinesOfCodeInFile.html). 참고로 [ESLint `max-lines` 기본은 300](https://eslint.org/docs/latest/rules/max-lines) | 없음(고정) |
 | 6줄 | 의미 있는 줄이 이만큼 이어서 같으면 중복 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값. 참고로 [jscpd 기본은 `--min-lines` 5, `--min-tokens` 50](https://unpkg.com/jscpd@5.1.0/README.md)인데, qh는 import·짧은 줄·데이터 줄을 빼고 세므로 같은 기준이 아니다 | `limits.duplicateLines` |
 | 8자 | 이보다 짧은 줄은 중복을 셀 때 뺀다 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값 | `limits.duplicateLineChars` |
-| 5자 | `테스트 불필요:`·`이유:`·허용 줄의 이유 최소 길이 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값 | `limits.reasonChars` (interface 선택 화면의 안내 문구는 아직 5로 고정) |
+| 5자 | `테스트 불필요:`·`이유:`·허용 줄의 이유 최소 길이 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값 | `limits.reasonChars` |
 | 카드 3개 / 7일 | 지난 아키텍처 점검 뒤 이만큼 지나면 점검 시기를 알린다 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(ADR 0001에서 정한 주기) | `limits.architectureCards` / `limits.architectureDays` |
-| 10초 | `qh doctor`가 Stop에서 도는 검사의 마지막 실행이 이보다 길면 경고 | 근거 없음(경고만 하고 막지 않는다) | 아직 없음(고정) |
+| 10초 | `qh doctor`가 Stop에서 도는 검사의 마지막 실행이 이보다 길면 경고 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(경고만 하고 막지 않는다) | `limits.stopSeconds` |
 
 ## 명령
 
