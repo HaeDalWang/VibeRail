@@ -21,3 +21,17 @@ ADR 불필요: 훅 반복 처리 한 군데 수정, 구조 변경 아님
 ## 추가: 기준 확인 기록 (qh confirm)
 - 사람이 확인한 품질 기준은 지문(설정+권한 표 해시)으로 결정 로그에 남아 다시 묻지 않음, 바뀌면 다시 물음 → test/qh.test.js "a person confirms the criteria once with qh confirm..."
 - 사람에게 묻는 문장은 쉬운 말로 (훅 지시문, lib/ask-guide.md "기준 확인")
+
+## 추가: 전면 점검에서 나온 막힘 (내 몫)
+- 선언 줄을 흔한 마크다운 모양(체크박스·인용·굵게·백틱·전각 콜론)으로도 읽고, 이유가 짧으면 5자 이상이라고 알림 → test/card.test.js
+- 한글·점이 든 위험 영역 이름의 작업 질문 답 인식 → test/card.test.js
+- 지운 .env·URL만 든 .env 변형은 막지 않음, Tests 폴더·*Tests 클래스·.cy. 파일을 테스트로 셈 → test/card.test.js
+- 큰 파일: 이름 변경·vendor·.min.·.sql 제외, 결정 줄 허용, 800줄 정확히 통과 / 잘못된 % 링크에 죽지 않음 → test/big-file.test.js
+- 문구 표(키: 값만 있는 줄)는 중복으로 세지 않음 → test/big-file.test.js "a table of text entries is data, not copied code"
+
+## 추가: 전면 점검에서 나온 막힘 (Kiro 몫)
+- 검사가 추적 파일을 바꾸면 환경 오류, 측정 파일은 바뀐 파일에서 빠짐, exit 126/127·DB 연결 거부는 환경 오류, 깨진 증거·기준선 JSON은 미실행, 한글 파일명, 환경 오류만이면 exit 3, 공통 조상 없음은 unshallow 안내 → test/gate-run.test.js
+- `status --base`가 기준 변경으로 안 잡힘, 코드 지도 없음은 경고, 사람 몫 doctor 실패는 "사용자에게 보고", 리뷰 환경 오류는 환경 오류 목록, 기존 실패 허용 → test/pr-gate.test.js, test/card.test.js
+- Stop: 환경 오류만이면 "판정하지 못함", 공통 조상 없음은 사용자에게 한 번 알림, 사용자에게는 쉬운 문장만 → test/stop-hook.test.js, test/user-words.test.js
+- 문서 영향 없음: lib/ask-guide.md(기존 실패 허용)와 docs/decisions.md에 반영, README의 사용자 흐름은 그대로
+- ADR 불필요: 판정 분류와 문구 수정, 저장 형식·구조 변경 없음 (lib/triage.js는 bin/qh.js에서 옮긴 것)

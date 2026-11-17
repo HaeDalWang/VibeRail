@@ -166,7 +166,7 @@ test('a PR-only check is neither run nor demanded at Stop, but is required by th
 test('a built-in check whose probe is missing is 환경 오류, not a code failure', () => {
   const root = repo({ baseRef: 'main', checks: { routes: { builtin: 'route-access', requests: false } }, common: ['routes'] });
   write(root, 'src/a.js', '2');
-  assert.strictEqual(qh(root, ['check']).status, 1);
+  assert.strictEqual(qh(root, ['check']).status, 3, 'only environment errors: exit 3, not a code failure');
   const s = statusJson(root);
   assert.strictEqual(stateOf(s, 'routes'), '환경 오류');
   assert.match(s.checks[0].detail.join(' '), /probe\.mjs 없음/);
@@ -332,7 +332,7 @@ test('with duplicates "grown", an old copy in a touched file warns, and a new co
   assert.match(s.structureWarnings.join('\n'), /중복\(원래 있던 것, 막지 않음\): src\/old\.js/);
   const stop = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}'));
   assert.doesNotMatch(stop.reason, /중복/, 'the warning is not handed to the agent to fix');
-  assert.match(stop.systemMessage, /qh 경고\(막지 않음\): .*src\/old\.js/);
+  assert.match(stop.systemMessage, /경고 \(막지 않음\)\n- .*중복 코드/, 'the person hears it in plain words');
   write(root, 'src/old.js', `${BLOCK('b')}\nfunction more() {}\n${BLOCK('c')}`);
   assert.match(structureOf(root), /중복: src\/old\.js.*이 파일 중복 6줄 → 12줄/);
   write(root, 'src/new.js', BLOCK('d'));

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { repo, write, qh, stopDecision, DECLARED, BASIC } = require('./helpers');
+const { repo, write, sh, qh, stopDecision, DECLARED, BASIC } = require('./helpers');
 
 test('stop blocks while a required check has no current evidence, and allows after it passes', () => {
   const root = repo(BASIC);
@@ -80,5 +80,40 @@ test('human decisions and base changes turn the agent back once, not on the repe
   assert.match(first.reason, /checks\.unit\.cmd/);
   const repeat = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
   assert.strictEqual(repeat.decision, undefined);
-  assert.match(repeat.systemMessage, /사람이 판단할 일.*\n- 작업 카드: 관리자는 모든 회사를 보나/);
+  assert.match(repeat.systemMessage, /사람이 판단할 일.*\n- 정해 주세요: 관리자는 모든 회사를 보나/);
+});
+
+// What the person sees may not need a developer to read: no paths, commands, hashes or tool names.
+const DEVELOPER_WORDS = /\S\/|\/\S|\.json\b|\b[0-9a-f]{7,}\b|`|\bgit |qh/i;
+
+test('with only environment errors, stop says it could not judge instead of "checks passed"', () => {
+  const root = repo({ ...BASIC, baseRef: 'origin/main' });
+  write(root, 'src/a.js', '2');
+  const d = stopDecision(qh(root, ['hook', 'stop'], '{}'));
+  assert.match(d.reason, /^qh: 환경 오류로 판정하지 못함/);
+});
+
+test('a branch with no common ancestor with the base is told to the person once, not passed silently', () => {
+  const root = repo(BASIC);
+  sh(root, 'git', ['checkout', '-q', '--orphan', 'other']);
+  sh(root, 'git', ['commit', '-qm', 'other']);
+  sh(root, 'git', ['checkout', '-q', 'work']);
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, baseRef: 'other' }));
+  const first = stopDecision(qh(root, ['hook', 'stop'], '{}'));
+  assert.ok(first?.systemMessage, 'the person hears about it');
+  assert.doesNotMatch(first.systemMessage, DEVELOPER_WORDS);
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{}')), null, 'same note is not repeated');
+});
+
+test('stop hands the agent a plain sentence for the person, and shows the person only plain sentences', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, checks: { unit: { cmd: 'true' } } }));
+  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 관리자는 모든 회사를 보나?\n');
+  write(root, 'docs/decisions.md', '- 2026-11-16 · unit을 true로 · 예시 · 없음\n');
+  qh(root, ['check']);
+  const first = stopDecision(qh(root, ['hook', 'stop'], '{}'));
+  assert.match(first.reason, /checks\.unit\.cmd[\s\S]*사용자에게는 이렇게 말한다: /);
+  const repeat = stopDecision(qh(root, ['hook', 'stop'], '{}'));
+  assert.match(repeat.systemMessage, /관리자는 모든 회사를 보나/);
+  assert.doesNotMatch(repeat.systemMessage, DEVELOPER_WORDS);
 });

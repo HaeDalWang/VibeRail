@@ -20,12 +20,16 @@ const repoTools = require('../lib/repo-tools');
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
-const ACCESS_FILE = '.quality/access.json';
+const { triage, ACCESS_FILE } = require('../lib/triage');
 const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
 const BASELINE_EXAMPLES = 3;
 const DEFAULT_TIMEOUT_SEC = 300;
+// Stop runs built-in checks inside the host's 120-second hook limit (lib/init.js).
+const BUILTIN_TIMEOUT_SEC = 90;
+// sh: 126 = found but not executable, 127 = not found (e.g. `npm test` without jest installed).
+const SHELL_NO_TOOL = [126, 127];
 const DEFAULT_REVIEW_TIMEOUT_SEC = 900;
 const MAX_BUFFER = 64 * 1024 * 1024;
 const EXIT = { ok: 0, failed: 1, env: 3 };
@@ -35,7 +39,8 @@ class EnvError extends Error {}
 // ---------- git ----------
 
 function git(root, args, env) {
-  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', env: env || process.env, maxBuffer: MAX_BUFFER });
+  // quotepath off: a Korean file name comes back as written, not as "\354\204…".
+  const r = spawnSync('git', ['-c', 'core.quotepath=false', ...args], { cwd: root, encoding: 'utf8', env: env || process.env, maxBuffer: MAX_BUFFER });
   if (r.status !== 0) throw new EnvError(`git ${args.join(' ')}: ${(r.stderr || '').trim()}`);
   return r.stdout.trim();
 }
@@ -64,6 +69,18 @@ function treeHash(root) {
   }
 }
 
+// Git prints nothing when the two have no common ancestor: in CI that is a shallow clone.
+function mergeBase(root, ref) {
+  try {
+    return git(root, ['merge-base', ref, 'HEAD']);
+  } catch (err) {
+    if (!/: $/.test(err.message)) throw err;
+    throw Object.assign(new EnvError(`git merge-base ${ref} HEAD: 공통 조상이 없다 (shallow clone이면 \`git fetch --unshallow\`)`), {
+      user: '품질 검사를 하지 못했습니다. 비교할 기준 브랜치와 이어지는 기록이 이 컴퓨터에 다 받아져 있지 않습니다. 기록을 전부 내려받으면 다시 검사합니다. 코드는 바꾸지 않았습니다.',
+    });
+  }
+}
+
 function lines(text) {
   return text.split('\n').filter(Boolean);
 }
@@ -73,7 +90,8 @@ function changedFiles(root, base) {
     ...lines(git(root, ['diff', '--name-only', base])),
     ...lines(git(root, ['ls-files', '--others', '--exclude-standard'])),
   ]);
-  return [...files].filter((f) => !f.startsWith(`${EVIDENCE_DIR}/`)).sort();
+  // Same exclusions as treeHash: qh's own records are not part of the work.
+  return [...files].filter((f) => !f.startsWith(`${EVIDENCE_DIR}/`) && f !== METRICS_FILE && !f.startsWith(`${REPORTS_DIR}/`)).sort();
 }
 
 // ---------- config & evidence ----------
@@ -89,8 +107,9 @@ function evidencePath(root, name) {
 }
 
 function readEvidence(root, name) {
+  // A record cut off mid-write counts as not run: the next run overwrites it.
   const file = evidencePath(root, name);
-  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+  return fs.existsSync(file) ? parseJson(fs.readFileSync(file, 'utf8')) : null;
 }
 
 function writeEvidence(root, name, data) {
@@ -165,23 +184,33 @@ function runCheck(root, name, check) {
   if (!check) throw new EnvError(`config에 없는 검사: ${name}`);
   let def = check;
   if (check.cmd?.includes(TESTS_SLOT)) {
-    const base = git(root, ['merge-base', loadConfig(root).baseRef, 'HEAD']);
+    const base = mergeBase(root, loadConfig(root).baseRef);
     def = { ...check, cmd: check.cmd.replaceAll(TESTS_SLOT, workTests(root, changedFiles(root, base)).map(shellQuote).join(' ')) };
   }
   const hash = treeHash(root);
-  const base = { check: name, cmd: def.cmd || `builtin:${def.builtin}`, treeHash: hash, startedAt: new Date().toISOString() };
+  const timeoutSec = def.timeoutSec || (def.builtin ? BUILTIN_TIMEOUT_SEC : DEFAULT_TIMEOUT_SEC);
+  const base = { check: name, cmd: def.cmd || `builtin:${def.builtin}`, treeHash: hash, timeoutSec, startedAt: new Date().toISOString() };
   const missing = def.builtin ? null : toolExists(root, def.cmd);
-  if (missing) return writeEvidence(root, name, { ...base, envError: `도구 없음: ${missing}` });
+  if (missing) return writeEvidence(root, name, { ...base, envError: `도구 없음: ${missing}`, envKind: 'tool' });
 
-  const r = spawnCheck(root, def, def.timeoutSec || DEFAULT_TIMEOUT_SEC);
+  const r = spawnCheck(root, def, timeoutSec);
   const logPath = path.join(EVIDENCE_DIR, `${name}.log`);
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
   fs.writeFileSync(path.join(root, logPath), `${r.stdout || ''}${r.stderr || ''}`);
   const timedOut = r.error?.code === 'ETIMEDOUT';
   const evidence = { ...base, exit: timedOut ? 124 : (r.status ?? 1), timedOut, finishedAt: new Date().toISOString(), logPath };
   if (def.builtin) evidence.result = parseJson(r.stdout);
-  if (evidence.result?.envError) evidence.envError = evidence.result.envError;
-  writeEvidence(root, name, evidence);
+  writeEvidence(root, name, { ...evidence, ...runEnvError(root, def, evidence) });
+}
+
+// Why a finished run says nothing about the code, if it does not: { envError, envKind } or {}.
+function runEnvError(root, def, ev) {
+  // Evidence binds the tree it ran on; a check that rewrites tracked files can never be current.
+  const touched = lines(git(root, ['diff', '--name-only', ev.treeHash, treeHash(root)]));
+  if (touched.length) return { envError: `검사가 파일을 바꿨다: ${touched.join(', ')} → .gitignore에 넣거나 출력 경로를 옮긴다`, envKind: 'changed' };
+  if (ev.result?.envError) return { envError: ev.result.envError, envKind: 'builtin' };
+  if (!def.builtin && SHELL_NO_TOOL.includes(ev.exit)) return { envError: `도구 없음 또는 실행 불가 (exit ${ev.exit}, 로그: ${ev.logPath})`, envKind: 'tool' };
+  return {};
 }
 
 function parseJson(text) {
@@ -197,9 +226,9 @@ function parseJson(text) {
 function checkStatus(root, name, now) {
   const ev = readEvidence(root, name);
   if (!ev) return { name, state: '미실행' };
-  if (ev.envError) return { name, state: '환경 오류', detail: [ev.envError] };
+  if (ev.envError) return { name, state: '환경 오류', envKind: ev.envKind, detail: [ev.envError] };
   // A slow suite is not a code bug: the agent must not "fix" tests to make them faster.
-  if (ev.timedOut) return { name, state: '환경 오류', detail: [`시간 초과 (로그: ${ev.logPath}) → 테스트를 고치지 말고 사용자에게: 이 검사의 timeoutSec를 늘리거나, 오래 걸리면 on을 ["pr"]로`] };
+  if (ev.timedOut) return { name, state: '환경 오류', envKind: 'timeout', detail: [`시간 초과 (로그: ${ev.logPath}) → 테스트를 고치지 말고 사용자에게: 이 검사의 timeoutSec를 늘리거나, 오래 걸리면 on을 ["pr"]로`] };
   const isCurrent = ev.treeHash === now;
   const detail = describeResult(ev);
   if (ev.exit !== 0) return { name, state: '실패', isCurrent, detail, logPath: ev.logPath };
@@ -277,8 +306,9 @@ function configChanges(root, base, config) {
   const confirm = '사용자가 이대로 쓰겠다고 하면 `qh confirm` 실행';
   const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
   if (!git(root, ['ls-tree', '--name-only', base, CONFIG_FILE])) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
-  const a = flatten({ ...readJsonAt(root, base, CONFIG_FILE), access: readJsonAt(root, base, ACCESS_FILE) });
-  const b = flatten({ ...config, access: readJsonAt(root, null, ACCESS_FILE) });
+  // baseRef is where to compare from, not what is checked (`status --base` overrides it).
+  const a = flatten({ ...readJsonAt(root, base, CONFIG_FILE), baseRef: undefined, access: readJsonAt(root, base, ACCESS_FILE) });
+  const b = flatten({ ...config, baseRef: undefined, access: readJsonAt(root, null, ACCESS_FILE) });
   const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k]).sort();
   if (keys.length > MAX_LISTED_CHANGES) {
     // A first baseline adds hundreds of routes: one line per section, read it in the diff.
@@ -304,6 +334,13 @@ function structureResult(root, { changed, base, phase, tree, structure }) {
   return { problems: [...own.problems, ...shape.problems, ...repo.problems], warnings: own.warnings, env: [...shape.env, ...repo.env] };
 }
 
+// Checks the person accepted as failing before this work: `기존 실패 허용: <검사> · 이유`.
+function allowedFailures(root) {
+  const file = path.join(root, DECISIONS_FILE);
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  return [...text.matchAll(/기존 실패 허용:\s*`?([^\s`·]+)/g)].map((m) => m[1]);
+}
+
 function reviewStatus(root, now) {
   const ev = readEvidence(root, 'review');
   if (!ev) return { state: '미실행' };
@@ -316,9 +353,9 @@ function assess(root, phase = 'stop', baseRef) {
   const config = baseRef ? { ...loadConfig(root), baseRef } : loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
-  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
+  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], allowedFailures: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
   if (env.length) return { config, ...out };
-  const base = git(root, ['merge-base', config.baseRef, 'HEAD']);
+  const base = mergeBase(root, config.baseRef);
   const changed = changedFiles(root, base);
   const req = requirements(config, changed, phase, root);
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
@@ -332,6 +369,7 @@ function assess(root, phase = 'stop', baseRef) {
     base,
     changed,
     checks,
+    allowedFailures: allowedFailures(root),
     later: req.later,
     risks: req.risks,
     docsMissing: req.docsMissing,
@@ -343,28 +381,9 @@ function assess(root, phase = 'stop', baseRef) {
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     configChanges: criteria,
+    criteria: { isFirstInstall: !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]), summary: criteriaSummary(root, config) },
     review: reviewStatus(root, now),
   };
-}
-
-// Sorts what is left into who must act: the agent, a person, or nobody (environment).
-function triage(a) {
-  const aiFix = [];
-  for (const c of a.checks) {
-    if (c.state === '미실행') aiFix.push(`검사 ${c.name}: 미실행 → \`qh check ${c.name}\` 실행`);
-    if (c.state === '실패') aiFix.push(`검사 ${c.name}: 실패${c.isCurrent === false ? '(이전 상태)' : ''} → 고친 뒤 \`qh check ${c.name}\`\n    ${(c.detail || []).join('\n    ')}`);
-    if (c.state === '이전 상태에서 통과') aiFix.push(`검사 ${c.name}: 이전 상태에서 통과 → 그 뒤 코드가 바뀌었으니 \`qh check ${c.name}\` 재실행`);
-  }
-  for (const d of a.docsMissing) aiFix.push(`문서 미갱신: ${d.doc} (위험 ${d.risk}의 연동 문서) → 같은 작업에서 갱신`);
-  aiFix.push(...a.policy, ...a.structure);
-  const human = [
-    ...a.undeclared.map((r) => `${r}: 접근 수준 미선언 → 누가 접근할 수 있는지 사용자에게 묻고, 답을 받은 뒤 ${ACCESS_FILE}의 routes에 적기`),
-    ...a.decisions.map((d) => `작업 카드: ${d}`),
-    ...a.taskQuestions,
-    ...a.configChanges.map((c) => `기준 변경(사람 확인 필요): ${c}`),
-  ];
-  const env = [...a.env, ...(a.structureEnv || []), ...a.checks.filter((c) => c.state === '환경 오류').map((c) => `검사 ${c.name}: ${c.detail.join(' ')}`)];
-  return { aiFix, human, env };
 }
 
 // ---------- output ----------
@@ -377,9 +396,9 @@ function formatStatus(a) {
   if (a.later.length) out.push(`  (PR 때 실행: ${a.later.join(', ')})`);
   out.push(`AI 리뷰: ${formatReview(a.review)}`);
   if (t.aiFix.length) out.push('AI가 고칠 일', ...t.aiFix.map((x) => `  - ${x}`));
-  if (t.human.length) out.push('사람이 판단할 일', ...t.human.map((x) => `  - ${x}`));
-  if (t.env.length) out.push('환경 오류 (코드를 고치지 말고 사용자에게 보고)', ...t.env.map((x) => `  - ${x}`));
-  if (a.structureWarnings?.length) out.push('경고 (막지 않음)', ...a.structureWarnings.map((x) => `  - ${x}`));
+  if (t.human.length) out.push('사람이 판단할 일', ...t.human.map((x) => `  - ${x.agent}`));
+  if (t.env.length) out.push('환경 오류 (코드를 고치지 말고 사용자에게 보고)', ...t.env.map((x) => `  - ${x.agent}`));
+  if (t.warnings.length) out.push('경고 (막지 않음)', ...t.warnings.map((x) => `  - ${x.agent}`));
   return out.join('\n');
 }
 
@@ -396,7 +415,7 @@ function formatReview(r) {
 
 function runReview(root, config, baseArg) {
   if (!config.review?.cmd) throw new EnvError('config.review.cmd 없음');
-  const base = git(root, ['merge-base', baseArg || config.baseRef, 'HEAD']);
+  const base = mergeBase(root, baseArg || config.baseRef);
   const hash = treeHash(root);
   const outDir = path.join(root, EVIDENCE_DIR, 'review');
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -443,22 +462,33 @@ function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
   }
   const a = assess(root, phase);
   let targets = names.length ? names : a.checks.map((c) => c.name);
-  if (builtinOnly) targets = targets.filter((n) => config.checks?.[n]?.builtin);
+  // Stop (builtinOnly) has the host's time limit: a built-in check already bound to this tree is not rerun.
+  if (builtinOnly) targets = targets.filter((n) => config.checks?.[n]?.builtin && !a.checks.find((c) => c.name === n)?.isCurrent);
   for (const n of targets) runCheck(root, n, config.checks?.[n]);
   const after = assess(root, phase);
   if (!builtinOnly) console.log(formatStatus(after));
-  const isFailing = after.checks.some((c) => targets.includes(c.name) && c.state !== '통과');
-  return isFailing ? EXIT.failed : EXIT.ok;
+  const isAllowed = (c) => c.state === '실패' && after.allowedFailures.includes(c.name);
+  const failing = after.checks.filter((c) => targets.includes(c.name) && c.state !== '통과' && !isAllowed(c));
+  if (!failing.length) return EXIT.ok;
+  return failing.every((c) => c.state === '환경 오류') ? EXIT.env : EXIT.failed;
+}
+
+// Doctor failures only a person may settle (files the agent must not change without asking).
+function formatSetup(setup) {
+  const human = setup.filter((p) => p.isHuman && p.level === '실패');
+  const rest = setup.filter((p) => !human.includes(p));
+  const ask = human.length ? `\nqh doctor: 사용자에게 보고 (사람이 정할 설정, 에이전트가 고치지 않는다)\n${human.map((p) => `  - ${p.msg} → ${p.fix}`).join('\n')}` : '';
+  return `${formatDoctor(rest)}${ask}`;
 }
 
 function cmdPr(root) {
-  const checkExit = cmdCheck(root, [], { phase: 'pr' });
-  if (checkExit === EXIT.env) return EXIT.env;
+  if (envProblems(root, loadConfig(root)).length) return cmdCheck(root, [], { phase: 'pr' });
+  cmdCheck(root, [], { phase: 'pr' });
   const reviewExit = runReview(root, loadConfig(root));
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  console.log(`\n${formatStatus(a)}\n${formatDoctor(setup)}\n${duplicateTotal(root)}`);
+  console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}`);
   const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
@@ -496,10 +526,10 @@ function block(reason, systemMessage) {
   return EXIT.ok;
 }
 
-const warningLine = (a) => {
-  const files = [...new Set((a.structureWarnings || []).map((w) => w.match(/: (\S+?):\d+ ↔/)?.[1]).filter(Boolean))];
-  return files.length ? `qh 경고(막지 않음): 만진 파일에 원래 있던 중복 — ${files.join(', ')} (자세히: qh status)` : null;
-};
+// What the person sees: only the plain sentences, each once.
+const userLines = (items) => [...new Set(items.map((x) => `- ${x.user}`))].join('\n');
+const warningNote = (t) => (t.warnings.length ? `품질 검사 경고 (막지 않음)\n${userLines(t.warnings)}` : null);
+const askLines = (items) => items.map((x) => `- ${x.agent}\n  사용자에게는 이렇게 말한다: ${x.user}`).join('\n');
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
 // It does not rely on stop_hook_active (Claude Code does not cap repeats; Kiro may not send it).
@@ -510,34 +540,54 @@ const warningLine = (a) => {
 const MAX_SAME_BLOCKS = 2;
 const STOP_STATE = 'stop-state.json';
 
+const readStopState = (root) => {
+  const file = path.join(root, EVIDENCE_DIR, STOP_STATE);
+  return (fs.existsSync(file) && parseJson(fs.readFileSync(file, 'utf8'))) || {};
+};
+const writeStopState = (root, state) => fs.writeFileSync(path.join(root, EVIDENCE_DIR, STOP_STATE), JSON.stringify(state));
+
 function hookStop(root) {
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
   fs.writeFileSync(path.join(root, EVIDENCE_DIR, 'last-hook-input.json'), readStdin() || '{}');
   const config = loadConfig(root);
+  try {
+    return judgeStop(root, config);
+  } catch (err) {
+    // An environment error with words for the person (no common ancestor) is told once, not swallowed.
+    if (!(err instanceof EnvError) || !err.user) throw err;
+    const last = readStopState(root);
+    if (last.envNote === err.user) return EXIT.ok;
+    writeStopState(root, { ...last, envNote: err.user });
+    process.stdout.write(`${JSON.stringify({ systemMessage: err.user })}\n`);
+    return EXIT.ok;
+  }
+}
+
+function judgeStop(root, config) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
   const t = triage(a);
-  const warn = warningLine(a);
+  const warn = warningNote(t);
   const aiPart = t.aiFix.map((x) => `- ${x}`).join('\n');
-  const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 파일 경로·명령·커밋 해시·qh 같은 도구 이름 없이, 무엇을 정하는지와 고르면 어떻게 되는지를 쉬운 말로):\n${t.human.map((x) => `- ${x}`).join('\n')}` : '';
-  const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${t.env.map((x) => `- ${x}`).join('\n')}` : '';
+  const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 아래 "사용자에게는" 문장처럼 파일 경로·명령·커밋 해시·도구 이름 없이 묻는다):\n${askLines(t.human)}` : '';
+  const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;
 
-  const stateFile = path.join(root, EVIDENCE_DIR, STOP_STATE);
-  const last = (fs.existsSync(stateFile) && parseJson(fs.readFileSync(stateFile, 'utf8'))) || {};
+  const last = readStopState(root);
   const isSameAi = aiPart !== '' && aiPart === last.aiPart;
   const isStuck = isSameAi && (last.tree === a.treeHash || last.count >= MAX_SAME_BLOCKS);
   const isNewAsk = askPart !== '' && askPart !== last.askPart;
   if ((aiPart && !isStuck) || isNewAsk) {
     const count = !aiPart ? 0 : isSameAi ? last.count + 1 : 1;
-    fs.writeFileSync(stateFile, JSON.stringify({ tree: a.treeHash, aiPart, count, askPart }));
+    writeStopState(root, { tree: a.treeHash, aiPart, count, askPart });
     require('../lib/measure').logStop(root, t);
-    return block(aiPart ? `qh: 끝내기 전에 고칠 일\n${aiPart}${askPart}` : `qh: 검사는 통과.${askPart}`, warn);
+    const head = aiPart ? `qh: 끝내기 전에 고칠 일\n${aiPart}` : t.env.length ? 'qh: 환경 오류로 판정하지 못함.' : 'qh: 검사는 통과.';
+    return block(`${head}${askPart}`, warn);
   }
-  fs.writeFileSync(stateFile, JSON.stringify({ tree: last.tree, aiPart, count: aiPart ? last.count : 0, askPart }));
+  writeStopState(root, { tree: last.tree, aiPart, count: aiPart ? last.count : 0, askPart });
   const notes = [
-    aiPart && `qh: 에이전트가 고치지 못한 채 멈춤 (같은 문제로 다시 막지 않음, 자세히: qh status)\n${aiPart}`,
-    askPart && `qh: 사람이 판단할 일 (에이전트에게 이미 전함)\n${[...t.human, ...t.env].map((x) => `- ${x}`).join('\n')}`,
+    aiPart && `품질 검사: 에이전트가 고치지 못한 채 멈춤 (같은 문제로 다시 막지 않음)\n${aiPart}`,
+    askPart && `사람이 판단할 일 (에이전트에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
     warn,
   ].filter(Boolean);
   if (notes.length) process.stdout.write(`${JSON.stringify({ systemMessage: notes.join('\n') })}\n`);
