@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems, relatedTests, isRealReason, DECISIONS_FILE } = require('../lib/policy');
+const { policyProblems, relatedTests, isRealReason, loadLimits, DECISIONS_FILE } = require('../lib/policy');
 const { createHash } = require('node:crypto');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
@@ -713,6 +713,7 @@ function main(argv) {
   const [cmd, ...rest] = argv;
   if (cmd === 'init') return require('../lib/init').init(QH_HOME, rest[0] || process.cwd());
   const root = findRoot(process.cwd());
+  loadLimits(root);
   if (cmd === 'routes' && rest.includes('--baseline')) return cmdRoutesBaseline(root, rest);
   if (cmd === 'check') return cmdCheck(root, rest);
   if (cmd === 'baseline') return cmdBaseline(root);

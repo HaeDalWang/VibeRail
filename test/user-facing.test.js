@@ -133,3 +133,9 @@ test('the agent rules show the declaration reason as a placeholder, not a pastea
   assert.doesNotMatch(snippet, /불필요: 이유`|영향 없음: 이유`/);
   assert.match(snippet, /`테스트 불필요: <왜 필요 없는지, 5자 이상>`/);
 });
+
+test('the qh-cycle skill never asks the person to type a slash command; the agent opens the installed skill file', () => {
+  const skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'qh-cycle', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(skill, /(^|[\s`(])\/(to-spec|to-tickets|retro|improve-codebase-architecture|grill-with-docs)\b|command to type/);
+  for (const name of ['to-spec', 'to-tickets', 'retro', 'improve-codebase-architecture']) assert.match(skill, new RegExp(`\\.claude/skills/${name}/SKILL\\.md`), name);
+});
