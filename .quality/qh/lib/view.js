@@ -44,7 +44,7 @@ function optionCard(o, level) {
 
 // decision() is the one place the copied line is built, so a test can run it without a browser.
 const PURE = `<script id="pure">
-function decision(id,reason){var r=String(reason).trim().replace(/\\s+/g,' ');return r.length<${MIN_REASON_CHARS}?null:'interface 결정: '+id+' · 이유: '+r}
+function decision(id,reason){var r=String(reason).trim().replace(/\\s+/g,' ');return r.length<${MIN_REASON_CHARS}?null:'안: '+id+'\\n이유: '+r}
 </script>`;
 const WIRE = `<script>
 document.querySelectorAll('article').forEach(function(a){

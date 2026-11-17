@@ -53,6 +53,8 @@ test('D6: an interface choice needs a real reason line', () => {
   assert.match(policyOf(root), /interface 결정:/, 'the pasted placeholder does not count');
   card(root, `${DECLARED}${GRILLED}## interface 결정\n옵션 B\n- 이유: 호출하는 쪽이 한 번만 알면 돼서\n`);
   assert.doesNotMatch(policyOf(root), /interface 결정:/);
+  card(root, `${DECLARED}${GRILLED}## interface 결정\n안: B\n이유: 호출이 단순해서\n`);
+  assert.doesNotMatch(policyOf(root), /interface 결정:/, 'the text the view copies passes as pasted');
   card(root, `${DECLARED}${GRILLED}## interface 결정\n\n## 판단 필요\n- 없음\n`);
   assert.doesNotMatch(policyOf(root), /interface 결정:/, 'an empty section asks for nothing');
 });

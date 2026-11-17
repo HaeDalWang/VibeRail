@@ -58,15 +58,15 @@ test('the page works offline: no external address, mermaid shown as text with a 
   assert.match(html, /인터넷 없이[^<]*그림 도구를 넣지 않아/);
 });
 
-test('the copy button gives "interface 결정: <id> · 이유: <text>" and refuses a short reason', () => {
+test('the copy button gives "안: <id>" and "이유: <text>" on two lines and refuses a short reason', () => {
   const { html } = view(level('A'));
   const pure = html.match(/<script id="pure">([\s\S]*?)<\/script>/)[1];
   const ctx = {};
   vm.runInNewContext(pure, ctx);
-  assert.strictEqual(ctx.decision('B', '  호출이   단순해서 '), 'interface 결정: B · 이유: 호출이 단순해서');
+  assert.strictEqual(ctx.decision('B', '  호출이   단순해서 '), '안: B\n이유: 호출이 단순해서');
   assert.strictEqual(ctx.decision('B', '짧음'), null);
   assert.strictEqual(ctx.decision('B', ''), null);
-  assert.strictEqual(ctx.decision('B', '다섯글자요'), 'interface 결정: B · 이유: 다섯글자요');
+  assert.strictEqual(ctx.decision('B', '다섯글자요'), '안: B\n이유: 다섯글자요');
 });
 
 test('a malformed interface file says what is missing and writes nothing', () => {

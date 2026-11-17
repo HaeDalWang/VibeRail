@@ -75,7 +75,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh init [경로]` | 설치·연결 |
 | `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
 | `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
-| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `interface 결정: <id> · 이유: …` 복사 버튼(이유 5자 미만이면 복사 거부). 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 도구를 넣지 않아 원본 글로 보인다 |
+| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 도구를 넣지 않아 원본 글로 보인다 |
 | `qh view glossary` | `GLOSSARY.md`를 로컬 HTML로 만든다 |
 | `qh cycle` | 지금 카드의 단계, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로 |
 | `qh doctor` | 설치·설정 전체 점검 |
