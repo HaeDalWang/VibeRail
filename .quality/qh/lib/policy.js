@@ -14,7 +14,7 @@ const { SECTIONS, section, seamPaths, addedLines } = require('./card');
 const DECISIONS_FILE = 'docs/decisions.md';
 const ADR_GLOB = 'docs/adr/*.md';
 // Defaults with no outside basis (docs/reference.md): a project changes them in config `limits`.
-const DEFAULT_LIMITS = { reasonChars: 5, duplicateLines: 6, duplicateLineChars: 8, architectureCards: 3, architectureDays: 7, stopSeconds: 10 };
+const DEFAULT_LIMITS = { reasonChars: 5, duplicateLines: 6, duplicateLineChars: 8, architectureCards: 3, architectureDays: 7, loopTickets: 3, stopSeconds: 10 };
 const MIN_REASON_CHARS = DEFAULT_LIMITS.reasonChars;
 // ponytail: one process-wide copy, set once per run by bin/qh.js; pass limits down if a run ever serves two projects.
 const LIMITS = { ...DEFAULT_LIMITS };

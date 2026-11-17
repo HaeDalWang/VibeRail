@@ -17,17 +17,40 @@ const NEXT = {
   의도: '범위 확정 (물어서 정한 범위를 사용자가 확인)',
   'interface 결정': '구조 고르기 (그림을 보고 하나 고르고 이유 한 줄)',
   '테스트 위치': '테스트 위치(seam) 정하기',
+  루프: '루프 시작 (이번에 돌릴 티켓 최대 3개와 사람 몫 티켓을 보고 "돌려")',
   완료: '완료 리뷰 (바뀐 구조와 테스트를 사용자가 확인)',
 };
+const TICKET_PATH = /\.scratch\/[^\s/`'")\]]+\/issues\/[^\s`'")\]]+\.md/g;
+
+const ticketPaths = (text) => [...new Set(text.match(TICKET_PATH) || [])];
+const ticketText = (root, rel) => (fs.existsSync(path.join(root, rel)) ? fs.readFileSync(path.join(root, rel), 'utf8') : '');
+// Done: at least one ticked acceptance box and none open.
+const isDone = (text) => /^\s*[-*] \[[xX]\]/m.test(text) && !/^\s*[-*] \[ \]/m.test(text);
+
+// Loop state once the seams are set; null when the card references no ticket files.
+function loopOf(root, card) {
+  const refs = ticketPaths(card);
+  if (!refs.length) return null;
+  const round = ticketPaths(section(card, SECTIONS.loop) || '');
+  const done = (t) => isDone(ticketText(root, t));
+  return {
+    round,
+    done: round.filter(done),
+    open: refs.filter((t) => !round.includes(t) && !done(t)),
+    human: round.filter((t) => /\*\*Status:\*\*\s*ready-for-human/.test(ticketText(root, t))),
+  };
+}
 
 // The first stage whose section is still missing; a declared small fix skips the cycle.
-function stageOf(card) {
+function stageOf(card, root) {
   if (declared(card, 'grilling 불필요')) return '완료';
   const intent = (section(card, SECTIONS.intent) || '').split('\n').filter((l) => declaredReason(l, 'grilling 불필요') === null).join('').trim();
   if (!intent) return '의도';
   const chosen = section(card, SECTIONS.interface);
   if (!chosen || !isRealReason(declaredReason(chosen, '이유') || '')) return 'interface 결정';
   if (!section(card, SECTIONS.seam)) return '테스트 위치';
+  const loop = root && loopOf(root, card);
+  if (loop && loop.done.length < Math.max(loop.round.length, 1)) return '루프';
   return '완료';
 }
 
@@ -67,11 +90,24 @@ function architectureDue(root) {
   return `아키텍처 점검 시기: ${last ? '지난 점검' : '첫 카드'} 뒤 카드 ${fresh.length}개, ${days}일 → 사용자에게 구조 후보 점검을 시작할지 묻는다 (후보 하나를 고르고 이유 한 줄)`;
 }
 
-// The lines to show: stage and next decision, then the architecture check when due.
+// The loop's lines: the stage line (progress, or the remainder after a finished round) and any warnings.
+function loopLines(loop, stage) {
+  const { round, done, open, human } = loop;
+  const out = [];
+  if (round.length && stage === '루프') out.push(`카드 단계: 루프 진행 ${done.length}/${round.length} · 다음 결정 ◆ 완료 리뷰 (루프가 끝나거나 멈추면)`);
+  if (round.length && stage === '완료') out.push(`카드 단계: 완료 · 다음 결정 ◆ ${NEXT.완료}${open.length ? ` · 남은 티켓 ${open.length}개는 리뷰 뒤 다음 루프로 다시 정함` : ''}`);
+  if (round.length > LIMITS.loopTickets) out.push(`루프: 이번 묶음이 ${round.length}개라 한도 ${LIMITS.loopTickets}개를 넘었다 → ${LIMITS.loopTickets}개로 줄여 다시 정한다`);
+  for (const t of human) out.push(`루프: 사람 몫 티켓(${t})이 묶음에 있다 → 루프에서 빼고 사용자에게 넘긴다`);
+  return out;
+}
+
+// The lines to show: stage and next decision, then loop warnings and the architecture check when due.
 function cycleLines(root, card, { always = false } = {}) {
   if (!always && !isCycleProject(root, card)) return [];
-  const stage = stageOf(card);
-  return [`카드 단계: ${stage} · 다음 결정 ◆ ${NEXT[stage]}`, architectureDue(root)].filter(Boolean);
+  const stage = stageOf(card, root);
+  const loop = stage === '루프' || stage === '완료' ? loopOf(root, card) : null;
+  const lines = loop && loop.round.length && !declared(card, 'grilling 불필요') ? loopLines(loop, stage) : [`카드 단계: ${stage} · 다음 결정 ◆ ${NEXT[stage]}`];
+  return [...lines, architectureDue(root)].filter(Boolean);
 }
 
 module.exports = { cycleLines, stageOf, architectureDue };
