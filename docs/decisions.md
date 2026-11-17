@@ -29,3 +29,4 @@
 - 2026-11-17 · qh-cycle: Pocock·Karpathy 원칙을 qh 규칙보다 우선하고 앞단·순환을 더한다 → docs/adr/0001-pocock-karpathy-principles-over-qh.md · 원하는 것과 다르게 만드는 일과 구조 악화를 앞단에서 막으려고 · 시범 지표가 나쁘면
 - 2026-11-17 · mattpocock/skills를 고정 커밋 그대로 vendor, 수정 금지(code-review·setup 제외) · 효과 동일성 · upstream 갱신 때 diff 확인
 - 2026-11-17 · 시범은 gureumi 2주, Claude Code만, Kiro는 symlink만 · 변수 분리, Kiro skill 지원 모름 · Kiro 문서 확인 후
+- 2026-11-17 · qh-cycle 규칙 적용 범위: 카드에 `## 의도` 제목이 있을 때만 의도 규칙을 적용하고(옛 카드는 그대로), 순환 안내(SessionStart)는 qh-cycle skill이 설치됐거나 카드에 순환 절이 있을 때만 보인다. 아키텍처 점검 시기는 점검 뒤 카드가 1개 이상 늘었을 때만 7일 기준을 적용한다 · 옛 카드와 순환을 안 쓰는 프로젝트가 갑자기 막히거나 안내를 받지 않게 · 시범에서 새 카드가 제목 없이 만들어져 의도 규칙을 우회하면

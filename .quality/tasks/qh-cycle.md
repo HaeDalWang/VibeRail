@@ -8,8 +8,9 @@
 
 ## 성공 조건 → 검사
 - `qh init`이 Pocock skill 10개를 고정 커밋 원문 그대로 `.claude/skills/`에 설치하고 `qh-cycle` skill도 설치 → test/init-skills.test.js
+- 설치본에 upstream MIT LICENSE가 같이 들어감 → 같은 테스트
 - vendor 원문과 설치본이 바이트 단위로 같음 → 같은 테스트
-- `qh init`이 docs/glossary.md·docs/agents/*.md 3개·.scratch/를 없을 때만 만든다(있으면 그대로) → 같은 테스트
+- `qh init`이 docs/agents/*.md 3개·.scratch/를 없을 때만 만든다(있으면 그대로). GLOSSARY.md는 만들지 않음(upstream이 첫 용어 때 루트에 생성, D27) → 같은 테스트
 - 카드 `## 의도`가 비고 `grilling 불필요:` 선언도 없이 코드가 바뀌면 Stop이 막음 → test/cycle-policy.test.js
 - `## interface 결정`·아키텍처 선택에 이유가 5자 미만이면 막음 → 같은 테스트
 - 카드에 `## 테스트 위치(seam)`가 있으면 그 seam 경로 테스트가 바뀌었는지로 TDD 판정, 없으면 기존 판정 → 같은 테스트
