@@ -204,3 +204,79 @@ test('config limits change the architecture cadence, the reason length and the c
   write(plain, 'src/two.js', `${six}\n`);
   assert.match(statusJson(plain).structure.join('\n'), /중복/, 'the default window is six lines');
 });
+
+// ---------- loop stage: tickets written by to-tickets, run in rounds of at most 3 ----------
+
+const SEAMED = `${GRILLED}## interface 결정\n옵션 A\n이유: 호출이 단순해서\n\n## 테스트 위치(seam)\nsrc/orders\n`;
+const T1 = '.scratch/orders/issues/01-x.md';
+const T2 = '.scratch/orders/issues/02-y.md';
+const T3 = '.scratch/orders/issues/03-z.md';
+const T4 = '.scratch/orders/issues/04-w.md';
+const ticket = (root, rel, boxes, status = 'ready-for-agent') => write(root, rel, `# t\n\n**Status:** ${status}\n\n${boxes.map((b) => `- [${b}] 기준`).join('\n')}\n`);
+const loopCard = (root, tickets, round = tickets) => card(root, `${SEAMED}\n## 티켓\n${tickets.join('\n')}\n\n## 루프\n${round.join('\n')}\n`);
+
+test('loop: a card with no ticket paths stays at 완료 as before', () => {
+  const root = repo(BASIC);
+  card(root, SEAMED);
+  assert.match(stage(root), /단계: 완료 · 다음 결정 ◆ 완료 리뷰/);
+});
+
+test('loop: tickets referenced but no 루프 section asks to start the loop', () => {
+  const root = repo(BASIC);
+  ticket(root, T1, [' ']);
+  card(root, `${SEAMED}\n링크: ${T1}\n`);
+  assert.match(stage(root), /단계: 루프 · 다음 결정 ◆ 루프 시작 \(이번에 돌릴 티켓 최대 3개와 사람 몫 티켓을 보고 "돌려"\)/);
+  card(root, `${SEAMED}\n링크: ${T1}\n\n## 루프\n\n`);
+  assert.match(stage(root), /단계: 루프 · 다음 결정 ◆ 루프 시작/, 'an empty 루프 section is the same');
+});
+
+test('loop: progress n/N counts tickets with ticked boxes and none open', () => {
+  const root = repo(BASIC);
+  ticket(root, T1, ['x', 'x']);
+  ticket(root, T2, ['x', ' ']);
+  loopCard(root, [T1, T2]);
+  const out = stage(root);
+  assert.match(out, /카드 단계: 루프 진행 1\/2 · 다음 결정 ◆ 완료 리뷰 \(루프가 끝나거나 멈추면\)/);
+  assert.strictEqual(out.split('\n').filter(Boolean).length, 1, 'one line');
+});
+
+test('loop: all done with one other ticket still open is 완료 and names the remainder', () => {
+  const root = repo(BASIC);
+  ticket(root, T1, ['x']);
+  ticket(root, T2, ['x']);
+  ticket(root, T3, [' ']);
+  loopCard(root, [T1, T2, T3], [T1, T2]);
+  const out = stage(root);
+  assert.match(out, /단계: 완료 · 다음 결정 ◆ 완료 리뷰[^\n]*· 남은 티켓 1개는 리뷰 뒤 다음 루프로 다시 정함/);
+  ticket(root, T3, ['x']);
+  assert.doesNotMatch(stage(root), /남은 티켓/);
+});
+
+test('loop: a round over the cap of 3 gets its own line', () => {
+  const root = repo(BASIC);
+  for (const t of [T1, T2, T3, T4]) ticket(root, t, [' ']);
+  loopCard(root, [T1, T2, T3, T4]);
+  const lines = stage(root).split('\n').filter(Boolean);
+  assert.match(lines[0], /루프 진행 0\/4/);
+  assert.match(lines.join('\n'), /루프: 이번 묶음이 4개라 한도 3개를 넘었다[^\n]*3개로 줄/);
+  loopCard(root, [T1, T2, T3]);
+  assert.doesNotMatch(stage(root), /한도/);
+});
+
+test('loop: a listed ticket marked ready-for-human must leave the loop', () => {
+  const root = repo(BASIC);
+  ticket(root, T1, [' ']);
+  ticket(root, T2, [' '], 'ready-for-human');
+  loopCard(root, [T1, T2]);
+  assert.match(stage(root), /루프: 사람 몫 티켓[^\n]*02-y\.md[^\n]*루프에서 빼/);
+  loopCard(root, [T1]);
+  assert.doesNotMatch(stage(root), /사람 몫/);
+});
+
+test('loop: SessionStart shows the loop progress line', () => {
+  const root = repo(BASIC);
+  ticket(root, T1, ['x']);
+  ticket(root, T2, [' ']);
+  loopCard(root, [T1, T2]);
+  assert.match(qh(root, ['hook', 'session-start']).stdout, /\(qh\) 카드 단계: 루프 진행 1\/2/);
+});
