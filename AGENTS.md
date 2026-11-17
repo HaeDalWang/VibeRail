@@ -20,9 +20,3 @@
 - PR을 올리기 전에 `qh pr`을 실행한다.
 - 사용자가 품질 리포트를 원하면 `qh measure`를 실행하고("지난 N주도 재 줘"면 `qh measure --backfill N`), 출력된 결과지 파일을 브라우저로 열어 준다(맥 `open`). 지난 결과지는 `.quality/reports/`에 있다.
 <!-- qh:end -->
-
-## 이 저장소 (VibeRail 자체)
-
-- 이 저장소도 qh로 관리한다. 검사는 `.quality/qh/` 사본이 돈다. 작업 중 고친 `lib/`·`bin/`은 검사기에 바로 반영되지 않는다(고치는 코드가 자기 검사를 약하게 만들 수 없게).
-- `lib/`·`bin/` 변경을 커밋한 뒤, 사본을 새 판으로 바꾸려면 `node bin/qh.js init .` 후 `.quality/qh/`를 따로 커밋한다(`chore: qh 사본 갱신`).
-- `.mcp.json`·`.kiro/settings/mcp.json`은 절대 경로가 들어가 커밋하지 않는다(.gitignore).

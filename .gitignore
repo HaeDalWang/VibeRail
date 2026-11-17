@@ -9,3 +9,5 @@ node_modules/
 .quality/metrics.csv
 .quality/reports/
 *.bak
+# 개발용 에이전트 지침: 로컬에만
+CLAUDE.local.md
