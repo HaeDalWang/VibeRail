@@ -3,12 +3,11 @@
 // Structure ratchet, judged on what this work touched (never on a repo-wide total: a
 // total lets one place's cleanup pay for another's new copy, and only says "worse"
 // too late to point anywhere).
-// - Duplicates: any copied block in a touched file blocks, new or old — whoever touches
-//   a file cleans its copies. The report names the existing copy, so the agent reuses it.
-//   An exception is a docs/decisions.md line `중복 허용: <path> · <reason>` the person agreed to.
-//   duplicates: "grown" (config structure) blocks only when the touched file has more copied
-//   lines than at the base; copies it already had are shown as a warning (for a repository
-//   that already holds many copies).
+// - Duplicates: a touched file blocks only when it has more copied lines than at the base
+//   (ADR 0001: an existing copy never blocks; it is a warning and an architecture-check
+//   candidate). The report names the existing copy, so the agent reuses it. An exception is
+//   a docs/decisions.md line `중복 허용: <path> · <reason>` the person agreed to. An old
+//   config's `duplicates: "grown"` is accepted and changes nothing.
 // - Big files: a code file over the limit may not grow.
 // - Root files: a new file at the repository root needs a reason in the decision log.
 // - Dead links: a changed doc may not link to a file that does not exist.
@@ -22,12 +21,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, VENDORED, MAX_SCAN_BYTES, DECISIONS_FILE, isRealReason, reasonSlot } = require('./policy');
+const { CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, VENDORED, MAX_SCAN_BYTES, DECISIONS_FILE, LIMITS, isRealReason, reasonSlot } = require('./policy');
 
-// A copy is this many consecutive meaningful lines that read the same once whitespace,
-// comments and literal values are set aside.
-const DUP_WINDOW = 6;
-const MIN_LINE_CHARS = 8;
+// A copy is LIMITS.duplicateLines consecutive meaningful lines (each at least
+// LIMITS.duplicateLineChars long) that read the same once whitespace, comments and literal
+// values are set aside.
 const MAX_FILE_LINES = 800;
 const MAX_REPORTED = 5;
 const SKIP_LINE = /^(import\b|export\b.*\bfrom\b|const\b.*=require\(|#|\/\/|\/?\*)/;
@@ -60,16 +58,16 @@ const isDataLine = (key) => /^[SN,;:{}[\]()]*$/.test(key.replace(/\w+:/g, '').re
 function meaningful(text) {
   return text.split('\n').flatMap((raw, i) => {
     const key = normalize(raw);
-    return key.length >= MIN_LINE_CHARS && !SKIP_LINE.test(key) && !isDataLine(key) ? [{ line: i + 1, key }] : [];
+    return key.length >= LIMITS.duplicateLineChars && !SKIP_LINE.test(key) && !isDataLine(key) ? [{ line: i + 1, key }] : [];
   });
 }
 
 function windowsFrom(file, text) {
   const lines = meaningful(text);
   const windows = [];
-  for (let i = 0; i + DUP_WINDOW <= lines.length; i++) {
-    const key = lines.slice(i, i + DUP_WINDOW).map((l) => l.key).join('\n');
-    windows.push({ key, lines: lines.slice(i, i + DUP_WINDOW).map((l) => l.line), file, line: lines[i].line, pos: i });
+  for (let i = 0; i + LIMITS.duplicateLines <= lines.length; i++) {
+    const key = lines.slice(i, i + LIMITS.duplicateLines).map((l) => l.key).join('\n');
+    windows.push({ key, lines: lines.slice(i, i + LIMITS.duplicateLines).map((l) => l.line), file, line: lines[i].line, pos: i });
   }
   return windows;
 }
@@ -95,7 +93,7 @@ function duplicateIndex(root) {
 }
 
 // A window has a copy elsewhere: another file, or far enough away in the same file.
-const copiesOf = (index, w) => index.get(w.key).filter((o) => o.file !== w.file || Math.abs(o.pos - w.pos) >= DUP_WINDOW);
+const copiesOf = (index, w) => index.get(w.key).filter((o) => o.file !== w.file || Math.abs(o.pos - w.pos) >= LIMITS.duplicateLines);
 
 // A decision-log line `<label>: <path> · <reason>` naming f, with a real reason after the path
 // (the same rule as a task-card declaration: the hint's placeholder or "이유" does not count).
@@ -116,15 +114,15 @@ const ASK_FIRST = '사용자에게 묻고 허락을 받은 뒤에만';
 // whose twin this work also edits is judged in that file too.
 function copiedLineCount(index, f, windows) {
   const byKey = Map.groupBy(windows, (w) => w.key);
-  const isCopied = (w) => (index.get(w.key) || []).some((o) => o.file !== f) || byKey.get(w.key).some((o) => Math.abs(o.pos - w.pos) >= DUP_WINDOW);
+  const isCopied = (w) => (index.get(w.key) || []).some((o) => o.file !== f) || byKey.get(w.key).some((o) => Math.abs(o.pos - w.pos) >= LIMITS.duplicateLines);
   return new Set(windows.filter(isCopied).flatMap((w) => w.lines)).size;
 }
 
 const capped = (out, label) => (out.length > MAX_REPORTED ? [...out.slice(0, MAX_REPORTED), `${label}: 그 밖에 ${out.length - MAX_REPORTED}쌍 더`] : out);
 
-// { problems, warnings }. Default: every copy in a touched file blocks. grownOnly: only a file
-// whose copied lines grew since the base blocks; the others are warnings.
-function duplicateFindings(root, changed, decisions, { base, grownOnly }) {
+// { problems, warnings }. Only a touched file whose copied lines grew since the base blocks;
+// the others are warnings.
+function duplicateFindings(root, changed, decisions, base) {
   const { index, windowsOf } = duplicateIndex(root);
   const allowed = (f) => isAllowedCopy(decisions, f);
   const pairs = new Map();
@@ -154,9 +152,9 @@ function duplicateFindings(root, changed, decisions, { base, grownOnly }) {
   const warnings = [];
   for (const { a, b, windows, touched } of pairs.values()) {
     const [mine, theirs] = a.file === touched ? [a, b] : [b, a];
-    const where = `${mine.file}:${mine.line} ↔ ${theirs.file}:${theirs.line} (의미 있는 줄 ${windows + DUP_WINDOW - 1}줄 이상 같음)`;
-    if (grownOnly && !grew(touched)) warnings.push(`중복(원래 있던 것, 막지 않음): ${where} → 이 파일을 손볼 때 합치면 좋다`);
-    else problems.push(`중복: ${where}${grownOnly ? ` · ${grew(touched)}` : ''} → 기존 것을 재사용하거나 한 곳으로 합친다. 정말 둘이어야 하면 ${ASK_FIRST} ${DECISIONS_FILE}에 \`중복 허용: ${mine.file} · ${reasonSlot('왜 둘이어야 하는지')}\``);
+    const where = `${mine.file}:${mine.line} ↔ ${theirs.file}:${theirs.line} (의미 있는 줄 ${windows + LIMITS.duplicateLines - 1}줄 이상 같음)`;
+    if (!grew(touched)) warnings.push(`중복(원래 있던 것, 막지 않음): ${where} → 아키텍처 점검 후보. 이 작업에서 고치지 않는다`);
+    else problems.push(`중복: ${where} · ${grew(touched)} → 기존 것을 재사용하거나 한 곳으로 합친다. 정말 둘이어야 하면 ${ASK_FIRST} ${DECISIONS_FILE}에 \`중복 허용: ${mine.file} · ${reasonSlot('왜 둘이어야 하는지')}\``);
   }
   return { problems: capped(problems, '중복'), warnings: capped(warnings, '중복(원래 있던 것)') };
 }
@@ -355,7 +353,7 @@ function goneRefProblems(root, changed, structure) {
 // { problems, warnings }: problems block, warnings are shown only.
 function structureFindings(root, { changed, base, structure = {} }) {
   const decisions = readText(root, DECISIONS_FILE) || '';
-  const dup = duplicateFindings(root, changed, decisions, { base, grownOnly: structure.duplicates === 'grown' });
+  const dup = duplicateFindings(root, changed, decisions, base);
   const problems = [
     ...dup.problems,
     ...bigFileProblems(root, changed, base, decisions),

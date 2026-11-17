@@ -74,6 +74,7 @@ function detect(root) {
     src: hasSrc ? ['src/**/*.js', 'src/**/*.mjs', 'src/**/*.cjs', 'src/**/*.ts'] : ['**/*.js', '**/*.mjs'],
     baseRef: baseRef(root),
     hasKiroRun: spawnSync('sh', ['-c', 'command -v kiro-run'], { encoding: 'utf8' }).status === 0,
+    hasClaude: spawnSync('sh', ['-c', 'command -v claude'], { encoding: 'utf8' }).status === 0,
   };
 }
 
@@ -83,6 +84,33 @@ function baseRef(root) {
   for (const b of ['main', 'master']) if (git(root, ['rev-parse', '--verify', '--quiet', b])) return b;
   return 'main';
 }
+
+// Claude Code headless review (flags as `claude --help` lists them, 2.1): only the read tools
+// exist, so it cannot edit files or run commands; the answer comes back as structured output
+// and the shell writes it to result.json. No MCP servers (--strict-mcp-config): the task
+// forbids reading outside the work folder, and they make every run much larger.
+const FINDINGS_SCHEMA = JSON.stringify({
+  type: 'object',
+  required: ['findings'],
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['file', 'line', 'rank', 'severity', 'verdict', 'checklist', 'reason', 'nextAction'],
+        properties: {
+          file: { type: 'string' }, line: { type: 'integer' }, rank: { type: 'integer' },
+          severity: { enum: ['높음', '중간', '낮음'] }, verdict: { enum: ['confirmed', 'doubtful'] },
+          checklist: { type: 'string' }, reason: { type: 'string' }, nextAction: { type: 'string' },
+        },
+      },
+    },
+  },
+});
+const TO_RESULT = "let s='';process.stdin.on('data',(d)=>{s+=d}).on('end',()=>process.stdout.write(JSON.stringify(JSON.parse(s).structured_output.findings)))";
+const CLAUDE_REVIEW_CMD = `claude -p "$(cat {task})" --tools Read,Grep,Glob --strict-mcp-config --permission-mode dontAsk --no-session-persistence`
+  + ` --append-system-prompt '파일 도구는 읽기 전용이다. result.json을 쓰지 말고, 그 배열을 findings에 담아 답한다.'`
+  + ` --output-format json --json-schema '${FINDINGS_SCHEMA}' | node -e "${TO_RESULT}" > {out}/result.json`;
 
 function draftConfig(d) {
   const checks = {};
@@ -95,9 +123,9 @@ function draftConfig(d) {
     checks.routes = { builtin: 'route-access', requests: false };
     checks.access = { builtin: 'route-access', ...(d.db === 'postgres' ? { on: ['pr'] } : {}) };
   }
-  // Copies a file already had are shown as a warning (a deepening candidate); copies this work adds still block.
-  const config = { baseRef: d.baseRef, checks, common: Object.keys(checks), risks: {}, structure: { duplicates: 'grown' } };
+  const config = { baseRef: d.baseRef, checks, common: Object.keys(checks), risks: {} };
   if (d.hasKiroRun) config.review = { cmd: 'kiro-run {workdir} {task} claude-sonnet-5.5 medium', timeoutSec: 900 };
+  else if (d.hasClaude) config.review = { cmd: CLAUDE_REVIEW_CMD, timeoutSec: 900 };
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
@@ -273,7 +301,7 @@ function report(root, d, log, notes, mapDone, isFreshInstall) {
   if (log.some((l) => l.rel === '.quality/probe.mjs')) next.push('.quality/probe.mjs를 채운다 (앱 만들기·로그인·테스트 DB).');
   if (d.express && read(root, '.quality/access.json') === null) next.push('권한 표 첫 버전: `node .quality/qh/bin/qh.js routes --baseline --levels <비로그인>,<…>,<최고>` 후 사람이 훑는다.');
   if (!d.test) next.push('테스트 검사가 없다: 테스트를 돌리는 명령(npm test·pytest·go test)을 찾지 못했다 → 사용자에게 테스트 실행 방법을 묻고, 허락을 받아 .quality/config.json checks에 test 검사({ "cmd": "…", "on": ["pr"] })와 common에 넣는다.');
-  if (!d.hasKiroRun) next.push('AI 리뷰를 쓰려면 .quality/config.json에 review.cmd를 넣는다.');
+  if (!d.hasKiroRun && !d.hasClaude) next.push('AI 리뷰를 쓰려면 .quality/config.json에 review.cmd를 넣는다.');
   next.push('품질 기준 정하기: 에이전트에게 "품질 기준을 같이 정하자"라고 말한다 (몇 가지 질문에 고른 답대로 검사가 켜진다).');
   next.push('확인: `node .quality/qh/bin/qh.js status`');
   console.log(`다음:\n${next.map((n, i) => `  ${i + 1}. ${n}`).join('\n')}`);
@@ -283,4 +311,4 @@ function report(root, d, log, notes, mapDone, isFreshInstall) {
   }
 }
 
-module.exports = { init };
+module.exports = { init, draftConfig };
