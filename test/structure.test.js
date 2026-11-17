@@ -71,7 +71,7 @@ test('a new file directly under a flat root blocks; subfolders, old files and de
   assert.doesNotMatch(structureOf(root), /정리 대상 폴더/);
   write(root, 'src/widgets/new.js', '1');
   assert.match(structureOf(root), /정리 대상 폴더: src\/widgets\/ 바로 아래 새 파일 src\/widgets\/new\.js/);
-  write(root, 'docs/decisions.md', '- 루트 파일: src/widgets/new.js · 진입점\n');
+  write(root, 'docs/decisions.md', '- 루트 파일: src/widgets/new.js · 진입점이라 여기 둔다\n');
   assert.doesNotMatch(structureOf(root), /정리 대상 폴더/);
 });
 
@@ -81,7 +81,7 @@ test('a listed document may not grow unless the decision log allows it', () => {
   assert.doesNotMatch(structureOf(root), /문서 증가/, 'rewriting in place is fine');
   write(root, 'DEPLOY.md', 'a\nb\nc\n');
   assert.match(structureOf(root), /문서 증가: DEPLOY\.md가 2줄 → 3줄/);
-  write(root, 'docs/decisions.md', '- 문서 증가 허용: DEPLOY.md · 새 환경\n');
+  write(root, 'docs/decisions.md', '- 문서 증가 허용: DEPLOY.md · 새 환경 배포 절차\n');
   assert.doesNotMatch(structureOf(root), /문서 증가/);
 });
 

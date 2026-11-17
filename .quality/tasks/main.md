@@ -35,3 +35,22 @@ ADR 불필요: 훅 반복 처리 한 군데 수정, 구조 변경 아님
 - Stop: 환경 오류만이면 "판정하지 못함", 공통 조상 없음은 사용자에게 한 번 알림, 사용자에게는 쉬운 문장만 → test/stop-hook.test.js, test/user-words.test.js
 - 문서 영향 없음: lib/ask-guide.md(기존 실패 허용)와 docs/decisions.md에 반영, README의 사용자 흐름은 그대로
 - ADR 불필요: 판정 분류와 문구 수정, 저장 형식·구조 변경 없음 (lib/triage.js는 bin/qh.js에서 옮긴 것)
+
+## 추가: e2e 점검 판정 규칙 (Y 몫)
+- 안내의 자리표시를 `<왜 필요 없는지, 5자 이상>`로, 자리표시 그대로는 거절(A03) / lock·도구 설정 파일은 루트 파일·TDD 제외(A08) / 지운 코드는 TDD 대상 아님(A09) / TDD 패키지별(A12) / 허용 줄 이유 5자·자리표시 거절·사용자 허락 뒤에만(A17·B9) / 충돌 표시 막음(A18) / `{tests}` 같은 언어만(B4) / git이 무시하는 .env는 비밀값 파일 아님(B8) → test/rules-e2e.test.js
+- init 테스트 명령 감지(pytest·go test·하위 package.json), 못 찾으면 알림(A13) → test/init-detect.test.js
+- 문서 영향 없음: 판정 규칙과 안내 문구만 바뀜, 사용자 흐름(README)은 그대로. 결정은 docs/decisions.md 2026-11-17 세 줄
+- ADR 불필요: 판정 함수 안의 규칙 변경, 저장 형식·구조 변경 없음
+
+## 추가: e2e 점검 Stop 훅·사람 문장·Kiro (X 몫)
+- 포기한 항목 알림은 쉬운 말로 한 번(A01·B7), 항목별 연속 2번(A02), 세션별 상태(B6), Kiro 입력이면 직접 확인·전할 말·다음 세션 시작에 다시 알림(B2·B3), 깨진 설정·커밋 0개(A07·A16), 명령 검사의 연결 실패는 환경 오류(A06), probe 빈 틀은 허락 질문(A05), 커밋 기록의 비밀값(A10), Express 아니면 권한 요구는 경고(A11), 판단 필요 체크박스 안내(B5) → test/hook-flow.test.js
+- 검사·위험 영역·라우트 질문을 쉬운 말로(A04·M1·B1·A15), 결과지 문구(A19), 에이전트 규칙(B5·B9·B10) → test/user-facing.test.js
+- 문서 영향 없음: 사람 흐름(README)은 그대로, 에이전트 규칙은 lib/agents-snippet.md·lib/ask-guide.md에 반영, 결정은 docs/decisions.md 2026-11-17 세 줄
+- ADR 불필요: Stop 상태 파일 모양(세션별)만 바뀜, 옛 파일은 버리고 다음 Stop에서 한 번 더 막을 뿐
+
+## 추가: X·Y 결과 점검 뒤 보완 (내 몫)
+- 묻지 않은 라우트 줄은 답이 아님 → test/user-facing.test.js "a route qh asked the person about ..."
+- .env에 넣었다 뺀 키도 pr이 막음 → test/hook-flow.test.js "the PR status blocks on an .env with a token committed ..."
+- 설치 뒤 안내를 쉬운 말로(A19 나머지) → test/init-detect.test.js "the next step after install says in plain words ..."
+- 문서: docs/architecture.md·docs/reference.md Stop 동작 갱신, lib/ask-guide.md에 사용자가 쓸 말 연결
+- ADR 불필요: 판정 조건 보완, 구조 변경 없음

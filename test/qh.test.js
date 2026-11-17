@@ -109,12 +109,12 @@ test('a "{tests}" check runs only the tests of this work, and is not required wh
   assert.strictEqual(stateOf(statusJson(root), 'quick'), '통과');
 });
 
-test('stop exits 1 with a warning when qh itself breaks, never blocking', () => {
+test('stop never fails on a broken config: exit 0 and one note naming the file', () => {
   const root = repo(BASIC);
   write(root, '.quality/config.json', '{ broken');
   const r = qh(root, ['hook', 'stop'], '{}');
-  assert.strictEqual(r.status, 1);
-  assert.match(r.stderr, /qh 오류/);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(JSON.parse(r.stdout).reason, /\.quality\/config\.json이 JSON 형식이 아니다/);
 });
 
 test('review runs the configured command and records findings bound to the tree', () => {
@@ -200,7 +200,7 @@ test('a person confirms the criteria once with qh confirm, and a later change as
   sh(root, 'git', ['commit', '-qm', 'no qh yet']);
   sh(root, 'git', ['checkout', '-q', '-B', 'work']);
   write(root, '.quality/config.json', JSON.stringify(BASIC));
-  assert.match(statusJson(root).configChanges[0], /켜진 검사: unit.*qh confirm/, 'the person is shown what is on, in plain words');
+  assert.match(statusJson(root).configChanges[0], /켜진 검사: 프로젝트 검사 1개.*qh confirm/, 'the person is shown what is on, in plain words');
   assert.strictEqual(qh(root, ['confirm']).status, 0);
   assert.deepStrictEqual(statusJson(root).configChanges, []);
   assert.match(fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8'), /기준 확인: [0-9a-f]{12}/);

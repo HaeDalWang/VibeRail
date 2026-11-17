@@ -22,7 +22,7 @@ test('stop does not block again when the agent changed nothing since the last bl
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":false}')).decision, 'block');
   const repeat = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
   assert.notStrictEqual(repeat?.decision, 'block', 'same tree, same items: the agent could not fix it, so stop looping');
-  assert.match(repeat.systemMessage, /unit.*미실행/);
+  assert.match(repeat.systemMessage, /고치지 못하고 멈췄습니다[\s\S]*검사\(프로젝트 검사\)를 마지막 변경 뒤에 다시 돌리지 않았습니다/);
   const nextTurn = stopDecision(qh(root, ['hook', 'stop'], '{}'));
   assert.notStrictEqual(nextTurn?.decision, 'block', 'a later turn that changed nothing (or a hook input without stop_hook_active) is not blocked again');
   write(root, 'src/a.js', '3');

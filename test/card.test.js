@@ -100,5 +100,5 @@ test('a check already failing on the base, allowed in the decision log, only war
   assert.match(out, /경고 \(막지 않음\)[\s\S]*unit/);
   const d = stopDecision(qh(root, ['hook', 'stop'], '{}'));
   assert.notStrictEqual(d?.decision, 'block');
-  assert.match(d.systemMessage, /unit/);
+  assert.match(d.systemMessage, /이 작업 전부터 실패하던 것이라/);
 });

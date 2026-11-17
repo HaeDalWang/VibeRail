@@ -28,7 +28,7 @@ test('vendored, minified and .sql files are left out of the big-file limit', () 
 test('a decision-log line allows one big file', () => {
   const root = repo(BASIC);
   write(root, 'src/table.js', linesOf(900));
-  assert.match(structureOf(root), /큰 파일: src\/table\.js.*큰 파일 허용: src\/table\.js · 이유/);
+  assert.match(structureOf(root), /큰 파일: src\/table\.js.*큰 파일 허용: src\/table\.js · <[^>]+>/);
   write(root, 'docs/decisions.md', '- 2026-11-18 · 큰 파일 허용: src/table.js · 생성된 표라 나누면 더 읽기 어렵다 · 생성기를 바꾸면\n');
   assert.doesNotMatch(structureOf(root), /큰 파일/);
 });
