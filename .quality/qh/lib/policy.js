@@ -8,6 +8,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const DECISIONS_FILE = 'docs/decisions.md';
 const ADR_GLOB = 'docs/adr/*.md';
@@ -25,6 +26,13 @@ const CODE_EXT = /\.(c|m)?[jt]sx?$|\.(py|go|rb|java|kt|rs|php|cs|swift|sql|sh|vu
 const TEST_FILE = /(^|\/)(tests?|__tests__|spec)\/|(^|\/)([^/]*\.)?Tests?\/|\.(test|spec|cy)\.[^/]+$|_test\.(go|py)$|(^|\/)test_[^/]+\.py$|[a-z0-9]Tests?\.(swift|cs|java|kt|kts|scala|m|mm)$/;
 const DOC_FILE = /\.(md|mdx|rst|txt)$/;
 const OWN_FILES = /^(\.quality|\.claude|\.kiro)\/|^(AGENTS|CLAUDE)\.md$/;
+// Files a tool wants at the package top: lock files, manifests and tool settings (by base name).
+// Not code to test, not a stray root file. ponytail: fixed list, extend when a tool is missed.
+const TOOL_FILE = /(^|\/)([^/]+\.config\.[cm]?[jt]s|[^/]+[.-]lock(file)?(\.json|\.ya?ml|b)?|npm-shrinkwrap\.json|package\.json|tsconfig[^/]*\.json|jsconfig\.json|pyproject\.toml|setup\.(py|cfg)|requirements[^/]*\.txt|Pipfile|go\.(mod|sum|work)|Cargo\.toml|Gemfile|composer\.json|deno\.jsonc?|pnpm-workspace\.yaml|Makefile|Dockerfile[^/]*|(docker-)?compose[^/]*\.ya?ml|Procfile)$/;
+// The folder a file's package lives in: the nearest of these above it.
+const PACKAGE_FILES = ['package.json', 'pyproject.toml', 'setup.py', 'go.mod', 'Cargo.toml', 'Gemfile', 'composer.json', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'deno.json'];
+// A line git leaves when a merge stopped on a conflict.
+const CONFLICT_MARK = /^(<{7}|>{7})( |$)/;
 // Copied-in libraries are someone else's code: not measured, not compared for copies.
 const VENDORED = /(^|\/)(vendor|third_party|node_modules)\//;
 const ENV_FILE = /(^|\/)\.env(\.[^/]*)?$/;
@@ -55,9 +63,14 @@ function declaredReason(card, label) {
   }
   return null;
 }
-const declared = (card, label) => (declaredReason(card, label) || '').length >= MIN_REASON_CHARS;
+// A reason someone wrote: long enough, and not the hint's <placeholder> pasted as it is.
+const isRealReason = (reason) => reason.length >= MIN_REASON_CHARS && !/^<[^>]*>$/.test(reason);
+const declared = (card, label) => isRealReason(declaredReason(card, label) || '');
+// What a hint shows in place of the reason, so a pasted hint is visibly unfinished.
+const reasonSlot = (why) => `<${why}, ${MIN_REASON_CHARS}자 이상>`;
+const NO_NEED = reasonSlot('왜 필요 없는지');
 // Said why, but too briefly: tell the agent instead of repeating the same block.
-const shortHint = (card, label) => (declaredReason(card, label) !== null && !declared(card, label) ? ` (\`${label}\`의 이유는 ${MIN_REASON_CHARS}자 이상)` : '');
+const shortHint = (card, label) => (declaredReason(card, label) !== null && !declared(card, label) ? ` (\`${label}\`의 이유는 ${MIN_REASON_CHARS}자 이상, <…> 자리에 실제 이유)` : '');
 
 function secretProblems(root, changed) {
   const out = [];
@@ -67,17 +80,29 @@ function secretProblems(root, changed) {
     if (!fs.existsSync(file) || !fs.statSync(file).isFile() || fs.statSync(file).size > MAX_SCAN_BYTES) continue;
     const text = fs.readFileSync(file, 'utf8');
     if (text.includes('\0')) continue;
+    // Out of git (taken out and ignored): it cannot be pushed, so neither the name nor the values count.
+    if (ENV_FILE.test(f) && isIgnored(root, f)) continue;
     const isPlainEnv = /(^|\/)\.env$/.test(f);
     const isSecretEnv = ENV_FILE.test(f) && !ENV_TEMPLATE.test(f) && (isPlainEnv || SECRET_ASSIGN.test(text) || SECRETS.some(([, re]) => re.test(text)));
     if (isSecretEnv) out.push(`비밀값 파일: ${f}가 git에 올라갈 상태다 → .gitignore에 넣고 값은 환경변수로`);
     text.split('\n').forEach((line, i) => {
-      if (line.includes(ALLOW_SECRET)) return;
-      const hit = SECRETS.find(([, re]) => re.test(line));
-      if (hit) out.push(`비밀값 의심: ${f}:${i + 1} (${hit[0]}) → 코드에서 빼고 환경변수로. 이미 커밋·푸시됐다면 사용자에게 키 교체를 알린다 (오탐이면 그 줄에 \`${ALLOW_SECRET}\` 주석)`);
+      const kind = secretKind(line);
+      if (kind) out.push(`비밀값 의심: ${f}:${i + 1} (${kind}) → 코드에서 빼고 환경변수로. 이미 커밋·푸시됐다면 사용자에게 키 교체를 알린다 (오탐이면 그 줄에 \`${ALLOW_SECRET}\` 주석)`);
     });
   }
   return out;
 }
+
+// The kind of secret one line of file f holds, or null. An .env value named like a key counts too.
+function secretKind(line, f = '') {
+  if (line.includes(ALLOW_SECRET)) return null;
+  const hit = SECRETS.find(([, re]) => re.test(line));
+  if (hit) return hit[0];
+  return ENV_FILE.test(f) && !ENV_TEMPLATE.test(f) && SECRET_ASSIGN.test(line) ? '.env 비밀값' : null;
+}
+
+// git says ignored only for a file it does not track: a tracked .env still counts.
+const isIgnored = (root, f) => spawnSync('git', ['check-ignore', '-q', '--', f], { cwd: root }).status === 0;
 
 const readSmall = (root, f) => {
   const file = path.join(root, f);
@@ -104,19 +129,44 @@ function integrationFailureProblems(root, { changed, risks, card, cardPath }) {
   if (!risks.some((r) => r.risk === 'external') || declared(card, '연동 실패 테스트 불필요')) return [];
   const tests = changed.filter((f) => TEST_FILE.test(f));
   if (tests.some((f) => FAILURE_WORDS.test(readSmall(root, f) || ''))) return [];
-  return [`연동 실패 테스트: 외부 연동 코드가 바뀌었는데 상대가 실패할 때(시간 초과·5xx·거절)의 테스트가 이번 변경에 없다 → 그 테스트를 쓰거나, ${cardPath}에 \`연동 실패 테스트 불필요: 이유\``];
+  return [`연동 실패 테스트: 외부 연동 코드가 바뀌었는데 상대가 실패할 때(시간 초과·5xx·거절)의 테스트가 이번 변경에 없다 → 그 테스트를 쓰거나, ${cardPath}에 \`연동 실패 테스트 불필요: ${NO_NEED}\``];
 }
 
 // Tests for `{tests}` in a check command: changed test files, plus tests named after a
-// changed code file (src/auth.mjs → any …/auth.test.mjs, auth.spec.ts, test_auth.py).
+// changed code file in the same language (src/auth.mjs → …/auth.test.ts, never test_auth.py).
 // ponytail: name match only; a code file without a same-name test is covered at PR.
+const LANG = [[/\.((c|m)?[jt]sx?|vue|svelte)$/, (s, b) => b.startsWith(`${s}.test.`) || b.startsWith(`${s}.spec.`)], [/\.py$/, (s, b) => b === `test_${s}.py` || b === `${s}_test.py`], [/\.go$/, (s, b) => b === `${s}_test.go`]];
+const langOf = (f) => LANG.findIndex(([re]) => re.test(f));
 function relatedTests(root, changed, tracked) {
   const exists = (f) => fs.existsSync(path.join(root, f));
   const stem = (f) => path.basename(f).replace(/\.[^.]+$/, '');
   const tests = tracked.filter((f) => TEST_FILE.test(f) && CODE_EXT.test(f));
-  const stems = new Set(changed.filter((f) => CODE_EXT.test(f) && !TEST_FILE.test(f) && !OWN_FILES.test(f)).map(stem));
-  const named = tests.filter((t) => { const b = path.basename(t); return [...stems].some((s) => b.startsWith(`${s}.test.`) || b.startsWith(`${s}.spec.`) || b === `test_${s}.py` || b === `${s}_test.go` || b === `${s}_test.py`); });
+  const codes = changed.filter((f) => CODE_EXT.test(f) && !TEST_FILE.test(f) && !OWN_FILES.test(f) && langOf(f) !== -1);
+  const named = tests.filter((t) => codes.some((c) => langOf(t) === langOf(c) && LANG[langOf(c)][1](stem(c), path.basename(t))));
   return [...new Set([...changed.filter((f) => TEST_FILE.test(f) && CODE_EXT.test(f)), ...named])].filter(exists).sort();
+}
+
+// The nearest folder above f holding a package file; '' (the whole repository) when none does.
+function packageOf(root, f, cache) {
+  const dir = path.posix.dirname(f);
+  if (dir === '.' || dir === '/') return '';
+  if (!cache.has(dir)) cache.set(dir, PACKAGE_FILES.some((p) => fs.existsSync(path.join(root, dir, p))) ? dir : packageOf(root, dir, cache));
+  return cache.get(dir);
+}
+
+// Code that this work changed (not deleted, not tool files) with no changed test in its package.
+function untestedCode(root, code) {
+  const cache = new Map();
+  const tested = new Set(code.filter((f) => TEST_FILE.test(f)).map((f) => packageOf(root, f, cache)));
+  return code.filter((f) => !TEST_FILE.test(f) && !TOOL_FILE.test(f) && fs.existsSync(path.join(root, f)) && !tested.has(packageOf(root, f, cache)));
+}
+
+// Lines git left from a merge that stopped on a conflict.
+function conflictProblems(root, changed) {
+  return changed.filter((f) => !f.startsWith('.quality/qh/')).flatMap((f) => {
+    const i = (readSmall(root, f) || '').split('\n').findIndex((l) => CONFLICT_MARK.test(l));
+    return i === -1 ? [] : [`충돌 표시: ${f}:${i + 1} 병합 충돌 표시(<<<<<<< · >>>>>>>)가 남아 있다 → 두 쪽 내용을 합치고 표시 줄을 지운다`];
+  });
 }
 
 // changed: files of this work; risks: matched risk areas; isCriteriaChanged: config or
@@ -125,26 +175,27 @@ function relatedTests(root, changed, tracked) {
 function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPath, answers }) {
   const out = [];
   const code = changed.filter((f) => CODE_EXT.test(f) && !OWN_FILES.test(f));
-  const prod = code.filter((f) => !TEST_FILE.test(f));
+  const prod = code.filter((f) => !TEST_FILE.test(f) && !TOOL_FILE.test(f));
   const has = (re) => changed.some((f) => re.test(f) && !OWN_FILES.test(f));
-  if (prod.length && !code.some((f) => TEST_FILE.test(f)) && !declared(card, '테스트 불필요')) {
-    out.push(`TDD: 코드(${prod.slice(0, 3).join(', ')}${prod.length > 3 ? ' …' : ''})가 바뀌었는데 테스트 변경이 없다 → 실패하는 테스트를 먼저 쓰고 고친다. 정말 필요 없으면 ${cardPath}에 \`테스트 불필요: 이유\`${shortHint(card, '테스트 불필요')}`);
+  const untested = untestedCode(root, code);
+  if (untested.length && !declared(card, '테스트 불필요')) {
+    out.push(`TDD: 코드(${untested.slice(0, 3).join(', ')}${untested.length > 3 ? ' …' : ''})가 바뀌었는데 ${code.some((f) => TEST_FILE.test(f)) ? '같은 패키지(가장 가까운 package.json·go.mod 등의 폴더)의 ' : ''}테스트 변경이 없다 → 실패하는 테스트를 먼저 쓰고 고친다. 정말 필요 없으면 ${cardPath}에 \`테스트 불필요: ${NO_NEED}\`${shortHint(card, '테스트 불필요')}`);
   }
   if (prod.length && !has(DOC_FILE) && !declared(card, '문서 영향 없음')) {
-    out.push(`문서 영향: 코드가 바뀌었는데 문서 변경이 없다 → 영향받는 문서를 같은 작업에서 고치거나, ${cardPath}에 \`문서 영향 없음: 이유\`${shortHint(card, '문서 영향 없음')}`);
+    out.push(`문서 영향: 코드가 바뀌었는데 문서 변경이 없다 → 영향받는 문서를 같은 작업에서 고치거나, ${cardPath}에 \`문서 영향 없음: ${reasonSlot('왜 문서를 안 고쳐도 되는지')}\`${shortHint(card, '문서 영향 없음')}`);
   }
   // The person said this work really changes a risky behaviour: no "ADR 불필요" for it.
   const confirmed = Object.entries(require('./questions').taskAnswers(card)).filter(([r, v]) => v === 'A' && risks.some((x) => x.risk === r)).map(([r]) => r);
   const isAdrWaived = declared(card, 'ADR 불필요') && !confirmed.length;
   if (risks.length && !changed.some((f) => path.matchesGlob(f, ADR_GLOB)) && !isAdrWaived) {
-    out.push(`ADR: 위험 영역(${risks.map((r) => r.risk).join(', ')})이 바뀌었다 → ${ADR_GLOB.replace('*', 'NNNN-제목')}에 결정·이유·대안을 쓴다${confirmed.length ? ` (작업 질문에서 ${confirmed.join(', ')} 변경 있음이라 ADR 불필요는 안 됨)` : `. 정말 필요 없으면 ${cardPath}에 \`ADR 불필요: 이유\`${shortHint(card, 'ADR 불필요')}`}`);
+    out.push(`ADR: 위험 영역(${risks.map((r) => r.risk).join(', ')})이 바뀌었다 → ${ADR_GLOB.replace('*', 'NNNN-제목')}에 결정·이유·대안을 쓴다${confirmed.length ? ` (작업 질문에서 ${confirmed.join(', ')} 변경 있음이라 ADR 불필요는 안 됨)` : `. 정말 필요 없으면 ${cardPath}에 \`ADR 불필요: ${NO_NEED}\`${shortHint(card, 'ADR 불필요')}`}`);
   }
   if (isCriteriaChanged && !changed.includes(DECISIONS_FILE)) {
     out.push(`결정 로그: 품질 기준(.quality/config.json·access.json)이 바뀌었다 → ${DECISIONS_FILE}에 한 줄(날짜 · 결정 · 이유 · 다시 볼 조건)`);
   }
   if (answers?.personal === 'A') out.push(...piiLogProblems(root, prod));
   if (answers?.external === 'A') out.push(...integrationFailureProblems(root, { changed, risks, card, cardPath }));
-  return [...out, ...secretProblems(root, changed)];
+  return [...out, ...conflictProblems(root, changed), ...secretProblems(root, changed)];
 }
 
-module.exports = { policyProblems, relatedTests, DECISIONS_FILE, CODE_EXT, TEST_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
+module.exports = { policyProblems, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };

@@ -84,13 +84,13 @@ const d=s.map((p,i)=>(i?'L':'M')+x(p).toFixed(1)+','+y(p).toFixed(1)).join('');
 const pts=s.map((p,i)=>'<circle class="'+(i===s.length-1?'end':'pt')+'" cx="'+x(p).toFixed(1)+'" cy="'+y(p).toFixed(1)+'" r="'+(i===s.length-1?4:3)+'"><title>'+md(p.date)+' · '+fmt(p.v)+'</title></circle>').join('');
 return'<svg class="spark" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+label+' 추이"><path class="ln" d="'+d+'"></path>'+pts+'</svg>'}
 const before=days.filter(d=>d.row.backfill==='1'||d.row.backfill===1).length;
-document.getElementById('meta').textContent='측정 이력: '+rows.length+'회'+(before?' (소급 '+before+'회)':'')+(older?' | 측정 방식이 바뀌기 전 기록 '+older+'회는 비교에서 뺌'+(before?'':' (같은 방식으로 다시 보려면 qh measure --backfill 8)'):'')+' | 기간: '+md(days[0].date)+' ~ '+md(last.date)+' (커밋 '+last.row.sha+')';
+document.getElementById('meta').textContent='측정 이력: '+rows.length+'회'+(before?' (소급 '+before+'회)':'')+(older?' | 측정 방식이 바뀌기 전 기록 '+older+'회는 비교에서 뺌'+(before?'':' (같은 방식으로 다시 보려면 에이전트에게 "지난 8주도 다시 재 줘"라고 하세요)'):'')+' | 기간: '+md(days[0].date)+' ~ '+md(last.date)+' (커밋 '+last.row.sha+')';
 function tally(lo,hi){const j=items.filter(([k,,,dir])=>dir==='lower'&&series(k,lo,hi).length>1).map(([k,l])=>({l,c:change(k,'lower',lo,hi)}));
 return{better:j.filter(x=>x.c.d<0),worse:j.filter(x=>x.c.d>0),same:j.filter(x=>x.c.d===0)}}
 const names=(name,xs)=>xs.length?name+' '+xs.map(x=>x.l+' '+x.c.delta).join(', '):'';
 const list=(name,xs)=>xs.length?'<p>'+names(name+':',xs)+'</p>':'';
 const v=document.getElementById('verdict');
-if(days.length<2){v.innerHTML='<strong>첫 측정입니다. 다음 측정부터 비교합니다.</strong><p>qh를 넣기 전 흐름을 보려면 <code>qh measure --backfill 8</code>로 지난 8주를 소급해 잽니다.</p>'}
+if(days.length<2){v.innerHTML='<strong>첫 측정입니다. 다음 측정부터 비교합니다.</strong><p>품질 검사를 넣기 전 흐름도 보려면 에이전트에게 "지난 8주도 재 줘"라고 하세요. 지난 8주를 거슬러 재서 함께 보여 줍니다.</p>'}
 else{const t=tally(base,days.length-1);const since=qhAt>0?'qh 설치 후 ('+md(days[base].date)+' 설치 직전 → '+md(last.date)+')':(qhAt<0?'qh 설치 전 기록만 있음 ('+md(days[0].date)+' → '+md(last.date)+')':md(days[0].date)+' 대비');
 v.className='verdict '+(t.worse.length>t.better.length?'bad':t.better.length?'good':'');
 let h='<strong>'+since+' — 개선 '+t.better.length+'건 / 악화 '+t.worse.length+'건 / 유지 '+t.same.length+'건</strong>'+list('악화',t.worse)+list('개선',t.better);

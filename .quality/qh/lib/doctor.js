@@ -172,16 +172,19 @@ function answerProblems(root, config) {
   const hasRisk = (r) => isStringList(config.risks?.[r]?.paths) && config.risks[r].paths.length > 0;
   // Config, access table, risks and review.cmd are the person's; docs and CI the agent may write.
   const need = (isMissing, msg, fix) => isMissing && out.push(ask(fail(`답 ${msg}`, fix)));
+  // route-access drives an Express app; elsewhere nothing can run it, so the person settles access another way.
+  const isExpress = Boolean(json(root, 'package.json')?.dependencies?.express);
+  const needAccess = (isMissing, msg, fix) => (isExpress ? need(isMissing, msg, fix) : isMissing && out.push(ask(warn(`답 ${msg}`, 'Express 앱이 아니라 자동 권한 검사를 쓸 수 없다 → 사용자와 권한을 확인할 방법을 정해 docs/decisions.md에 한 줄'))));
   const write = (isMissing, msg, fix) => isMissing && out.push(fail(`답 ${msg}`, fix));
   const docs = (rel, label, what) => write(!fs.existsSync(path.join(root, rel)), `"${label}" → ${rel}가 없다`, `${what}을 적는 문서를 만든다`);
   if (a.login === 'A') {
-    need(!hasBuiltin('route-access'), '"로그인 기능 있음" → 권한 검사(route-access)가 없다', 'checks에 route-access 검사 추가 (Express가 아니면 사용자와 방법을 정한다)');
-    need(!fs.existsSync(path.join(root, '.quality/access.json')), '"로그인 기능 있음" → 권한 표(.quality/access.json)가 없다', '`qh routes --baseline --levels …` 후 사람이 훑는다');
+    needAccess(!hasBuiltin('route-access'), '"로그인 기능 있음" → 권한 검사(route-access)가 없다', 'checks에 route-access 검사 추가');
+    needAccess(!fs.existsSync(path.join(root, '.quality/access.json')), '"로그인 기능 있음" → 권한 표(.quality/access.json)가 없다', '`qh routes --baseline --levels …` 후 사람이 훑는다');
     need(!hasRisk('auth'), '"로그인 기능 있음" → 위험 영역 auth가 없다', 'risks.auth.paths에 로그인·권한 코드 경로 (바꾸면 ADR이 필요해진다)');
   }
   if (a.personal === 'A') {
     docs('docs/personal-data.md', '개인정보 취급함', '어떤 개인정보를 어디에 두고 누가 보는지');
-    need(a.login !== 'A' && !fs.existsSync(path.join(root, '.quality/access.json')), '"개인정보 취급함" → 권한 표가 없다', '`qh routes --baseline …`');
+    needAccess(a.login !== 'A' && !fs.existsSync(path.join(root, '.quality/access.json')), '"개인정보 취급함" → 권한 표가 없다', '`qh routes --baseline …`');
   }
   if (a.db === 'A') {
     need(!hasBuiltin('sql-prepare'), '"DB 변경 있음" → SQL 검사(sql-prepare)가 없다', 'checks에 sql-prepare 검사 추가');
@@ -211,6 +214,13 @@ function stopSpeedProblems(root, config) {
   return out;
 }
 
+// Every rule asks for tests; without a check that runs them nothing proves they pass.
+function testCheckProblems(config) {
+  const { checkLabel } = require('./triage');
+  if (Object.values(config?.checks || {}).some((d) => /테스트/.test(checkLabel(d)))) return [];
+  return [ask(warn('테스트를 돌리는 검사가 없다 (테스트를 써도 통과하는지 아무도 확인하지 않는다)', '사용자에게 묻고 checks에 테스트 명령(`npm test`·`pytest -q`·`go test ./...` 등)을 넣는다'))];
+}
+
 function doctor(root, { light = false } = {}) {
   const base = lightProblems(root);
   if (light) return base;
@@ -227,6 +237,7 @@ function doctor(root, { light = false } = {}) {
     ...probeProblems(root, config),
     ...mapProblems(root),
     ...stopSpeedProblems(root, config),
+    ...(config ? testCheckProblems(config) : []),
     ...(config ? structureConfigProblems(root, config.structure).map(ask) : []),
     ...(config ? answerProblems(root, config) : []),
   ];

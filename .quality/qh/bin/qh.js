@@ -11,16 +11,18 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems, relatedTests, DECISIONS_FILE } = require('../lib/policy');
+const { policyProblems, relatedTests, isRealReason, DECISIONS_FILE } = require('../lib/policy');
 const { createHash } = require('node:crypto');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
+const stopState = require('../lib/stop-state');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
-const { triage, ACCESS_FILE } = require('../lib/triage');
+const PROBE_FILE = '.quality/probe.mjs';
+const { triage, aiFixUser, aiFixKind, criteriaWords, ACCESS_FILE } = require('../lib/triage');
 const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
@@ -99,7 +101,13 @@ function changedFiles(root, base) {
 function loadConfig(root) {
   const file = path.join(root, CONFIG_FILE);
   if (!fs.existsSync(file)) throw new EnvError(`${CONFIG_FILE} 없음`);
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    throw Object.assign(new EnvError(`${CONFIG_FILE}이 JSON 형식이 아니다: ${err.message} → 코드를 고치지 말고 사용자에게 보고 (설정 파일은 사용자 확인 없이 고치지 않는다)`), {
+      user: '품질 검사 설정 파일이 깨져 있어 검사를 못 했습니다. 설정 파일을 고칠지 정해 주세요. 고치기 전까지는 검사하지 않습니다.',
+    });
+  }
 }
 
 function evidencePath(root, name) {
@@ -122,6 +130,11 @@ function writeEvidence(root, name, data) {
 function envProblems(root, config) {
   const problems = doctor(root, { light: true }).map((p) => `설정: ${p.msg} → ${p.fix}`);
   if (problems.length) return problems;
+  try {
+    git(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+  } catch {
+    return ['커밋 없음: 이 저장소에 아직 커밋이 없어 비교할 기준이 없다 → 사용자에게 알리고, 원하면 첫 커밋을 만든다. 첫 커밋 뒤부터 판정한다'];
+  }
   try {
     git(root, ['rev-parse', '--verify', '--quiet', `${config.baseRef}^{commit}`]);
   } catch {
@@ -196,22 +209,32 @@ function runCheck(root, name, check) {
   const r = spawnCheck(root, def, timeoutSec);
   const logPath = path.join(EVIDENCE_DIR, `${name}.log`);
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
-  fs.writeFileSync(path.join(root, logPath), `${r.stdout || ''}${r.stderr || ''}`);
+  const log = `${r.stdout || ''}${r.stderr || ''}`;
+  fs.writeFileSync(path.join(root, logPath), log);
   const timedOut = r.error?.code === 'ETIMEDOUT';
   const evidence = { ...base, exit: timedOut ? 124 : (r.status ?? 1), timedOut, finishedAt: new Date().toISOString(), logPath };
   if (def.builtin) evidence.result = parseJson(r.stdout);
-  writeEvidence(root, name, { ...evidence, ...runEnvError(root, def, evidence) });
+  writeEvidence(root, name, { ...evidence, ...runEnvError(root, def, evidence, log) });
 }
 
 // Why a finished run says nothing about the code, if it does not: { envError, envKind } or {}.
-function runEnvError(root, def, ev) {
+function runEnvError(root, def, ev, log) {
   // Evidence binds the tree it ran on; a check that rewrites tracked files can never be current.
   const touched = lines(git(root, ['diff', '--name-only', ev.treeHash, treeHash(root)]));
   if (touched.length) return { envError: `검사가 파일을 바꿨다: ${touched.join(', ')} → .gitignore에 넣거나 출력 경로를 옮긴다`, envKind: 'changed' };
-  if (ev.result?.envError) return { envError: ev.result.envError, envKind: 'builtin' };
-  if (!def.builtin && SHELL_NO_TOOL.includes(ev.exit)) return { envError: `도구 없음 또는 실행 불가 (exit ${ev.exit}, 로그: ${ev.logPath})`, envKind: 'tool' };
+  if (ev.result?.envError) return { envError: ev.result.envError, envKind: isProbeTodo(root, ev.result.envError) ? 'probe-todo' : 'builtin' };
+  if (def.builtin || ev.exit === 0) return {};
+  if (SHELL_NO_TOOL.includes(ev.exit)) return { envError: `도구 없음 또는 실행 불가 (exit ${ev.exit}, 로그: ${ev.logPath})`, envKind: 'tool' };
+  const down = require('../lib/run-builtin').serviceDown(log);
+  if (down) return { envError: `필요한 서비스(DB·docker 등)에 연결하지 못함: ${down} (로그: ${ev.logPath}) → 코드를 고치지 말고 사용자에게 보고`, envKind: 'service' };
   return {};
 }
+
+// The probe draft from qh init still throws todo(): a person decides who fills it in.
+const isProbeTodo = (root, envError) => {
+  const file = path.join(root, PROBE_FILE);
+  return envError.includes(PROBE_FILE) && fs.existsSync(file) && /throw todo\(/.test(fs.readFileSync(file, 'utf8'));
+};
 
 function parseJson(text) {
   try {
@@ -256,10 +279,15 @@ function taskCard(root) {
   return { rel, text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
 }
 
-function taskDecisions(text) {
-  const section = text.split(/^## /m).find((s) => s.startsWith('판단 필요'));
-  if (!section) return [];
-  return [...section.matchAll(/^- \[ \] (.+)$/gm)].map((m) => m[1].trim());
+const decisionSection = (text) => text.split(/^## /m).find((s) => s.startsWith('판단 필요')) || '';
+const taskDecisions = (text) => [...decisionSection(text).matchAll(/^- \[ \] (.+)$/gm)].map((m) => m[1].trim());
+const NOTHING = /^\(?(없음|없다|none|n\/a)\)?\.?$/i;
+
+// Only `- [ ] ` items reach the person; a plain list item there would be silently skipped.
+function cardFormatProblems(card) {
+  const plain = [...decisionSection(card.text).matchAll(/^[-*+]\s+(?!\[[ xX]\])(.+)$/gm)].map((m) => m[1].trim()).filter((x) => !NOTHING.test(x));
+  if (!plain.length) return [];
+  return [`작업 카드: ${card.rel} \`## 판단 필요\`에 체크박스 없는 항목이 있어 사람 확인으로 잡히지 않는다 → 사람이 정할 것이면 \`- [ ] 항목\`으로 바꿔 사용자에게 묻고, 아니면 다른 절로 옮긴다: ${plain.map((x) => `"${x}"`).join(', ')}`];
 }
 
 function flatten(obj, prefix = '', out = {}) {
@@ -291,13 +319,7 @@ const isCriteriaConfirmed = (root) => {
 };
 
 // In words a non-developer can answer "is this what you want?" about.
-function criteriaSummary(root, config) {
-  const routes = Object.keys(readJsonAt(root, null, ACCESS_FILE).routes || {}).length;
-  const parts = [`켜진 검사: ${Object.keys(config.checks || {}).join(', ') || '없음'}`];
-  if (Object.keys(config.risks || {}).length) parts.push(`지키는 위험 영역: ${Object.keys(config.risks).join(', ')}`);
-  if (routes) parts.push(`권한 표 경로 ${routes}개`);
-  return parts.join(' · ');
-}
+const criteriaSummary = (root, config) => criteriaWords(config, Object.keys(readJsonAt(root, null, ACCESS_FILE).routes || {}).length);
 
 // What the gate measures against (checks, risks, the access table) changed in this work.
 // A person who confirmed this exact version (qh confirm) is not asked again.
@@ -309,7 +331,11 @@ function configChanges(root, base, config) {
   // baseRef is where to compare from, not what is checked (`status --base` overrides it).
   const a = flatten({ ...readJsonAt(root, base, CONFIG_FILE), baseRef: undefined, access: readJsonAt(root, base, ACCESS_FILE) });
   const b = flatten({ ...config, baseRef: undefined, access: readJsonAt(root, null, ACCESS_FILE) });
-  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k]).sort();
+  // A route qh asked "who may open it?" about, added to a table the base already had, is the person's answer.
+  const hadTable = Boolean(readJsonAt(root, base, ACCESS_FILE).routes);
+  const asked = stopState.askedRoutes(root);
+  const isAnswer = (k) => hadTable && a[k] === undefined && asked.has(k.replace(/^access\.routes\./, '').replace(/\.(level|check)$/, ''));
+  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k] && !isAnswer(k)).sort();
   if (keys.length > MAX_LISTED_CHANGES) {
     // A first baseline adds hundreds of routes: one line per section, read it in the diff.
     const sections = Map.groupBy(keys, (k) => k.split('.').slice(0, 2).join('.'));
@@ -334,11 +360,12 @@ function structureResult(root, { changed, base, phase, tree, structure }) {
   return { problems: [...own.problems, ...shape.problems, ...repo.problems], warnings: own.warnings, env: [...shape.env, ...repo.env] };
 }
 
-// Checks the person accepted as failing before this work: `기존 실패 허용: <검사> · 이유`.
+// Checks the person accepted as failing before this work: `기존 실패 허용: <검사> · 이유`,
+// the reason held to the task-card rule (5 characters, not the hint's <…> placeholder).
 function allowedFailures(root) {
   const file = path.join(root, DECISIONS_FILE);
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  return [...text.matchAll(/기존 실패 허용:\s*`?([^\s`·]+)/g)].map((m) => m[1]);
+  return [...text.matchAll(/기존 실패 허용:\s*`?([^\s`·]+)`?\s*(?:·\s*([^·\n]*))?/g)].filter((m) => isRealReason((m[2] || '').trim())).map((m) => m[1]);
 }
 
 function reviewStatus(root, now) {
@@ -373,13 +400,18 @@ function assess(root, phase = 'stop', baseRef) {
     later: req.later,
     risks: req.risks,
     docsMissing: req.docsMissing,
-    policy: changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : [],
+    policy: [
+      ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
+      ...cardFormatProblems(card),
+      ...(phase === 'pr' ? require('../lib/history-secrets').historySecretProblems(root, base) : []),
+    ],
     structure: shape.problems,
     structureEnv: shape.env,
     structureWarnings: shape.warnings,
     decisions: taskDecisions(card.text),
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
+    accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],
     configChanges: criteria,
     criteria: { isFirstInstall: !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]), summary: criteriaSummary(root, config) },
     review: reviewStatus(root, now),
@@ -489,7 +521,8 @@ function cmdPr(root) {
   const t = triage(a);
   const setup = doctor(root);
   console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}`);
-  const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
+  const isEnvCheck = a.checks.some((c) => c.state === '환경 오류');
+  const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || isEnvCheck || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
@@ -530,67 +563,75 @@ function block(reason, systemMessage) {
 const userLines = (items) => [...new Set(items.map((x) => `- ${x.user}`))].join('\n');
 const warningNote = (t) => (t.warnings.length ? `품질 검사 경고 (막지 않음)\n${userLines(t.warnings)}` : null);
 const askLines = (items) => items.map((x) => `- ${x.agent}\n  사용자에게는 이렇게 말한다: ${x.user}`).join('\n');
+const plainFixes = (items, config) => items.map((x) => ({ user: aiFixUser(x, config) }));
+const stuckNote = (items, config) => `품질 검사: 에이전트가 아래 문제를 고치지 못하고 멈췄습니다. 에이전트에게 "남은 품질 문제 고쳐줘"라고 하거나, 그대로 둘지 정해 주세요.\n${userLines(plainFixes(items, config))}`;
+
+// Kiro sends no stop_hook_active, does not call Stop again after a block and shows no
+// systemMessage (Kiro CLI 3.3.0, /tmp/qh-e2e/B): the agent rechecks itself and carries the words.
+const oneShotTail = (lines) => `\n\n이 호스트는 고친 뒤 이 검사를 다시 부르지 않는다. 고친 뒤 \`qh status\`를 직접 돌려 남은 항목이 없을 때만 끝낸다. 남으면 고치지 못한 것을 사용자에게 보고한다.\n사용자에게 전할 말 (이 호스트는 알림을 따로 보여 주지 않는다. 남은 것은 응답에 이 말로 넣는다):\n${lines}`;
+
+function hookInput() {
+  const raw = readStdin() || '{}';
+  const data = parseJson(raw);
+  const input = data && typeof data === 'object' ? data : {};
+  return { raw, session: typeof input.session_id === 'string' ? input.session_id : '', isOneShot: !('stop_hook_active' in input) };
+}
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
-// It does not rely on stop_hook_active (Claude Code does not cap repeats; Kiro may not send it).
-// - AI-fix items block again only after the tree changed, and at most MAX_SAME_BLOCKS times in a row.
+// - An AI-fix item (by kind: "TDD", "검사 unit") blocks again only after the tree changed, and at
+//   most MAX_SAME_BLOCKS times in a row; another item coming or going does not reset it.
 // - Questions for the person and environment errors are handed back once per distinct content.
-// Anything not handed back goes to the user as a systemMessage.
+// What is not handed back goes to the person as a systemMessage, once per distinct content.
+// State is per agent session (lib/stop-state.js).
 // ponytail: fixed cap of 2 same-item blocks, make it config if a project needs more retries.
 const MAX_SAME_BLOCKS = 2;
-const STOP_STATE = 'stop-state.json';
-
-const readStopState = (root) => {
-  const file = path.join(root, EVIDENCE_DIR, STOP_STATE);
-  return (fs.existsSync(file) && parseJson(fs.readFileSync(file, 'utf8'))) || {};
-};
-const writeStopState = (root, state) => fs.writeFileSync(path.join(root, EVIDENCE_DIR, STOP_STATE), JSON.stringify(state));
 
 function hookStop(root) {
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
-  fs.writeFileSync(path.join(root, EVIDENCE_DIR, 'last-hook-input.json'), readStdin() || '{}');
-  const config = loadConfig(root);
+  const host = hookInput();
+  fs.writeFileSync(path.join(root, EVIDENCE_DIR, 'last-hook-input.json'), host.raw);
   try {
-    return judgeStop(root, config);
+    return judgeStop(root, loadConfig(root), host);
   } catch (err) {
-    // An environment error with words for the person (no common ancestor) is told once, not swallowed.
+    // An environment error with words for the person (broken config, no common ancestor) is told once, not swallowed.
     if (!(err instanceof EnvError) || !err.user) throw err;
-    const last = readStopState(root);
+    const last = stopState.readSession(root, host.session);
     if (last.envNote === err.user) return EXIT.ok;
-    writeStopState(root, { ...last, envNote: err.user });
-    process.stdout.write(`${JSON.stringify({ systemMessage: err.user })}\n`);
-    return EXIT.ok;
+    stopState.writeSession(root, host.session, { ...last, envNote: err.user }, host.isOneShot ? `- ${err.user}` : undefined);
+    return block(`qh: 환경 오류로 판정하지 못함.\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines([{ agent: err.message, user: err.user }])}`, err.user);
   }
 }
 
-function judgeStop(root, config) {
+function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
   const t = triage(a);
-  const warn = warningNote(t);
-  const aiPart = t.aiFix.map((x) => `- ${x}`).join('\n');
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 아래 "사용자에게는" 문장처럼 파일 경로·명령·커밋 해시·도구 이름 없이 묻는다):\n${askLines(t.human)}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;
 
-  const last = readStopState(root);
-  const isSameAi = aiPart !== '' && aiPart === last.aiPart;
-  const isStuck = isSameAi && (last.tree === a.treeHash || last.count >= MAX_SAME_BLOCKS);
-  const isNewAsk = askPart !== '' && askPart !== last.askPart;
-  if ((aiPart && !isStuck) || isNewAsk) {
-    const count = !aiPart ? 0 : isSameAi ? last.count + 1 : 1;
-    writeStopState(root, { tree: a.treeHash, aiPart, count, askPart });
+  const last = stopState.readSession(root, host.session);
+  const counts = last.counts || {};
+  const isGivenUp = (x) => Boolean(counts[aiFixKind(x)]) && (last.tree === a.treeHash || counts[aiFixKind(x)] >= MAX_SAME_BLOCKS);
+  const fresh = t.aiFix.filter((x) => !isGivenUp(x));
+  const givenUp = t.aiFix.filter(isGivenUp);
+  const nextCounts = Object.fromEntries(t.aiFix.map(aiFixKind).map((k) => [k, fresh.some((x) => aiFixKind(x) === k) ? (counts[k] || 0) + 1 : counts[k]]));
+  const forPerson = [...plainFixes(t.aiFix, a.config), ...t.human, ...t.env, ...t.warnings];
+  const pending = host.isOneShot ? (forPerson.length ? userLines(forPerson) : null) : undefined;
+  if (fresh.length || (askPart !== '' && askPart !== last.askPart)) {
+    stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
+    if (a.undeclared.length) stopState.markAsked(root, a.undeclared);
     require('../lib/measure').logStop(root, t);
-    const head = aiPart ? `qh: 끝내기 전에 고칠 일\n${aiPart}` : t.env.length ? 'qh: 환경 오류로 판정하지 못함.' : 'qh: 검사는 통과.';
-    return block(`${head}${askPart}`, warn);
+    const head = fresh.length ? `qh: 끝내기 전에 고칠 일\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: 환경 오류로 판정하지 못함.' : 'qh: 검사는 통과.';
+    return block(`${head}${askPart}${host.isOneShot ? oneShotTail(userLines(forPerson)) : ''}`, warningNote(t));
   }
-  writeStopState(root, { tree: last.tree, aiPart, count: aiPart ? last.count : 0, askPart });
-  const notes = [
-    aiPart && `품질 검사: 에이전트가 고치지 못한 채 멈춤 (같은 문제로 다시 막지 않음)\n${aiPart}`,
+  const note = [
+    givenUp.length && stuckNote(givenUp, a.config),
     askPart && `사람이 판단할 일 (에이전트에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
-    warn,
-  ].filter(Boolean);
-  if (notes.length) process.stdout.write(`${JSON.stringify({ systemMessage: notes.join('\n') })}\n`);
+    warningNote(t),
+  ].filter(Boolean).join('\n');
+  stopState.writeSession(root, host.session, { tree: last.tree, counts: nextCounts, askPart, notified: note }, pending);
+  if (note && note !== last.notified) process.stdout.write(`${JSON.stringify({ systemMessage: note })}\n`);
   return EXIT.ok;
 }
 
@@ -643,7 +684,9 @@ function cmdBaseline(root) {
 
 function hookSessionStart(root) {
   const unasked = loadConfig(root)?.answers ? '' : '\n(qh) 프로젝트 질문에 아직 답하지 않았다 → 사용자에게 알리고, 원하면 .quality/qh/lib/ask-guide.md대로 질문 세션을 연다.';
-  console.log(`${formatStatus(assess(root))}${unasked}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
+  const pending = stopState.takePending(root);
+  const left = pending ? `\n(qh) 지난 세션이 끝날 때 남은 품질 문제가 있었다(그 호스트는 알림을 보여 주지 않는다). 위 상태에 아직 남았으면 사용자에게 이렇게 전한다:\n${pending}` : '';
+  console.log(`${formatStatus(assess(root))}${unasked}${left}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
   return EXIT.ok;
 }
 

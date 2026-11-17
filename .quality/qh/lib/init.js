@@ -37,13 +37,33 @@ function write(root, rel, body, plan) {
 
 // ---------- detection ----------
 
+const hasNpmTest = (pkg) => Boolean(pkg.scripts?.test && pkg.scripts.test !== NPM_DEFAULT_TEST);
+const readJson = (root, rel) => { try { return JSON.parse(read(root, rel) || '{}'); } catch { return {}; } };
+// pytest settings live in pyproject.toml, pytest.ini, tox.ini or setup.cfg ([tool:pytest]).
+const PYTEST_CONFIG = [['pyproject.toml', /\[tool\.pytest|\bpytest\b/], ['pytest.ini', /./], ['tox.ini', /\[pytest\]/], ['setup.cfg', /\[tool:pytest\]/]];
+
+// The command that runs the project's tests: npm at the top, else packages one folder down
+// (backend/, packages/x/), plus pytest and go test where they are set up. null when none.
+// ponytail: one folder down only; a deeper monorepo layout gets its command from the person.
+function detectTest(root) {
+  const cmds = [];
+  if (hasNpmTest(readJson(root, 'package.json'))) cmds.push('npm test');
+  else {
+    const subs = fs.globSync(['*/package.json', 'packages/*/package.json', 'apps/*/package.json'], { cwd: root }).filter((f) => !/^(node_modules|\.)/.test(f)).sort();
+    for (const f of subs) if (hasNpmTest(readJson(root, f))) cmds.push(`npm --prefix ${path.dirname(f)} test`);
+  }
+  if (PYTEST_CONFIG.some(([f, re]) => re.test(read(root, f) || '')) || fs.existsSync(path.join(root, 'conftest.py'))) cmds.push('pytest -q');
+  if (fs.existsSync(path.join(root, 'go.mod'))) cmds.push('go test ./...');
+  return cmds.length ? cmds.join(' && ') : null;
+}
+
 function detect(root) {
   const pkg = JSON.parse(read(root, 'package.json') || '{}');
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
   const hasSrc = fs.existsSync(path.join(root, 'src'));
   const sqliteMigrations = fs.globSync('migrations/*.sql', { cwd: root }).length > 0;
   return {
-    test: pkg.scripts?.test && pkg.scripts.test !== NPM_DEFAULT_TEST ? 'npm test' : null,
+    test: detectTest(root),
     // A server framework only in devDependencies is a test tool, not the app.
     express: Boolean(pkg.dependencies?.express),
     db: deps.pg ? 'postgres' : sqliteMigrations ? 'sqlite' : null,
@@ -242,8 +262,9 @@ function report(root, d, log, notes, mapDone, isFreshInstall) {
   const next = [];
   if (log.some((l) => l.rel === '.quality/probe.mjs')) next.push('.quality/probe.mjs를 채운다 (앱 만들기·로그인·테스트 DB).');
   if (d.express && read(root, '.quality/access.json') === null) next.push('권한 표 첫 버전: `node .quality/qh/bin/qh.js routes --baseline --levels <비로그인>,<…>,<최고>` 후 사람이 훑는다.');
+  if (!d.test) next.push('테스트 검사가 없다: 테스트를 돌리는 명령(npm test·pytest·go test)을 찾지 못했다 → 사용자에게 테스트 실행 방법을 묻고, 허락을 받아 .quality/config.json checks에 test 검사({ "cmd": "…", "on": ["pr"] })와 common에 넣는다.');
   if (!d.hasKiroRun) next.push('AI 리뷰를 쓰려면 .quality/config.json에 review.cmd를 넣는다.');
-  next.push('프로젝트 질문: 에이전트에게 "qh 질문 세션 열어줘" (화면에서 고른 답대로 검사가 켜진다).');
+  next.push('품질 기준 정하기: 에이전트에게 "품질 기준을 같이 정하자"라고 말한다 (몇 가지 질문에 고른 답대로 검사가 켜진다).');
   next.push('확인: `node .quality/qh/bin/qh.js status`');
   console.log(`다음:\n${next.map((n, i) => `  ${i + 1}. ${n}`).join('\n')}`);
   if (log.length) {
