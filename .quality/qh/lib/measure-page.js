@@ -46,7 +46,7 @@ th.qhstart,td.qhstart{border-left:2px solid var(--accent)}
 <div class="verdict" id="verdict"></div>
 <section aria-label="처음과 지금"><div class="tiles" id="tiles"></div></section>
 <section><h2>지표 뜻</h2>
-<p class="meta">아래 <span id="judged">4</span>개 지표의 뜻과 보는 법입니다. 변화는 qh 설치 직전(설치 전 기록이 없으면 첫 측정)부터 지금까지의 숫자입니다. 좋고 나쁨은 qh가 판정하지 않고, 목표치는 프로젝트가 정합니다.</p>
+<p class="meta">아래 <span id="judged">4</span>개 지표의 뜻과 보는 법입니다. 변화는 VibeRail 설치 직전(설치 전 기록이 없으면 첫 측정)부터 지금까지의 숫자입니다. 좋고 나쁨은 VibeRail이 판정하지 않고, 목표치는 프로젝트가 정합니다.</p>
 <div class="wrap"><table id="why"></table></div></section>
 <section><h2>측정 이력</h2>
 <p class="meta">측정마다 오른쪽에 날짜 열이 추가됩니다. 같은 날은 마지막 값, 기울어진 날짜는 과거 버전을 소급 측정한 값입니다.</p>
@@ -54,7 +54,7 @@ th.qhstart,td.qhstart{border-left:2px solid var(--accent)}
 <footer class="foot">
 <span>측정 기준: 측정할 때마다 지금 저장한 버전을 재서 기록 파일에 한 줄씩 더합니다(지우지 않음). 소급 값은 과거 주별 버전 하나를 임시 복사본에서 같은 방식으로 잰 것입니다.</span>
 <span>코드 수치는 버전 관리에 올라간 파일만, 테스트와 DB 변경 파일은 코드에서 뺍니다(중복 비율도 같은 기준). 중복은 의미 있는 6줄이 같은 덩어리, "같은 이름 테스트"는 이름이 같은 테스트 파일이 있는지입니다.</span>
-<span>qh 작동 수치는 이 컴퓨터에 남은 "AI가 답을 끝낼 때" 기록(저장한 버전에는 안 올라감)에서 셉니다. 소급 구간에는 없습니다. 차단이 많다는 건 나쁜 게 아니라 qh가 일을 했다는 뜻입니다.</span>
+<span>품질 검사 작동 수치는 이 컴퓨터에 남은 "AI가 답을 끝낼 때" 기록(저장한 버전에는 안 올라감)에서 셉니다. 소급 구간에는 없습니다. 차단이 많다는 건 나쁜 게 아니라 품질 검사가 일을 했다는 뜻입니다.</span>
 </footer></main>
 <script>
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -89,11 +89,11 @@ const moved=(lo,hi)=>items.filter(([k,,,dir])=>dir==='lower'&&series(k,lo,hi).le
 const names=xs=>xs.map(x=>x.l+' '+fmt(x.c.first.v)+' → '+fmt(x.c.last.v)).join(', ');
 const v=document.getElementById('verdict');
 if(days.length<2){v.innerHTML='<strong>첫 측정입니다. 다음 측정부터 비교합니다.</strong><p>품질 검사를 넣기 전 흐름도 보려면 AI에게 "지난 8주도 재 줘"라고 하세요. 지난 8주를 거슬러 재서 함께 보여 줍니다.</p>'}
-else{const since=qhAt>0?'qh 설치 후 ('+md(days[base].date)+' 설치 직전 → '+md(last.date)+')':(qhAt<0?'qh 설치 전 기록만 있음 ('+md(days[0].date)+' → '+md(last.date)+')':md(days[0].date)+' 대비');
+else{const since=qhAt>0?'VibeRail 설치 후 ('+md(days[base].date)+' 설치 직전 → '+md(last.date)+')':(qhAt<0?'VibeRail 설치 전 기록만 있음 ('+md(days[0].date)+' → '+md(last.date)+')':md(days[0].date)+' 대비');
 let h='<strong>'+since+' — 숫자가 달라진 항목</strong>';
 const m=moved(base,days.length-1);h+='<p>'+(m.length?names(m):'달라진 항목 없음')+'</p>';
-if(qhAt>0&&base>0){const b=moved(0,base);h+='<p class="meta">qh 넣기 전 흐름 ('+md(days[0].date)+' → '+md(days[base].date)+'): '+(b.length?names(b):'달라진 항목 없음')+'</p>'}
-if(qhAt<0)h+='<p class="meta">qh가 저장된 뒤 측정하면 설치 후 변화를 따로 보여 줍니다.</p>';
+if(qhAt>0&&base>0){const b=moved(0,base);h+='<p class="meta">VibeRail 넣기 전 흐름 ('+md(days[0].date)+' → '+md(days[base].date)+'): '+(b.length?names(b):'달라진 항목 없음')+'</p>'}
+if(qhAt<0)h+='<p class="meta">VibeRail이 저장된 뒤 측정하면 설치 후 변화를 따로 보여 줍니다.</p>';
 v.innerHTML=h}
 const label=k=>(items.find(([x])=>x===k)||[k,k])[1];
 document.getElementById('tiles').innerHTML=D.tiles.map(([k,unit])=>{const c=change(k);if(!c.first)return'';
@@ -103,7 +103,7 @@ const tick=t=>esc(t).replace(/\x60([^\x60]+)\x60/g,'<code>$1</code>');
 document.getElementById('why').innerHTML='<thead><tr><th>지표</th><th>뜻</th><th>나빠지면</th><th>좋아지면</th><th>기준과 받아들이는 법</th></tr></thead><tbody>'+
 items.filter(x=>x[4]).map(([,l,,,w])=>'<tr><td class="name">'+esc(l)+'</td>'+w.map((t,i)=>'<td data-l="'+['뜻','나빠지면','좋아지면','기준과 받아들이는 법'][i]+'">'+tick(t)+'</td>').join('')+'</tr>').join('')+'</tbody>';
 const li=days.length-1;
-const head='<thead><tr><th>항목</th><th>추이</th><th>변화 ('+(qhAt>0?'설치 직전':'처음')+'→최근)</th>'+days.map((d,i)=>'<th class="n'+(i===li?' latest':'')+(d.row.backfill==1?' before':'')+(i===qhAt&&qhAt>0?' qhstart':'')+'">'+md(d.date)+(i===qhAt&&qhAt>0?'<small>qh 설치 후</small>':'')+(d.n>1?'<small>'+d.n+'회 중 마지막</small>':'')+'</th>').join('')+'</tr></thead>';
+const head='<thead><tr><th>항목</th><th>추이</th><th>변화 ('+(qhAt>0?'설치 직전':'처음')+'→최근)</th>'+days.map((d,i)=>'<th class="n'+(i===li?' latest':'')+(d.row.backfill==1?' before':'')+(i===qhAt&&qhAt>0?' qhstart':'')+'">'+md(d.date)+(i===qhAt&&qhAt>0?'<small>VibeRail 설치 후</small>':'')+(d.n>1?'<small>'+d.n+'회 중 마지막</small>':'')+'</th>').join('')+'</tr></thead>';
 const body=D.groups.map(([g,xs])=>'<tr class="group"><td colspan="'+(3+days.length)+'">'+g+'</td></tr>'+xs.map(([k,l,desc])=>{const c=change(k);
 return'<tr><td><span class="name">'+l+'</span><span class="desc">'+desc+'</span></td><td>'+spark(k,l)+'</td><td>'+c.pill+'<span class="delta">'+c.delta+'</span></td>'+days.map((d,i)=>'<td class="n'+(i===li?' latest':'')+(i===qhAt&&qhAt>0?' qhstart':'')+'">'+fmt(d.row[k])+'</td>').join('')+'</tr>'}).join('')).join('');
 document.getElementById('hist').innerHTML=head+'<tbody>'+body+'</tbody>';

@@ -76,6 +76,9 @@ test('A-level question page, measure report and interface screen contain no deve
     const text = html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<script id="pure">[\s\S]*?<\/script>/, '');
     const hits = [...new Set(text.match(new RegExp(SCREEN_WORDS, 'g')))];
     assert.deepStrictEqual(hits, [], `${name} 화면에 전문용어: ${hits}`);
+    // The product is VibeRail to a person; "qh 답" is only the marker the agent reads back.
+    const names = text.replace(/qh 답/g, '').replace(/^\s*\/\/.*$/gm, '').match(/\bqh\b(?!-)[^<'"\n]{0,20}/g) || [];
+    assert.deepStrictEqual(names, [], `${name} 화면에 qh라는 이름`);
   }
 });
 
