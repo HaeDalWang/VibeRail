@@ -19,3 +19,8 @@
 테스트 불필요: 개발자용 체험 스크립트, 실행 결과로 세 조건을 직접 확인함
 문서 영향 없음: 개발 전용 도구라 공개 문서가 아니라 CLAUDE.local.md에 한 줄
 ADR 불필요: 제품 동작·구조 변경 없음, 저장소 밖 임시 폴더만 만듦
+
+## 추가: 선택지를 선택 창으로
+- 체험 중 사용자 요청: 선택지 질문을 텍스트가 아니라 방향키로 고르는 창으로 → 규칙 블록에 한 줄(Claude Code는 AskUserQuestion, 없거나 5개 이상이면 번호 텍스트) → test/user-facing.test.js "the agent rules ask choices with the arrow-key picker..."
+- 작업 질문 안내의 "채팅에서"를 뺌(새 규칙과 충돌)
+- [x] 선택지 표시 방식 · 선택 창으로 (사용자 요청)

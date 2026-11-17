@@ -122,6 +122,11 @@ test('the agent rules say how to write decisions, when allow lines may be writte
   assert.match(guide, /큰 파일 허용[\s\S]*중복 허용[\s\S]*답을 받은 뒤에만/);
 });
 
+test('the agent rules ask choices with the arrow-key picker in Claude Code and numbered text elsewhere', () => {
+  const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
+  assert.match(snippet, /선택지[^\n]*AskUserQuestion[^\n]*번호/);
+});
+
 test('the report page tells the person what to say to the agent, not a command', () => {
   const page = fs.readFileSync(path.join(LIB, 'measure-page.js'), 'utf8');
   assert.doesNotMatch(page, /qh measure --backfill/);
