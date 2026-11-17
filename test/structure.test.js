@@ -320,8 +320,17 @@ test('namespace use marks names, and any other use of the module marks the whole
 
 // ---------- measure ----------
 
+test('measure reads allow lines by the same rule as the checks: no real reason, no exception', () => {
+  const lines = '- 루트 파일: src/widgets/b.js · 짧음\n- 테스트 없음 허용: src/widgets/a.js\n';
+  const root = repo({ flatRoots: ['src/widgets'] }, { 'src/widgets/a.js': '1', 'src/widgets/b.js': '1', 'docs/decisions.md': lines });
+  assert.strictEqual(qh(root, ['measure']).status, 0);
+  const [head, row] = fs.readFileSync(path.join(root, '.quality/metrics.csv'), 'utf8').trim().split('\n').map((l) => l.split(','));
+  assert.strictEqual(row[head.indexOf('flat_root_files')], '2', 'a reason under five characters does not accept b.js');
+  assert.strictEqual(row[head.indexOf('untested_pct')], '100', 'a line without a reason does not accept a.js');
+});
+
 test('measure counts flat-root files only where configured, minus declared ones', () => {
-  const root = repo({ flatRoots: ['src/widgets'] }, { 'src/widgets/a.js': '1', 'src/widgets/b.js': '1', 'src/widgets/sub/c.js': '1', 'docs/decisions.md': '- 루트 파일: src/widgets/b.js · 진입점\n' });
+  const root = repo({ flatRoots: ['src/widgets'] }, { 'src/widgets/a.js': '1', 'src/widgets/b.js': '1', 'src/widgets/sub/c.js': '1', 'docs/decisions.md': '- 루트 파일: src/widgets/b.js · 앱 진입점이라 맨 위\n' });
   assert.strictEqual(qh(root, ['measure']).status, 0);
   const [head, row] = fs.readFileSync(path.join(root, '.quality/metrics.csv'), 'utf8').trim().split('\n').map((l) => l.split(','));
   assert.strictEqual(row[head.indexOf('flat_root_files')], '1');
