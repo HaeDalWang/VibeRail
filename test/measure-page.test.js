@@ -18,5 +18,5 @@ test('the report does not tally metrics into 개선/악화/유지 counts or labe
 test('the report still shows first -> now with the delta text and the before/after-qh split', () => {
   assert.match(html, /class="from"/);
   assert.match(html, /class="delta"/);
-  assert.match(html, /qh 설치 직전/);
+  assert.match(html, /VibeRail 설치 직전/);
 });
