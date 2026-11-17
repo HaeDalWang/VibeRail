@@ -185,3 +185,22 @@ test('architecture check is due after 7 days; with no line it counts from the fi
   commitCard(young, 'a', day(-2));
   assert.doesNotMatch(stage(young), /아키텍처 점검 시기/);
 });
+
+// ---------- defaults with no outside basis: config `limits` can change them ----------
+
+test('config limits change the architecture cadence, the reason length and the copy window', () => {
+  const root = repo({ ...BASIC, limits: { architectureCards: 1, architectureDays: 30, reasonChars: 12, duplicateLines: 8 } });
+  commitCard(root, 'a', day(-1));
+  assert.match(stage(root), /아키텍처 점검 시기[^\n]*카드 1개/, 'one card is enough when the project says so');
+  write(root, 'src/a.js', '2');
+  card(root, DECLARED);
+  assert.match(policyOf(root), /TDD:.*이유는 12자 이상/, '"상수 하나만 바꿈" is under 12 characters');
+  const six = Array.from({ length: 6 }, (_, i) => `const value${i} = compute(${i}, options.flag);`).join('\n');
+  write(root, 'src/one.js', `${six}\n`);
+  write(root, 'src/two.js', `${six}\n`);
+  assert.doesNotMatch(statusJson(root).structure.join('\n'), /중복/, 'six same lines are under an eight-line window');
+  const plain = repo(BASIC);
+  write(plain, 'src/one.js', `${six}\n`);
+  write(plain, 'src/two.js', `${six}\n`);
+  assert.match(statusJson(plain).structure.join('\n'), /중복/, 'the default window is six lines');
+});

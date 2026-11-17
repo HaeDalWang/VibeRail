@@ -30,16 +30,16 @@ Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `
 | ◆① Scope | person | Show the scope in plain Korean, ask them to confirm. | scope appended to `## 의도` |
 | 2. Interface | you: Skill `codebase-design` | Design at least two interfaces (DESIGN-IT-TWICE). Write them to a JSON file and run `qh view interface <file>` to make the local HTML. Give the person the path. | |
 | ◆② Pick | person | They pick one and must give a reason. No reason, no next step. | `## interface 결정` with `이유:`; the seams go to `## 테스트 위치(seam)` |
-| 3. Spec, tickets | person types `/to-spec`, then `/to-tickets` | Upstream writes `.scratch/<feature>/spec.md` and `issues/NN-*.md`. Link them in the card. | link |
+| 3. Spec, tickets | person says so in words ("명세 만들어 줘", then "작업 나눠 줘"); you open `.claude/skills/to-spec/SKILL.md`, then `.claude/skills/to-tickets/SKILL.md` | Upstream writes `.scratch/<feature>/spec.md` and `issues/NN-*.md`. Link them in the card. | link |
 | 4. Build | you: Skill `tdd` | One ticket at a time, tests only at the card's seams. Do not call `implement`; it is not installed. | |
 | ◆③ Review | you run `qh review`; person reads | Show the person the interface and the tests, not the whole diff. | |
-| 5. Retro | person types `/retro` | Turn repeatable mistakes into lint, hooks or tests. | |
+| 5. Retro | person says so in words ("회고하자"); you open `.claude/skills/retro/SKILL.md` | Turn repeatable mistakes into lint, hooks or tests. | |
 
-Never pass a ◆ step on the person's behalf. When a step needs a slash command, end your turn with one line: the command to type, and why now.
+Never pass a ◆ step on the person's behalf. When a step is the person's to start, end your turn with one line in plain Korean: what to say to you (for example "명세 만들어 줘"), and why now. Never ask them to type a command.
 
 ### Skills you cannot call
 
-`to-spec`, `to-tickets`, `retro`, `improve-codebase-architecture` and `grill-with-docs` are user-invoked only. Do not read their files and follow them yourself; tell the person which command to type.
+`to-spec`, `to-tickets`, `retro`, `improve-codebase-architecture` and `grill-with-docs` are user-invoked only (`disable-model-invocation`), so the Skill tool cannot start them. The person starts them by saying so in words; then you Read the installed file `.claude/skills/<name>/SKILL.md` (qh init copies it there unedited) and follow it as written. Do not start one before the person asks for it, and do not edit it.
 
 ### Review
 
@@ -47,7 +47,7 @@ Where any vendored skill says to call `code-review`, run `qh review` instead. qh
 
 ## Architecture check
 
-`qh cycle` says when it is due (three cards finished or seven days since the last check). Then tell the person to type `/improve-codebase-architecture`. They pick one candidate and give a reason (◆④). Record it in `docs/decisions.md` as `아키텍처 점검: <date> · <candidate> · <reason>`. Only the picked candidate is refactored, as its own card. Existing duplicates qh reported as warnings are good input for this step.
+`qh cycle` says when it is due (three cards finished or seven days since the last check). Then tell the person in one plain line that an architecture check is due and what to say ("구조 점검하자"). When they say it, Read `.claude/skills/improve-codebase-architecture/SKILL.md` and follow it. They pick one candidate and give a reason (◆④). Record it in `docs/decisions.md` as `아키텍처 점검: <date> · <candidate> · <reason>`. Only the picked candidate is refactored, as its own card. Existing duplicates qh reported as warnings are good input for this step.
 
 ## Talking to the person
 
