@@ -10,11 +10,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { DEFAULT_LIMITS, loadLimits } = require('./policy');
 
 const PHASES = ['stop', 'pr'];
 const BUILTINS = ['sql-prepare', 'route-access'];
 const PROBE_FILE = '.quality/probe.mjs';
-const STOP_BUDGET_MS = 10_000;
 const MAP_TOOL = 'code-review-graph';
 const MAP_DB = '.code-review-graph/graph.db';
 const QH_HOOK = /qh\.js"? hook (stop|session-start)\b/;
@@ -200,20 +200,28 @@ function answerProblems(root, config) {
   return out;
 }
 
-// A Stop that the agent is told to wait on must stay fast (decision: under 10 s).
+// A Stop that the agent is told to wait on must stay fast (default under 10 s, limits.stopSeconds).
 function stopSpeedProblems(root, config) {
   const out = [];
+  const { stopSeconds } = loadLimits(root);
   for (const name of config?.common || []) {
     const def = config.checks?.[name];
     if (!def || !(def.on || PHASES).includes('stop')) continue;
     const ev = json(root, `.quality/evidence/${name}.json`);
     const ms = ev?.finishedAt ? Date.parse(ev.finishedAt) - Date.parse(ev.startedAt) : 0;
-    if (ms > STOP_BUDGET_MS) out.push(warn(`검사 ${name}이 Stop에서 요구되는데 마지막 실행이 ${Math.round(ms / 1000)}초`, `checks.${name}.on을 ["pr"]로 (Stop은 10초 이내)`));
+    if (ms > stopSeconds * 1000) out.push(warn(`검사 ${name}이 Stop에서 요구되는데 마지막 실행이 ${Math.round(ms / 1000)}초`, `checks.${name}.on을 ["pr"]로 (Stop은 ${stopSeconds}초 이내)`));
   }
   return out;
 }
 
 // Every rule asks for tests; without a check that runs them nothing proves they pass.
+// loadLimits quietly keeps the default for a value it cannot use; say so here.
+function limitsProblems(config) {
+  return Object.entries(config.limits || {})
+    .filter(([k, v]) => !(k in DEFAULT_LIMITS) || !Number.isInteger(v) || v <= 0)
+    .map(([k, v]) => warn(`limits.${k}: ${JSON.stringify(v)}는 쓰이지 않는다 (기본값 사용)`, `키는 ${Object.keys(DEFAULT_LIMITS).join('·')} 중 하나, 값은 양의 정수`));
+}
+
 function testCheckProblems(config) {
   const { checkLabel } = require('./triage');
   if (Object.values(config?.checks || {}).some((d) => /테스트/.test(checkLabel(d)))) return [];
@@ -237,6 +245,7 @@ function doctor(root, { light = false } = {}) {
     ...mapProblems(root),
     ...stopSpeedProblems(root, config),
     ...(config ? testCheckProblems(config) : []),
+    ...(config ? limitsProblems(config).map(ask) : []),
     ...(config ? structureConfigProblems(root, config.structure).map(ask) : []),
     ...(config ? answerProblems(root, config) : []),
   ];

@@ -14,7 +14,7 @@ const { SECTIONS, section, seamPaths, addedLines } = require('./card');
 const DECISIONS_FILE = 'docs/decisions.md';
 const ADR_GLOB = 'docs/adr/*.md';
 // Defaults with no outside basis (docs/reference.md): a project changes them in config `limits`.
-const DEFAULT_LIMITS = { reasonChars: 5, duplicateLines: 6, duplicateLineChars: 8, architectureCards: 3, architectureDays: 7 };
+const DEFAULT_LIMITS = { reasonChars: 5, duplicateLines: 6, duplicateLineChars: 8, architectureCards: 3, architectureDays: 7, stopSeconds: 10 };
 const MIN_REASON_CHARS = DEFAULT_LIMITS.reasonChars;
 // ponytail: one process-wide copy, set once per run by bin/qh.js; pass limits down if a run ever serves two projects.
 const LIMITS = { ...DEFAULT_LIMITS };
@@ -248,4 +248,4 @@ function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPat
   return [...out, ...conflictProblems(root, changed), ...secretProblems(root, changed)];
 }
 
-module.exports = { policyProblems, declared, declaredReason, MIN_REASON_CHARS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
+module.exports = { policyProblems, declared, declaredReason, MIN_REASON_CHARS, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
