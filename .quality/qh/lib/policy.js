@@ -83,6 +83,16 @@ function declaredReason(card, label) {
 }
 // A reason someone wrote: long enough, and not the hint's <placeholder> pasted as it is.
 const isRealReason = (reason) => reason.length >= LIMITS.reasonChars && !/^<[^>]*>$/.test(reason);
+// A decision-log line `<label>: <path> · <reason>` naming f, with a real reason after the path
+// (the same rule as a task-card declaration: the hint's placeholder or "이유" does not count).
+const isAllowedBy = (decisions, label, f) => decisions.split('\n').some((l) => {
+  const at = l.indexOf(label);
+  const rest = at === -1 ? '' : l.slice(at + label.length).replace(/`/g, '');
+  const p = rest.indexOf(f);
+  if (p === -1) return false;
+  const after = rest.slice(p + f.length);
+  return isRealReason((after.includes('·') ? after.split('·')[1] : after.replace(/^[\s:：,-]+/, '')).trim());
+});
 const declared = (card, label) => isRealReason(declaredReason(card, label) || '');
 // What a hint shows in place of the reason, so a pasted hint is visibly unfinished.
 const reasonSlot = (why) => `<${why}, ${LIMITS.reasonChars}자 이상>`;
@@ -250,4 +260,4 @@ function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPat
   return [...out, ...conflictProblems(root, changed), ...secretProblems(root, changed)];
 }
 
-module.exports = { policyProblems, isOwnCode, declared, declaredReason, MIN_REASON_CHARS, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
+module.exports = { policyProblems, isOwnCode, isAllowedBy, declared, declaredReason, MIN_REASON_CHARS, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
