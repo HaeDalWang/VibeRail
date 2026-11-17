@@ -52,3 +52,34 @@ test('every item for a person has a sentence without paths, commands, hashes or 
     }
   }
 });
+
+// The three screens a non-developer opens (A level): question page, measure report, interface choice.
+// Developer words stay out of the page text; level B may show them in its own detail block.
+const fs = require('node:fs');
+const { ask } = require('../lib/ask');
+const { GROUPS } = require('../lib/measure');
+const { page } = require('../lib/measure-page');
+const { repo, write, qh, BASIC } = require('./helpers');
+
+const SCREEN_WORDS = /\b(TDD|ADR|PR|CI|API|Stop|express|SQL)\b|에이전트|커밋|\.quality|docs\/|\.(json|csv|mjs|md)\b/;
+
+test('A-level question page, measure report and interface screen contain no developer words', () => {
+  const root = repo({ ...BASIC, answers: { level: { choice: 'A' } } }, { 'package.json': JSON.stringify({ dependencies: { express: '^4' } }) });
+  write(root, 'opts.json', JSON.stringify({ title: '주문 묶기', options: [{ id: 'A', name: '하나로', summary: '묶는다', mermaid: 'graph TD\n  A-->B', gain: '단순', cost: '커진다' }, { id: 'B', name: '둘로', summary: '나눈다', mermaid: 'graph TD\n  A-->C', gain: '작음', cost: '늘어남' }] }));
+  const view = qh(root, ['view', 'interface', 'opts.json']);
+  const screens = {
+    질문: fs.readFileSync(ask(root, { answers: {} }), 'utf8'),
+    결과지: page('demo', [{ date: '2026-11-01', sha: 'abc' }], GROUPS),
+    '설계안 선택': fs.readFileSync(view.stdout.match(/(\S+\.html)/)[1], 'utf8'),
+  };
+  for (const [name, html] of Object.entries(screens)) {
+    const text = html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<script id="pure">[\s\S]*?<\/script>/, '');
+    const hits = [...new Set(text.match(new RegExp(SCREEN_WORDS, 'g')))];
+    assert.deepStrictEqual(hits, [], `${name} 화면에 전문용어: ${hits}`);
+  }
+});
+
+test('the sentences qh gives the agent to say hold no developer words either', () => {
+  const t = triage(everyKind({ isFirstInstall: false, summary: '켜진 검사: unit' }));
+  for (const item of [...t.human, ...t.env, ...t.warnings]) assert.doesNotMatch(item.user.replace('"/api/users"', ''), /\b(TDD|ADR|PR|CI|API|Stop|express)\b|에이전트|커밋/, item.user);
+});
