@@ -51,6 +51,8 @@ const PACKAGE_FILES = ['package.json', 'pyproject.toml', 'setup.py', 'go.mod', '
 const CONFLICT_MARK = /^(<{7}|>{7})( |$)/;
 // Copied-in libraries are someone else's code: not measured, not compared for copies.
 const VENDORED = /(^|\/)(vendor|third_party|node_modules)\//;
+// Code this project writes: not qh's own files, not copied-in or minified code. One rule for every check.
+const isOwnCode = (f) => CODE_EXT.test(f) && !OWN_FILES.test(f) && !VENDORED.test(f) && !/\.min\./.test(f);
 const ENV_FILE = /(^|\/)\.env(\.[^/]*)?$/;
 const ENV_TEMPLATE = /\.(example|sample|template)$/;
 // A plain .env is the secret file by convention; a variant (.env.development) with only URLs and flags is config.
@@ -221,7 +223,7 @@ function conflictProblems(root, changed) {
 // project answers (null before the first question session).
 function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPath, answers, base }) {
   const out = [];
-  const code = changed.filter((f) => CODE_EXT.test(f) && !OWN_FILES.test(f));
+  const code = changed.filter(isOwnCode);
   const prod = code.filter((f) => !TEST_FILE.test(f) && !TOOL_FILE.test(f));
   const has = (re) => changed.some((f) => re.test(f) && !OWN_FILES.test(f));
   const seams = seamPaths(card);
@@ -248,4 +250,4 @@ function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPat
   return [...out, ...conflictProblems(root, changed), ...secretProblems(root, changed)];
 }
 
-module.exports = { policyProblems, declared, declaredReason, MIN_REASON_CHARS, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
+module.exports = { policyProblems, isOwnCode, declared, declaredReason, MIN_REASON_CHARS, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };

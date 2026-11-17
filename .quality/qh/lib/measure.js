@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { CODE_EXT, TEST_FILE, OWN_FILES, VENDORED, MAX_SCAN_BYTES, DECISIONS_FILE, relatedTests } = require('./policy');
+const { isOwnCode, TEST_FILE, MAX_SCAN_BYTES, DECISIONS_FILE, relatedTests } = require('./policy');
 const { duplicateStats, deadRefProblems, MAX_FILE_LINES } = require('./structure');
 
 const METRICS_FILE = '.quality/metrics.csv';
@@ -125,7 +125,7 @@ const decisionsOf = (root) => (fs.existsSync(path.join(root, DECISIONS_FILE)) ? 
 
 function codeNumbers(root, tracked) {
   const decisions = decisionsOf(root).split('\n').filter((l) => l.includes('테스트 없음 허용'));
-  const code = tracked.filter((f) => CODE_EXT.test(f) && !OWN_FILES.test(f) && !VENDORED.test(f) && !/\.min\./.test(f));
+  const code = tracked.filter(isOwnCode);
   const tests = code.filter((f) => TEST_FILE.test(f));
   // Migrations (.sql) are not where same-name tests live; they would only skew the ratio.
   const prod = code.filter((f) => !TEST_FILE.test(f) && !/\.sql$/.test(f));
