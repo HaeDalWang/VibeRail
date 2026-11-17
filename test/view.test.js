@@ -50,12 +50,18 @@ test('level A shows name, summary, diagram, gain, cost; level B adds signature a
   assert.ok(b.includes('src/orders'));
 });
 
-test('the page works offline: no external address, mermaid shown as text with a note', () => {
-  const { html } = view(level('A'));
+test('the page draws diagrams from a local Mermaid copy: no external address, source text only as fallback', () => {
+  const { r, html } = view(level('A'));
   assert.doesNotMatch(html, /(src|href)\s*=\s*["']?(https?:)?\/\//i);
-  assert.doesNotMatch(html, /<script[^>]+src=/i);
-  assert.match(html, /<pre[^>]*>graph TD/);
-  assert.match(html, /인터넷 없이[^<]*그림 도구를 넣지 않아/);
+  assert.doesNotMatch(html, /https?:\/\//i, 'no address the page could call');
+  const src = html.match(/<script src="([^"]+)"/);
+  assert.ok(src && !/^[a-z]+:|^\//i.test(src[1]), 'local relative script');
+  const local = path.join(path.dirname(r.stdout.match(/(\S+\.html)/)[1]), src[1]);
+  assert.match(fs.readFileSync(local, 'utf8').slice(0, 200000), /mermaid/i, 'the copy sits next to the page');
+  assert.match(html, /<pre[^>]*>graph TD/, 'source stays in the page for the fallback');
+  assert.match(html, /mermaid\.render/);
+  assert.doesNotMatch(html, /그림 도구를 넣지 않아/);
+  assert.match(html, /그림을 그리지 못하면 원본 글/);
 });
 
 test('the copy button gives "안: <id>" and "이유: <text>" on two lines and refuses a short reason', () => {
