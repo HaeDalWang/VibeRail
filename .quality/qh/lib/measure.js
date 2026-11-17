@@ -9,15 +9,15 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { isOwnCode, TEST_FILE, MAX_SCAN_BYTES, DECISIONS_FILE, relatedTests } = require('./policy');
+const { isOwnCode, isAllowedBy, TEST_FILE, MAX_SCAN_BYTES, DECISIONS_FILE, relatedTests } = require('./policy');
 const { duplicateStats, deadRefProblems, MAX_FILE_LINES } = require('./structure');
 
 const METRICS_FILE = '.quality/metrics.csv';
 // One page per measurement, kept next to the numbers so past reports can be opened later.
 const REPORTS_DIR = '.quality/reports';
 // Bumped whenever what a number counts changes; rows are compared only within one version
-// (a rule change must not show up as an improvement). 2 = ADR 0001, 3 = vendored code left out.
-const RULES = 3;
+// (a rule change must not show up as an improvement). 2 = ADR 0001, 3 = vendored code left out, 4 = allow lines need a real reason.
+const RULES = 4;
 const STOP_LOG = '.quality/evidence/stop-log.jsonl';
 const DAY_SEC = 86400;
 const FEAT_WINDOW_DAYS = 60;
@@ -124,13 +124,13 @@ function featMedian(root, at) {
 const decisionsOf = (root) => (fs.existsSync(path.join(root, DECISIONS_FILE)) ? fs.readFileSync(path.join(root, DECISIONS_FILE), 'utf8') : '');
 
 function codeNumbers(root, tracked) {
-  const decisions = decisionsOf(root).split('\n').filter((l) => l.includes('테스트 없음 허용'));
+  const decisions = decisionsOf(root);
   const code = tracked.filter(isOwnCode);
   const tests = code.filter((f) => TEST_FILE.test(f));
   // Migrations (.sql) are not where same-name tests live; they would only skew the ratio.
   const prod = code.filter((f) => !TEST_FILE.test(f) && !/\.sql$/.test(f));
   const sizes = prod.map((f) => lineCount(root, f));
-  const needTests = prod.filter((f) => !decisions.some((l) => l.includes(f)));
+  const needTests = prod.filter((f) => !isAllowedBy(decisions, '테스트 없음 허용', f));
   const untested = needTests.filter((f) => !relatedTests(root, [f], tracked).length).length;
   return {
     code_files: prod.length,
@@ -146,9 +146,9 @@ const isOwnDoc = (f) => !f.startsWith('.');
 
 // Files directly under the folders the project set to be split by feature, minus declared exceptions.
 function flatRootFiles(root, tracked, dirs) {
-  const allowed = decisionsOf(root).split('\n').filter((l) => l.includes('루트 파일'));
+  const decisions = decisionsOf(root);
   const roots = new Set(dirs.map((d) => d.replace(/\/+$/, '')));
-  return tracked.filter((f) => roots.has(path.posix.dirname(f)) && !allowed.some((l) => l.includes(f))).length;
+  return tracked.filter((f) => roots.has(path.posix.dirname(f)) && !isAllowedBy(decisions, '루트 파일', f)).length;
 }
 
 function docNumbers(root, tracked, structure) {
