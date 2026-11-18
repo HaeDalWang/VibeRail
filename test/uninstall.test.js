@@ -82,3 +82,34 @@ test('uninstall stops when a file it would edit has uncommitted changes', () => 
   assert.match(r.stdout, /AGENTS\.md/);
   assert.ok(exists(root, '.quality/qh'), 'nothing was removed');
 });
+
+test('uninstall keeps a skill folder the person changed and lists it, and removes an unchanged one', () => {
+  const root = project(MINE);
+  qh(root, ['init', root]);
+  commitAll(root, 'chore: qh 설치');
+  write(root, '.claude/skills/qh-cycle/SKILL.md', `${read(root, '.claude/skills/qh-cycle/SKILL.md')}\nmy own step\n`);
+  write(root, '.claude/skills/tdd/my-notes.md', 'mine');
+  const r = qh(root, ['uninstall']);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.ok(exists(root, '.claude/skills/qh-cycle/SKILL.md'), 'edited skill kept');
+  assert.ok(exists(root, '.claude/skills/tdd/my-notes.md'), 'a file added to a skill folder is kept');
+  assert.match(r.stdout, /남겨 둠 \(설치본과 달라져[^\n]*qh-cycle[^\n]*tdd|남겨 둠 \(설치본과 달라져[^\n]*tdd[^\n]*qh-cycle/);
+  assert.ok(!exists(root, '.claude/skills/grilling'), 'an unchanged skill goes');
+});
+
+test('uninstall changes nothing when .claude/settings.json is malformed or its hooks have the wrong shape', () => {
+  for (const bad of ['{ not json qh.js', '{"hooks":{"Stop":"qh.js"}}']) {
+    const root = project(MINE);
+    qh(root, ['init', root]);
+    commitAll(root, 'chore: qh 설치');
+    write(root, '.claude/settings.json', bad);
+    commitAll(root, 'break settings');
+    const agents = read(root, 'AGENTS.md');
+    const r = qh(root, ['uninstall']);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /환경 오류[^\n]*\.claude\/settings\.json/);
+    assert.match(r.stdout, /아무것도 바꾸지 않았다/);
+    assert.strictEqual(read(root, 'AGENTS.md'), agents, 'AGENTS.md untouched');
+    assert.ok(exists(root, '.quality/qh') && exists(root, '.claude/skills/qh-cycle'), 'nothing was removed');
+  }
+});
