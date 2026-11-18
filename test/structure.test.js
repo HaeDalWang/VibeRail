@@ -53,7 +53,8 @@ function repo(structure, files = {}, { eslint = false, bins = {} } = {}) {
 const qh = (root, args) => spawnSync(process.execPath, [QH, ...args], { cwd: root, encoding: 'utf8' });
 function status(root, phase = 'stop') {
   const r = qh(root, ['status', '--json', ...(phase === 'pr' ? ['--pr'] : [])]);
-  assert.strictEqual(r.status, 0, r.stderr);
+  // status --pr exits 1 when the PR gate would block: these tests read the structure items either way.
+  assert.ok(r.status === 0 || (phase === 'pr' && r.status === 1), r.stderr);
   return JSON.parse(r.stdout);
 }
 const structureOf = (root, phase) => status(root, phase).structure.join('\n');

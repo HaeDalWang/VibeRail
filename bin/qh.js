@@ -75,7 +75,7 @@ function treeHash(root) {
 // Git prints nothing when the two have no common ancestor: in CI that is a shallow clone.
 function mergeBase(root, ref) {
   try {
-    return git(root, ['merge-base', ref, 'HEAD']);
+    return require('../lib/base-commit').workBase(root, git, ref, git(root, ['merge-base', ref, 'HEAD']));
   } catch (err) {
     if (!/: $/.test(err.message)) throw err;
     throw Object.assign(new EnvError(`git merge-base ${ref} HEAD: 공통 조상이 없다 (shallow clone이면 \`git fetch --unshallow\`)`), {
@@ -467,6 +467,12 @@ function readFindings(file) {
 
 // ---------- commands ----------
 
+// Nothing left to fix, ask or report: this commit is where the next work on the base branch starts.
+function recordPassed(root, a) {
+  const t = triage(a);
+  if (!(t.aiFix.length || t.human.length || t.env.length)) stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
+}
+
 function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
   const config = loadConfig(root);
   const env = envProblems(root, config);
@@ -481,6 +487,7 @@ function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
   for (const n of targets) runCheck(root, n, config.checks?.[n]);
   const after = assess(root, phase);
   if (!builtinOnly) console.log(formatStatus(after));
+  if (!builtinOnly && !names.length) recordPassed(root, after);
   const isAllowed = (c) => c.state === '실패' && after.allowedFailures.includes(c.name);
   const failing = after.checks.filter((c) => targets.includes(c.name) && c.state !== '통과' && !isAllowed(c));
   if (!failing.length) return EXIT.ok;
@@ -597,6 +604,7 @@ function hookStop(root) {
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
+  recordPassed(root, a);
   // The agent writes the card's open decisions itself, so a last answer that asks something has
   // asked them; turning it back makes the person read the same question twice. Agents ask in
   // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
