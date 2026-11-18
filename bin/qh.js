@@ -433,7 +433,10 @@ function assess(root, phase = 'stop', baseRef) {
 // ---------- review ----------
 
 function runReview(root, config, baseArg) {
-  if (isReviewSkipped(root, config)) return EXIT.ok;
+  if (isReviewSkipped(root, config)) {
+    console.log('AI 리뷰: 사용자가 검토 생략을 골라 돌리지 않았다');
+    return EXIT.ok;
+  }
   if (!config.review?.cmd) throw new EnvError('config.review.cmd 없음');
   const base = mergeBase(root, baseArg || config.baseRef);
   const hash = treeHash(root);
@@ -447,7 +450,9 @@ function runReview(root, config, baseArg) {
   const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
-  const cmd = config.review.cmd.replaceAll('{workdir}', shellQuote(root)).replaceAll('{task}', shellQuote(taskFile)).replaceAll('{out}', shellQuote(outDir));
+  // A placeholder the user already wrapped in matching quotes is the bare placeholder: quoted once, not twice.
+  const slots = { workdir: root, task: taskFile, out: outDir };
+  const cmd = config.review.cmd.replace(/(["']?)\{(workdir|task|out)\}\1/g, (_, _q, name) => shellQuote(slots[name]));
   const evidence = { check: 'review', cmd, treeHash: hash, base, startedAt: new Date().toISOString() };
   const missing = toolExists(root, cmd);
   if (missing) return writeEvidence(root, 'review', { ...evidence, envError: `도구 없음: ${missing}` }) || EXIT.env;

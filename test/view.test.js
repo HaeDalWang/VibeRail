@@ -187,3 +187,15 @@ test('a malformed architecture file says what is missing and writes nothing', ()
   assert.strictEqual(qh(root, ['view', 'architecture']).status, 1);
   assert.strictEqual(fs.existsSync(path.join(root, '.quality/reports')), false);
 });
+
+test('the same id twice in an architecture or interface file is rejected', () => {
+  const root = repo(BASIC);
+  write(root, 'c.json', JSON.stringify({ ...CANDIDATES, candidates: [CANDIDATES.candidates[0], CANDIDATES.candidates[0]] }));
+  const a = qh(root, ['view', 'architecture', 'c.json']);
+  assert.strictEqual(a.status, 1);
+  assert.match(a.stdout, /후보 id가 겹친다/);
+  write(root, 'o.json', JSON.stringify({ ...OPTIONS, options: [OPTIONS.options[0], OPTIONS.options[0]] }));
+  const i = qh(root, ['view', 'interface', 'o.json']);
+  assert.strictEqual(i.status, 1);
+  assert.match(i.stdout, /안 id가 겹친다/);
+});

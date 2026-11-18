@@ -85,3 +85,21 @@ test('status --pr exits non-zero when the PR gate would block, and exits 0 when 
   assert.strictEqual(ok.status, 0, ok.stdout);
   assert.strictEqual(qh(root, ['status']).status, 0, 'plain status only reports');
 });
+
+test('review.cmd placeholders the user already wrapped in quotes are not quoted twice', () => {
+  const body = "const fs=require('fs');const [o,w,t]=process.argv.slice(1);if(!fs.existsSync(w)||!fs.existsSync(t)||!fs.statSync(o).isDirectory())process.exit(2);fs.writeFileSync(o+'/result.json','[]')";
+  for (const [label, args] of [['double', '"{out}" "{workdir}" "{task}"'], ['single', "'{out}' '{workdir}' '{task}'"]]) {
+    const root = installed({ ...BASIC, review: { cmd: `node -e "${body}" ${args}` } });
+    const spaced = path.join(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'qh-sp-')), 'my project');
+    fs.renameSync(root, spaced);
+    assert.strictEqual(qh(spaced, ['review']).status, 0, label);
+    assert.ok(fs.existsSync(path.join(spaced, '.quality/evidence/review/result.json')), label);
+  }
+});
+
+test('qh review says in one Korean line that the review is off when the person chose C', () => {
+  const root = installed({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
+  const r = qh(root, ['review']);
+  assert.strictEqual(r.status, 0);
+  assert.match(r.stdout, /검토 생략을 골라/);
+});
