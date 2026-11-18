@@ -6,6 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { repo, write, sh, qh, statusJson, stopDecision, DECLARED, BASIC } = require('./helpers');
 const { triage } = require('../lib/triage');
@@ -21,20 +22,33 @@ function smallFix(config = BASIC) {
   return root;
 }
 
-test('grilling 불필요 written by the agent alone is a question for the person, and counts once it was shown', () => {
+const questionOf = (root) => triage(statusJson(root)).human[0].user;
+const card = (body, extra = '') => `${DECLARED}## 의도\n\n${body}\n${extra}`;
+const SMALL = 'grilling 불필요: 오타 한 글자 수정';
+
+test('grilling 불필요 is a question for the person and counts only with a checked card line carrying that question', () => {
   const root = smallFix();
-  assert.strictEqual(statusJson(root).waivers.length, 1, 'not asked yet');
-  const first = stop(root);
-  assert.strictEqual(first.decision, 'block');
-  assert.match(first.reason, /Ask the user[\s\S]*grilling 불필요/);
-  assert.deepStrictEqual(statusJson(root).waivers, [], 'shown to the person: the waiver counts');
-  assert.strictEqual(stop(root), null);
+  assert.strictEqual(statusJson(root).waivers.length, 1);
+  const q = questionOf(root);
+  assert.strictEqual(stop(root).decision, 'block');
+  assert.strictEqual(statusJson(root).waivers.length, 1, 'handing the question over is not an answer');
+  write(root, '.quality/tasks/work.md', card(SMALL, `\n## 판단 필요\n- [ ] ${q}\n`));
+  const open = statusJson(root);
+  assert.deepStrictEqual(open.waivers, [], 'an unchecked line is the open decision instead');
+  assert.deepStrictEqual(open.decisions, [q]);
+  write(root, '.quality/tasks/work.md', card(SMALL, `\n## 판단 필요\n- [x] ${q} · 네 괜찮습니다\n`));
+  const done = statusJson(root);
+  assert.deepStrictEqual([done.waivers, done.decisions], [[], []]);
+  write(root, '.quality/tasks/work.md', card(SMALL, `\n## 판단 필요\n- [x] ${q}\n`));
+  assert.strictEqual(statusJson(root).waivers.length, 1, 'a checked line without an answer is not one');
 });
 
 test('a different grilling reason is a different question', () => {
   const root = smallFix();
-  stop(root);
-  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\ngrilling 불필요: 다른 이유로 건너뜀\n`);
+  const q = questionOf(root);
+  write(root, '.quality/tasks/work.md', card(SMALL, `\n## 판단 필요\n- [x] ${q} · 네\n`));
+  assert.strictEqual(statusJson(root).waivers.length, 0);
+  write(root, '.quality/tasks/work.md', card('grilling 불필요: 다른 이유로 건너뜀', `\n## 판단 필요\n- [x] ${q} · 네\n`));
   assert.strictEqual(statusJson(root).waivers.length, 1);
 });
 
@@ -54,14 +68,17 @@ test('a secret marked fake with the allow marker is asked about first; the agent
   const s = statusJson(root);
   assert.strictEqual(s.waivers.length, 1);
   assert.doesNotMatch(s.waivers[0].agent, new RegExp(key));
+  const q = questionOf(root);
   write(root, 'src/a.test.js', `const t = '${key}'\n`);
   assert.doesNotMatch(statusJson(root).policy.join('\n'), /allow-secret/, 'a plain secret hint must not teach the marker');
   write(root, 'src/a.test.js', `const t = '${key}' // qh:allow-secret 테스트용 가짜\n`);
   stop(root);
+  assert.strictEqual(statusJson(root).waivers.length, 1, 'shown is not answered');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] ${q} · 가짜가 맞습니다\n`);
   assert.deepStrictEqual(statusJson(root).waivers, []);
 });
 
-test('qh confirm counts only for a version of the criteria the person was shown', () => {
+test('qh confirm counts only with the checked card line for the criteria question', () => {
   const root = repo(BASIC);
   sh(root, 'git', ['checkout', '-q', 'main']);
   sh(root, 'git', ['rm', '-q', '.quality/config.json']);
@@ -71,8 +88,32 @@ test('qh confirm counts only for a version of the criteria the person was shown'
   assert.strictEqual(qh(root, ['confirm']).status, 0, 'the agent confirmed on its own');
   assert.strictEqual(statusJson(root).configChanges.length, 1, 'still a question');
   stop(root);
-  assert.deepStrictEqual(statusJson(root).configChanges, [], 'shown, so the written confirmation counts');
+  assert.strictEqual(statusJson(root).configChanges.length, 1, 'shown is not answered');
+  const q = questionOf(root);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] ${q} · 이대로 쓰겠습니다\n`);
+  assert.deepStrictEqual(statusJson(root).configChanges, []);
   assert.match(fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8'), /기준 확인: [0-9a-f]{12}/);
+});
+
+test('a card line with the answer is enough in CI: a fresh clone passes check --pr and status --pr, an unchecked line blocks', () => {
+  const root = repo({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', card(SMALL));
+  const q = questionOf(root);
+  const clone = (line) => {
+    write(root, '.quality/tasks/work.md', card(SMALL, `\n## 판단 필요\n${line}\n`));
+    sh(root, 'git', ['add', '-A']);
+    sh(root, 'git', ['commit', '-qm', 'work']);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-ci-'));
+    sh(dir, 'git', ['clone', '-q', root, 'c']);
+    const c = path.join(dir, 'c');
+    sh(c, 'git', ['checkout', '-q', 'work']);
+    sh(c, 'git', ['fetch', '-q', 'origin', 'main:main']);
+    return [qh(c, ['check', '--pr']).status, qh(c, ['status', '--pr']).status];
+  };
+  assert.deepStrictEqual(clone(`- [x] ${q} · 네 괜찮습니다`), [0, 0]);
+  assert.strictEqual(clone(`- [ ] ${q}`)[1], 1);
 });
 
 test('the person-facing sentences of the waiver questions have no paths, commands or tool names', () => {
@@ -81,4 +122,15 @@ test('the person-facing sentences of the waiver questions have no paths, command
   const t = triage(statusJson(root));
   assert.strictEqual(t.human.length, 2);
   for (const item of t.human) assert.doesNotMatch(item.user, DEVELOPER_WORDS, item.user);
+});
+
+test('qh pr lists a log line exempted with the pii marker, and the pii hint has no trailing space', () => {
+  const root = repo({ ...BASIC, answers: { personal: { choice: 'A' }, reviewer: { choice: 'C', date: '2026-11-18' } } });
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  write(root, 'src/a.js', 'console.log("signup", user.email)\n');
+  write(root, '.quality/tasks/work.md', DECLARED);
+  const hint = statusJson(root).policy.find((p) => p.startsWith('개인정보 로그'));
+  assert.ok(hint && !/\s$/.test(hint), JSON.stringify(hint));
+  write(root, 'src/a.js', 'console.log("signup", user.email) // qh:allow-pii 테스트 계정\n');
+  assert.match(qh(root, ['pr']).stdout, /면제한 것[\s\S]*qh:allow-pii: src\/a\.js:1/);
 });
