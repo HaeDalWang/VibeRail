@@ -44,4 +44,4 @@ Claude Code나 Kiro에서 내 프로젝트를 연 다음에 붙여 넣으면 됩
 | "환경 오류"라고 한다 | `이거 해결해줘` |
 | 그만 쓰고 싶다 | `VibeRail 지워줘` (설치가 더한 것만 걷어내고, 내 파일과 기록은 남겨요) |
 
-내 코드는 밖으로 나가지 않습니다. 개발자용 설명: [사용 설명서](docs/reference.md) · [구조](docs/architecture.md)
+VibeRail 자체는 아무것도 올리지 않지만, 쓰는 AI 서비스(AI 검토 포함)에는 코드가 전달됩니다. 개발자용 설명: [사용 설명서](docs/reference.md) · [구조](docs/architecture.md)
