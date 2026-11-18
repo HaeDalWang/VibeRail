@@ -80,7 +80,7 @@ test('human decisions and base changes turn the agent back once, not on the repe
   assert.match(first.reason, /checks\.unit\.cmd/);
   const repeat = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
   assert.strictEqual(repeat.decision, undefined);
-  assert.match(repeat.systemMessage, /사람이 판단할 일.*\n- 정해 주세요: 관리자는 모든 회사를 보나/);
+  assert.match(repeat.systemMessage, /사람이 판단할 일.*\n- 관리자는 모든 회사를 보나\?/);
 });
 
 // What the person sees may not need a developer to read: no paths, commands, hashes or tool names.

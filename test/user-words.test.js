@@ -86,3 +86,9 @@ test('the sentences qh gives the agent to say hold no developer words either', (
   const t = triage(everyKind({ isFirstInstall: false, summary: '켜진 검사: unit' }));
   for (const item of [...t.human, ...t.env, ...t.warnings]) assert.doesNotMatch(item.user.replace('"/api/users"', ''), /\b(TDD|ADR|PR|CI|API|Stop|express)\b|에이전트|커밋/, item.user);
 });
+
+test('a card decision written as a question is shown as is; a bare note gets "정해 주세요"', () => {
+  const human = (d) => triage({ ...everyKind(null), decisions: [d] }).human.find((x) => x.agent.startsWith('작업 카드')).user;
+  assert.strictEqual(human('이 범위로 만들까요?'), '이 범위로 만들까요?');
+  assert.strictEqual(human('범위 확인'), '정해 주세요: 범위 확인');
+});
