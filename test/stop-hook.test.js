@@ -126,6 +126,8 @@ test('a decision the agent already asked about in its last message is not asked 
   const out = stopDecision(qh(root, ['hook', 'stop'], asked));
   assert.notStrictEqual(out?.decision, 'block', 'the agent asked: handing it back makes the person read the same question twice');
   assert.doesNotMatch(out?.systemMessage || '', /범위 확인/);
+  const askedPolitely = JSON.stringify({ stop_hook_active: false, last_assistant_message: '고른 안과 이유를 이 창에 붙여 넣어 주세요.' });
+  assert.notStrictEqual(stopDecision(qh(root, ['hook', 'stop'], askedPolitely))?.decision, 'block', 'a Korean request without "?" is still a question (seen in the sandbox run)');
   const notAsked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '다 만들었습니다.' });
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], notAsked)).decision, 'block', 'an answer that asks nothing still gets turned back');
 });

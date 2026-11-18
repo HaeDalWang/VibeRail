@@ -26,7 +26,7 @@ ADR 불필요: 제품 동작·구조 변경 없음, 저장소 밖 임시 폴더�
 - [x] 선택지 표시 방식 · 선택 창으로 (사용자 요청)
 
 ## 추가: 체험 막힘 고치기 (2026-11-18 루프)
-- 에이전트가 이미 물은 카드 질문을 Stop 훅이 다시 묻게 해서 질문이 두 번 나옴 → 마지막 답에 물음표가 있으면 카드 질문은 되돌리지 않음 → test/stop-hook.test.js "a decision the agent already asked about..."
+- 에이전트가 이미 물은 카드 질문을 Stop 훅이 다시 묻게 해서 질문이 두 번 나옴 → 마지막 답에 물음표나 "주세요"가 있으면 카드 질문은 되돌리지 않음 → test/stop-hook.test.js "a decision the agent already asked about..."
 - "켜진 검사: 없음"이 무슨 뜻인지 모름 → "아직 켜 둔 자동 검사가 없음" → test/user-facing.test.js
 - interface 화면 JSON 모양을 몰라 qh 코드를 뒤짐 → qh-cycle 스킬에 모양 한 줄 → test/init-skills.test.js
 - 범위를 grilling과 ◆①에서 두 번 물음 → 이미 같은 범위에 예라고 했으면 기록만 (스킬 한 줄, 문구라 테스트 불필요 범위)
