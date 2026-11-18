@@ -85,7 +85,7 @@ function optionProblems(spec) {
 }
 
 function interfacePage(spec, level) {
-  const intro = `<h1>${esc(spec.title)}</h1><p class="mute">안을 읽고 하나를 고른 뒤, 고른 이유를 적고 복사해서 AI 창에 붙여 넣으세요. ${esc(MERMAID_NOTE)}</p>`;
+  const intro = `<h1>${esc(spec.title)}</h1><p class="mute">안을 읽고 하나를 고른 뒤, 고른 이유를 적고 복사해서 AI 창에 붙여 넣으세요. 복사가 번거로우면 AI 창에 "B안, 이유는 …"처럼 말해도 됩니다. ${esc(MERMAID_NOTE)}</p>`;
   return shell(spec.title, intro + spec.options.map((o) => optionCard(o, level)).join(''), PURE + DRAW + WIRE);
 }
 
@@ -156,7 +156,7 @@ function run(root, args, config) {
   const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
   const file = write(root, `interface-${path.basename(jsonFile, '.json')}.html`, interfacePage(spec, level));
   fs.copyFileSync(path.join(__dirname, MERMAID_FILE), path.join(path.dirname(file), MERMAID_FILE));
-  console.log(`interface 선택 화면: ${file}\n사용자에게 이 파일을 브라우저로 열어 달라고 한다. 사용자가 고른 안과 이유를 붙여 넣으면 카드 \`## interface 결정\`에 그대로 적는다.`);
+  console.log(`interface 선택 화면: ${file}\n사용자에게 이 파일을 브라우저로 열어 달라고 한다. 사용자가 고른 안과 이유를 붙여 넣거나 채팅으로 말해도 받아서 카드 \`## interface 결정\`에 그대로 적는다.`);
   return 0;
 }
 
