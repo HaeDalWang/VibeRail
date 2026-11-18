@@ -12,13 +12,13 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
 const { policyProblems, relatedTests, isRealReason, loadLimits, DECISIONS_FILE } = require('../lib/policy');
-const { createHash } = require('node:crypto');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
 const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
+const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
@@ -151,7 +151,6 @@ const runsIn = (def, phase) => (def?.on || PHASES).includes(phase);
 
 const TESTS_SLOT = '{tests}';
 const workTests = (root, changed) => relatedTests(root, changed, lines(git(root, ['ls-files'])));
-const shellQuote = (f) => `'${f.replace(/'/g, "'\\''")}'`;
 
 function requirements(config, changed, phase, root) {
   if (changed.length === 0) return { names: [], later: [], risks: [], docsMissing: [] };
@@ -309,18 +308,6 @@ function readJsonAt(root, rev, file) {
   }
 }
 
-// The criteria as they are now; a person's confirmation is bound to it.
-function criteriaFingerprint(root) {
-  const read = (f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : '');
-  return createHash('sha256').update(`${read(CONFIG_FILE)}\n${read(ACCESS_FILE)}`).digest('hex').slice(0, 12);
-}
-
-// `qh confirm` recorded this exact version of the criteria in the decision log.
-const isCriteriaRecorded = (root) => {
-  const file = path.join(root, DECISIONS_FILE);
-  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${criteriaFingerprint(root)}`);
-};
-
 // In words a non-developer can answer "is this what you want?" about.
 const criteriaSummary = (root, config) => criteriaWords(config, Object.keys(readJsonAt(root, null, ACCESS_FILE).routes || {}).length);
 
@@ -330,7 +317,7 @@ function configChanges(root, base, config, card) {
   const isFirstInstall = !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]);
   // The person's answer is the card line for this question (lib/waivers.js); an unchecked line is an open decision.
   const state = waivers.answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
-  if (state === 'open' || (state === 'yes' && isCriteriaRecorded(root))) return [];
+  if (state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root))) return [];
   const confirm = '사용자가 답하면 작업 카드 `## 판단 필요`에 `- [x] <Tell the user 문장 그대로> · <답>`을 쓰고 `qh confirm` 실행';
   const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
   if (isFirstInstall) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
@@ -450,9 +437,7 @@ function runReview(root, config, baseArg) {
   const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
-  // A placeholder the user already wrapped in matching quotes is the bare placeholder: quoted once, not twice.
-  const slots = { workdir: root, task: taskFile, out: outDir };
-  const cmd = config.review.cmd.replace(/(["']?)\{(workdir|task|out)\}\1/g, (_, _q, name) => shellQuote(slots[name]));
+  const cmd = fillReviewCmd(config.review.cmd, { workdir: root, task: taskFile, out: outDir });
   const evidence = { check: 'review', cmd, treeHash: hash, base, startedAt: new Date().toISOString() };
   const missing = toolExists(root, cmd);
   if (missing) return writeEvidence(root, 'review', { ...evidence, envError: `도구 없음: ${missing}` }) || EXIT.env;
@@ -537,8 +522,8 @@ function cmdPr(root) {
 
 // Only after the person said yes: binds their confirmation to this exact version of the criteria.
 function cmdConfirm(root) {
-  const fp = criteriaFingerprint(root);
-  if (isCriteriaRecorded(root)) {
+  const fp = waivers.criteriaFingerprint(root);
+  if (waivers.isCriteriaRecorded(root)) {
     console.log(`이미 확인됨 (기준 확인: ${fp})`);
     return EXIT.ok;
   }
