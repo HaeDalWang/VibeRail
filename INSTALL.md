@@ -21,4 +21,7 @@
 
 ## 지우기 (사용자가 "VibeRail 지워줘"라고 할 때)
 
-`git log --oneline --grep "chore: qh 설치"`로 설치 커밋을 찾아 `git revert <커밋>`. 찾지 못하면 멈추고 사용자에게 알린다. 파일을 직접 지우지 않는다.
+1. 프로젝트 맨 위 폴더에서 `node .quality/qh/bin/qh.js uninstall`을 실행한다. 설치가 더한 것(복사본·hook·규칙 블록·skill)만 걷어내고, 사용자의 설정·권한 표·작업 카드·결정 기록은 남긴다. 커밋 안 된 변경이 있는 파일 때문에 멈추면 이유를 쉬운 말로 알리고 그 파일을 먼저 커밋하자고 제안한다.
+2. 코드 지도도 같이 지울지 묻는다(설치 전부터 쓰던 사용자도 있다). 좋다고 하면 `code-review-graph uninstall --repo . --keep-user-configs -y`.
+3. 바뀐 파일을 `git add`하고 `git commit -m "chore: qh 제거"`. push하지 않는다.
+옛 설치(`.quality/qh`가 없다)이면 멈추고 사용자에게 알린다. 설치 커밋을 `git revert`하지 않는다(설치 뒤 이어진 작업과 충돌한다).

@@ -716,6 +716,7 @@ const USAGE = `사용: qh <명령>
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
   status [--json] [--pr] [--base ref]  상태표 (--pr: PR 기준, --base: config.baseRef 대신 비교할 ref)
   routes --baseline --levels a,b,c  현재 동작으로 권한 표 첫 버전 만들기
+  uninstall            qh가 init으로 더한 것(복사본·hook·규칙 블록·skill)을 걷어내고 사용자의 내용은 둠
   confirm              사용자가 지금 품질 기준(설정·권한 표)을 확인했다고 결정 로그에 기록 (바뀌면 다시 물음)
   baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록
   hook session-start | hook stop`;
@@ -725,6 +726,7 @@ function main(argv) {
   if (cmd === 'init') return require('../lib/init').init(QH_HOME, rest[0] || process.cwd());
   const root = findRoot(process.cwd());
   loadLimits(root);
+  if (cmd === 'uninstall') return require('../lib/uninstall').uninstall(QH_HOME, root);
   if (cmd === 'routes' && rest.includes('--baseline')) return cmdRoutesBaseline(root, rest);
   if (cmd === 'check') return cmdCheck(root, rest.filter((x) => x !== '--pr'), { phase: rest.includes('--pr') ? 'pr' : 'stop' });
   if (cmd === 'baseline') return cmdBaseline(root);
