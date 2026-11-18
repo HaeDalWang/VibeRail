@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { repo, write, sh, qh, DECLARED, BASIC } = require('./helpers');
 
-const REVIEW_OK = { cmd: "node -e \"require('fs').writeFileSync('{out}/result.json','[]')\"" };
+const REVIEW_OK = { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" };
 
 function installed(config = { ...BASIC, review: REVIEW_OK }) {
   const root = repo(config);
@@ -59,4 +59,29 @@ test('pr passes with a check failure the decision log allows as already failing'
   const r = qh(root, ['pr']);
   assert.match(r.stdout, /경고 \(막지 않음\)[\s\S]*unit/);
   assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('pr skips the review when the reviewer answer is "검토 생략" (C), without needing review.cmd', () => {
+  const root = installed({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
+  const r = qh(root, ['pr']);
+  assert.doesNotMatch(r.stdout, /review\.cmd 없음/);
+  assert.match(r.stdout, /AI 리뷰: 생략/);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('review.cmd placeholders are shell-quoted: a path with a space reaches the command as one argument', () => {
+  const root = installed({ ...BASIC, review: { cmd: `node -e "const fs=require('fs');const [o,w,t]=process.argv.slice(1);if(!fs.existsSync(w)||!fs.existsSync(t)||!fs.statSync(o).isDirectory())process.exit(2);fs.writeFileSync(o+'/result.json','[]')" {out} {workdir} {task}` } });
+  const spaced = path.join(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'qh-sp-')), 'my project');
+  fs.renameSync(root, spaced);
+  assert.strictEqual(qh(spaced, ['review']).status, 0);
+  assert.ok(fs.existsSync(path.join(spaced, '.quality/evidence/review/result.json')));
+});
+
+test('status --pr exits non-zero when the PR gate would block, and exits 0 when it would pass', () => {
+  const root = installed({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
+  assert.strictEqual(qh(root, ['status', '--pr']).status, 1, 'the check was never run');
+  assert.strictEqual(qh(root, ['check', '--pr']).status, 0);
+  const ok = qh(root, ['status', '--pr']);
+  assert.strictEqual(ok.status, 0, ok.stdout);
+  assert.strictEqual(qh(root, ['status']).status, 0, 'plain status only reports');
 });

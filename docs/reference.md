@@ -92,8 +92,8 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh view glossary` | `GLOSSARY.md`를 로컬 HTML로 만든다 |
 | `qh cycle` | 지금 카드의 단계, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로 |
 | `qh doctor` | 설치·설정 전체 점검 |
-| `qh check [이름…]` | 필요한 검사 실행 |
-| `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다 |
+| `qh check [이름…] [--pr]` | 필요한 검사 실행. `--pr`은 올리기 직전에만 도는 검사까지 돌린다 |
+| `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다. `--pr`은 PR이 막힐 문제가 남아 있으면 0이 아닌 값으로 끝난다(AI 리뷰는 돌리지 않음). CI는 `qh check --pr` 다음 이것을 돈다 |
 | `qh pr` | PR 직전 판정 (검사 전부 + 점검 + AI 리뷰) |
 | `qh routes --baseline --levels a,b,c` | 지금 앱 동작으로 권한 표 첫 버전 만들기 |
 | `qh measure [--backfill 주]` | 지금 상태를 재서 `.quality/metrics.csv`에 한 줄 더하고 결과지(HTML)를 `.quality/reports/날짜-커밋.html`로 쌓는다. `--backfill 8`은 지난 8주를 소급해 qh 전 흐름도 남긴다 |

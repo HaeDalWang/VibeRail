@@ -119,7 +119,7 @@ flowchart LR
 
 - 저장소 전체 도구는 몇 초에서 몇 분이 걸린다. Stop에 두기엔 느려서 PR에서만 돌린다.
 - 항목마다 고정 ID가 있다. 기준선에 없는 ID가 생기면 실패한다. 기준선을 늘리는 것(`qh baseline`)은 기준 변경이라 사람에게 간다.
-- CI에서는 `qh status --pr --base <ref>`로 비교할 ref를 넘긴다.
+- CI에서는 `qh check --pr` 다음 `qh status --pr --base <ref>`를 돌린다. 막히는 문제가 있으면 `status --pr`이 0이 아닌 값으로 끝나 CI가 실패한다(AI 리뷰는 돌리지 않는다). `--base`로 비교할 ref를 넘긴다.
 
 ## 흐름 4 — 측정 (`qh measure`)
 

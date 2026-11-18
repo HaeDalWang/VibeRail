@@ -118,7 +118,7 @@ test('stop never fails on a broken config: exit 0 and one note naming the file',
 });
 
 test('review runs the configured command and records findings bound to the tree', () => {
-  const fake = `node -e "require('fs').writeFileSync('{out}/result.json', JSON.stringify([{file:'src/a.js',line:1,severity:'높음',verdict:'confirmed',reason:'r',nextAction:'n'}]))"`;
+  const fake = `node -e "require('fs').writeFileSync(process.argv[1]+'/result.json', JSON.stringify([{file:'src/a.js',line:1,severity:'높음',verdict:'confirmed',reason:'r',nextAction:'n'}]))" {out}`;
   const root = repo({ ...BASIC, review: { cmd: fake } });
   write(root, 'src/a.js', '2');
   assert.strictEqual(qh(root, ['review']).status, 0);
@@ -139,7 +139,7 @@ test('review without a result file is an environment problem', () => {
 });
 
 test('pr fails while a person still has to decide, even when every check passes', () => {
-  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync('{out}/result.json','[]')\"" } });
+  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" } });
   assert.strictEqual(qh(root, ['init', root]).status, 0, 'pr also runs doctor, so qh must be set up');
   write(root, 'src/a.js', '2');
   write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [ ] 열린 질문\n`);
@@ -358,7 +358,7 @@ test('short or import-only similarities are not duplicates', () => {
 });
 
 test('init and pr report the repository-wide duplicate total without blocking on it', () => {
-  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync('{out}/result.json','[]')\"" } }, { 'src/mail.js': BLOCK('a'), 'src/copy.js': BLOCK('b') });
+  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" } }, { 'src/mail.js': BLOCK('a'), 'src/copy.js': BLOCK('b') });
   assert.match(qh(root, ['init', root]).stdout, /중복 합계\(참고, 막지 않음\): 12줄 · src\/(mail|copy)\.js 6/);
   write(root, 'src/a.js', '2');
   write(root, '.quality/tasks/work.md', DECLARED);
