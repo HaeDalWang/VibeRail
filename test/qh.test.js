@@ -201,6 +201,7 @@ test('a person confirms the criteria once with qh confirm, and a later change as
   sh(root, 'git', ['checkout', '-q', '-B', 'work']);
   write(root, '.quality/config.json', JSON.stringify(BASIC));
   assert.match(statusJson(root).configChanges[0], /켜진 검사: 프로젝트 검사 1개.*qh confirm/, 'the person is shown what is on, in plain words');
+  qh(root, ['hook', 'stop'], '{}'); // the question reached the person: only then does a confirmation count
   assert.strictEqual(qh(root, ['confirm']).status, 0);
   assert.deepStrictEqual(statusJson(root).configChanges, []);
   assert.match(fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8'), /기준 확인: [0-9a-f]{12}/);

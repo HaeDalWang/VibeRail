@@ -18,6 +18,7 @@ const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
 const { formatStatus } = require('../lib/status-format');
+const waivers = require('../lib/waivers');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
@@ -314,9 +315,11 @@ function criteriaFingerprint(root) {
   return createHash('sha256').update(`${read(CONFIG_FILE)}\n${read(ACCESS_FILE)}`).digest('hex').slice(0, 12);
 }
 
+// A confirmation line counts only for a version of the criteria the person was shown (lib/waivers.js).
 const isCriteriaConfirmed = (root) => {
   const file = path.join(root, DECISIONS_FILE);
-  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${criteriaFingerprint(root)}`);
+  const fp = criteriaFingerprint(root);
+  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${fp}`) && stopState.askedRoutes(root).has(waivers.criteriaKey(fp));
 };
 
 // In words a non-developer can answer "is this what you want?" about.
@@ -385,7 +388,7 @@ function assess(root, phase = 'stop', baseRef) {
   const config = baseRef ? { ...loadConfig(root), baseRef } : loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
-  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], allowedFailures: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
+  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], allowedFailures: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], waivers: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
   if (env.length) return { config, ...out };
   const base = mergeBase(root, config.baseRef);
   const changed = changedFiles(root, base);
@@ -415,6 +418,7 @@ function assess(root, phase = 'stop', baseRef) {
     structureWarnings: shape.warnings,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
+    waivers: waivers.pendingWaivers(root, { card: card.text, changed, asked: stopState.askedRoutes(root) }),
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],
@@ -505,7 +509,7 @@ function formatSetup(setup) {
 // What stops a PR: the same list for `qh pr` and `qh status --pr` (CI). The review run is `qh pr`'s own.
 function isPrBlocked(a, t, setup) {
   const isEnvCheck = a.checks.some((c) => c.state === '환경 오류');
-  return Boolean(t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || isEnvCheck || setup.some((p) => p.level === '실패'));
+  return Boolean(t.aiFix.length || a.undeclared.length || a.decisions.length || a.waivers.length || a.taskQuestions.length || t.env.length || isEnvCheck || setup.some((p) => p.level === '실패'));
 }
 
 function cmdPr(root) {
@@ -515,7 +519,8 @@ function cmdPr(root) {
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}`);
+  const declared = waivers.declaredWaivers(taskCard(root).text);
+  console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}${declared.length ? `\n에이전트가 작업 카드에서 면제한 것 (리뷰어 확인):\n${declared.map((d) => `  - ${d}`).join('\n')}` : ''}`);
   const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
@@ -626,7 +631,8 @@ function judgeStop(root, config, host) {
   const pending = host.isOneShot ? (forPerson.length ? userLines(forPerson) : null) : undefined;
   if (fresh.length || (askPart !== '' && askPart !== last.askPart)) {
     stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
-    if (a.undeclared.length) stopState.markAsked(root, a.undeclared);
+    // What this block shows the person counts as asked: routes, waivers, and this version of the criteria.
+    stopState.markAsked(root, [...a.undeclared, ...a.waivers.map((w) => w.key), ...(a.configChanges.length ? [waivers.criteriaKey(criteriaFingerprint(root))] : [])]);
     require('../lib/measure').logStop(root, t);
     const head = fresh.length ? `qh: fix these before ending\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: could not judge because of an environment error (환경 오류).' : 'qh: checks passed.';
     return block(`${head}${askPart}${host.isOneShot ? oneShotTail(userLines(forPerson)) : ''}`, warningNote(t));

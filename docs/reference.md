@@ -35,7 +35,8 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - ADR: 위험 영역(`config.risks`)이 바뀌면 `docs/adr/`에 ADR이 있어야 한다.
   - 위 셋은 필요 없으면 작업 카드에 `테스트 불필요: 이유` 같은 한 줄로 넘긴다.
   - 결정 로그: 품질 기준(config·권한 표)이 바뀌면 `docs/decisions.md`에 한 줄을 남긴다.
-  - 비밀값: 바뀐 파일에서 키·토큰·`.env`를 찾는다. 찾은 값은 출력하지 않는다.
+  - 비밀값: 바뀐 파일에서 키·토큰·`.env`를 찾는다. 찾은 값은 출력하지 않는다. 가짜 값에 `qh:allow-secret`을 달아도 사람이 "가짜가 맞다"고 답하기 전에는 PR이 막힌다(아래 사람 확인 면제).
+  - 사람 확인이 필요한 면제: `grilling 불필요`·`qh confirm`·`qh:allow-secret`은 에이전트가 글을 써도 효력이 없고, Stop이 그 질문을 사용자에게 보여 준 뒤(`.quality/evidence/stop-state.json`의 askedRoutes)에야 인정된다. `테스트 불필요`·`문서 영향 없음`·`ADR 불필요`는 에이전트가 쓸 수 있고, `qh pr`이 한데 모아 리뷰어에게 보인다.
 - **구조 래칫** (이번 작업이 만진 파일만, Stop·PR 모두)
   - 중복: 만진 파일의 중복 줄이 base보다 늘면 막는다(설정 없이 항상). 원래 있던 중복은 막지 않고 "아키텍처 점검 후보" 경고로만 보여 준다(ADR 0001, `qh status`, Stop에서는 사용자에게만 보이는 경고 줄). 기존 위치를 알려 준다. 옛 설정의 `structure.duplicates: "grown"`은 그대로 둬도 되고 아무것도 바꾸지 않는다. 예외는 `docs/decisions.md`에 `중복 허용: 파일 · 이유`를 쓸 때만 인정한다.
   - 중복 합계: `qh init`과 `qh pr`이 저장소 전체 중복 줄 수와 많은 파일 3개를 보여 준다. 참고용이고 막지 않는다.

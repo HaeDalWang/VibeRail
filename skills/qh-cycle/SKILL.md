@@ -21,7 +21,7 @@ State lives in the branch's task card `.quality/tasks/<branch>.md`. These sectio
 - `## 테스트 위치(seam)` — the agreed seams, one path per line. TDD is judged at these paths.
 - `## 루프` — the ticket files of the current round, one path per line (`.scratch/<feature>/issues/NN-*.md`), at most 3.
 
-Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`.
+Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`. The waiver counts only after qh has shown the person the question "may we skip scoping this?" (the Stop hook hands it to you to ask); ask it in those words and wait for the answer.
 
 ## The loop
 
