@@ -563,24 +563,19 @@ function block(reason, systemMessage) {
 // What the person sees: only the plain sentences, each once.
 const userLines = (items) => [...new Set(items.map((x) => `- ${x.user}`))].join('\n');
 const warningNote = (t) => (t.warnings.length ? `품질 검사 경고 (막지 않음)\n${userLines(t.warnings)}` : null);
-const askLines = (items) => items.map((x) => `- ${x.agent}\n  사용자에게는 이렇게 말한다: ${x.user}`).join('\n');
+const askLines = (items) => items.map((x) => `- ${x.agent}\n  Tell the user: ${x.user}`).join('\n');
 const plainFixes = (items, config) => items.map((x) => ({ user: aiFixUser(x, config) }));
 const stuckNote = (items, config) => `품질 검사: 에이전트가 아래 문제를 고치지 못하고 멈췄습니다. 에이전트에게 "남은 품질 문제 고쳐줘"라고 하거나, 그대로 둘지 정해 주세요.\n${userLines(plainFixes(items, config))}`;
 
 // Kiro sends no stop_hook_active, does not call Stop again after a block and shows no
 // systemMessage (Kiro CLI 3.3.0, /tmp/qh-e2e/B): the agent rechecks itself and carries the words.
-const oneShotTail = (lines) => `\n\n이 호스트는 고친 뒤 이 검사를 다시 부르지 않는다. 고친 뒤 \`qh status\`를 직접 돌려 남은 항목이 없을 때만 끝낸다. 남으면 고치지 못한 것을 사용자에게 보고한다.\n사용자에게 전할 말 (이 호스트는 알림을 따로 보여 주지 않는다. 남은 것은 응답에 이 말로 넣는다):\n${lines}`;
+const oneShotTail = (lines) => `\n\nThis host does not call this check again after you fix things. After fixing, run \`qh status\` yourself and end only when nothing is left. If something remains, report what you could not fix to the user.\nWhat to tell the user (this host shows the person no separate notice; put what remains in your response in these words):\n${lines}`;
 
 function hookInput() {
   const raw = readStdin() || '{}';
   const data = parseJson(raw);
   const input = data && typeof data === 'object' ? data : {};
-  return {
-    raw,
-    session: typeof input.session_id === 'string' ? input.session_id : '',
-    isOneShot: !('stop_hook_active' in input),
-    lastMessage: typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '',
-  };
+  return { raw, session: typeof input.session_id === 'string' ? input.session_id : '', isOneShot: !('stop_hook_active' in input) };
 }
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
@@ -604,22 +599,16 @@ function hookStop(root) {
     const last = stopState.readSession(root, host.session);
     if (last.envNote === err.user) return EXIT.ok;
     stopState.writeSession(root, host.session, { ...last, envNote: err.user }, host.isOneShot ? `- ${err.user}` : undefined);
-    return block(`qh: 환경 오류로 판정하지 못함.\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines([{ agent: err.message, user: err.user }])}`, err.user);
+    return block(`qh: could not judge because of an environment error (환경 오류).\n환경 오류 (do not change code; report it to the user):\n${askLines([{ agent: err.message, user: err.user }])}`, err.user);
   }
 }
 
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
-  // The agent writes the card's open decisions itself, so a last answer that asks something has
-  // asked them; turning it back makes the person read the same question twice. Agents ask in
-  // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
-  // blocks on any open decision, so a wrong guess here cannot let one through.
-  // ponytail: "?"/"주세요" is the only signal, compare the decision text if that misfires.
-  const isAsking = /[?？]|주세요/.test(host.lastMessage);
-  const t = triage(isAsking ? { ...a, decisions: [] } : a);
-  const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 아래 "사용자에게는" 문장처럼 파일 경로·명령·커밋 해시·도구 이름 없이 묻는다):\n${askLines(t.human)}` : '';
-  const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines(t.env)}` : '';
+  const t = triage(a);
+  const humanPart = t.human.length ? `\nAsk the user (ask in your response and end it. The user may not be a developer: ask like the "Tell the user:" sentences below, with no file paths, commands, commit hashes, or tool names):\n${askLines(t.human)}` : '';
+  const envPart = t.env.length ? `\n환경 오류 (do not change code; report it to the user):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;
 
   const last = stopState.readSession(root, host.session);
@@ -634,7 +623,7 @@ function judgeStop(root, config, host) {
     stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
     if (a.undeclared.length) stopState.markAsked(root, a.undeclared);
     require('../lib/measure').logStop(root, t);
-    const head = fresh.length ? `qh: 끝내기 전에 고칠 일\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: 환경 오류로 판정하지 못함.' : 'qh: 검사는 통과.';
+    const head = fresh.length ? `qh: fix these before ending\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: could not judge because of an environment error (환경 오류).' : 'qh: checks passed.';
     return block(`${head}${askPart}${host.isOneShot ? oneShotTail(userLines(forPerson)) : ''}`, warningNote(t));
   }
   const note = [
@@ -695,7 +684,7 @@ function cmdBaseline(root) {
 }
 
 function hookSessionStart(root) {
-  const unasked = loadConfig(root)?.answers ? '' : '\n(qh) 프로젝트 질문에 아직 답하지 않았다 → 사용자에게 알리고, 원하면 .quality/qh/lib/ask-guide.md대로 질문 세션을 연다.';
+  const unasked = loadConfig(root)?.answers ? '' : '\n(qh) The project questions are not answered yet → tell the user, and if they want, open a question session as .quality/qh/lib/ask-guide.md says.';
   const pending = stopState.takePending(root);
   const left = pending ? `\n(qh) 지난 세션이 끝날 때 남은 품질 문제가 있었다(그 호스트는 알림을 보여 주지 않는다). 위 상태에 아직 남았으면 사용자에게 이렇게 전한다:\n${pending}` : '';
   const cycle = require('../lib/cycle').cycleLines(root, taskCard(root).text).map((l) => `\n(qh) ${l}`).join('');

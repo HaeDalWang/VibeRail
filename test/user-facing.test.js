@@ -115,17 +115,17 @@ test('environment and allowed-failure sentences name the check by what it does',
 test('the agent rules say how to write decisions, when allow lines may be written, and how to talk to the person', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
   assert.match(snippet, /`## 판단 필요`[^\n]*`- \[ \] /);
-  assert.match(snippet, /`## 판단 필요`[^\n]*사용자가 그대로 읽고 답할 수 있는 질문/, 'the gate shows the item to the person as is');
-  assert.match(snippet, /허용[^\n]*사용자에게 묻고[^\n]*답을 받은 뒤에만/);
-  assert.match(snippet, /사용자에게 하는 말[^\n]*경로·명령/);
+  assert.match(snippet, /`## 판단 필요`[^\n]*a question the user can read and answer as is/, 'the gate shows the item to the person as is');
+  assert.match(snippet, /allow lines[^\n]*only after asking the user and getting an answer/);
+  assert.match(snippet, /In what you say to the user[^\n]*file paths, commands/);
   const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
-  assert.match(guide, /## 허용 줄/);
-  assert.match(guide, /큰 파일 허용[\s\S]*중복 허용[\s\S]*답을 받은 뒤에만/);
+  assert.match(guide, /## Allow lines/);
+  assert.match(guide, /큰 파일 허용[\s\S]*중복 허용[\s\S]*only after asking the user and getting an answer/);
 });
 
 test('the agent rules ask choices with the arrow-key picker in Claude Code and numbered text elsewhere', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
-  assert.match(snippet, /선택지[^\n]*AskUserQuestion[^\n]*번호/);
+  assert.match(snippet, /choices[^\n]*AskUserQuestion[^\n]*number/);
 });
 
 test('the report page tells the person what to say to the agent, not a command', () => {
@@ -136,8 +136,8 @@ test('the report page tells the person what to say to the agent, not a command',
 
 test('the agent rules show the declaration reason as a placeholder, not a pasteable word', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
-  assert.doesNotMatch(snippet, /불필요: 이유`|영향 없음: 이유`/);
-  assert.match(snippet, /`테스트 불필요: <왜 필요 없는지, 5자 이상>`/);
+  assert.doesNotMatch(snippet, /불필요: (reason|이유)`|영향 없음: (reason|이유)`/);
+  assert.match(snippet, /`테스트 불필요: <why no test is needed, 5\+ chars>`/);
 });
 
 test('the qh-cycle skill never asks the person to type a slash command; the agent opens the installed skill file', () => {
@@ -148,6 +148,6 @@ test('the qh-cycle skill never asks the person to type a slash command; the agen
 
 test('the installed agent guide shows how to add a test check after the person says yes', () => {
   const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
-  const section = guide.slice(guide.indexOf('## 검사 넣기'));
-  for (const re of [/^## 검사 넣기/, /묻는다/, /예라고 한 뒤에만/, /"cmd"/, /\{tests\}/, /"on": \["pr"\]/]) assert.match(section, re);
+  const section = guide.slice(guide.indexOf('## Adding a check'));
+  for (const re of [/^## Adding a check \(검사 넣기\)/, /Ask the user/, /only after they say yes/i, /"cmd"/, /\{tests\}/, /"on": \["pr"\]/]) assert.match(section, re);
 });

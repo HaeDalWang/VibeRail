@@ -19,6 +19,7 @@ State lives in the branch's task card `.quality/tasks/<branch>.md`. These sectio
 - `## 용어` — glossary terms this card introduced or changed (links into `GLOSSARY.md`).
 - `## interface 결정` — the option picked, and a line `이유: <the person's reason>`.
 - `## 테스트 위치(seam)` — the agreed seams, one path per line. TDD is judged at these paths.
+- `## 루프` — the ticket files of the current round, one path per line (`.scratch/<feature>/issues/NN-*.md`), at most 3.
 
 Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`.
 
@@ -31,11 +32,12 @@ Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `
 | 2. Interface | you: Skill `codebase-design` | Design at least two interfaces (DESIGN-IT-TWICE). Write them to a JSON file `{ "title", "options": [{ "id", "name", "summary", "mermaid", "gain", "cost", "signature"?, "seam"? }] }` (all strings, 2+ options) and run `qh view interface <file>` to make the local HTML. Give the person the path. | |
 | ◆② Pick | person | They pick one and must give a reason. No reason, no next step. | `## interface 결정` with `이유:`; the seams go to `## 테스트 위치(seam)` |
 | 3. Spec, tickets | person says so in words ("명세 만들어 줘", then "작업 나눠 줘"); you open `.claude/skills/to-spec/SKILL.md`, then `.claude/skills/to-tickets/SKILL.md` | Upstream writes `.scratch/<feature>/spec.md` and `issues/NN-*.md`. Link them in the card. | link |
-| 4. Build | you: Skill `tdd` | One ticket at a time, tests only at the card's seams. Do not call `implement`; it is not installed. | |
-| ◆③ Review | you run `qh review`; person reads | Show the person the interface and the tests, not the whole diff. | |
+| ◆ Loop start | person | No reason line. Classify each ticket AFK or HITL: HITL if it needs UI/UX judgment, touches money, security or a data-loss path, or cannot be decided by the agreed seam tests. Set `**Status:** ready-for-human` on HITL tickets (ticket files are project data, not vendored files). Pick up to 3 `ready-for-agent` tickets on the frontier (blockers done). Show in plain Korean what will run, what is theirs, and the stop conditions; wait for "돌려". | paths under `## 루프` |
+| 4. Build (loop) | you: Skill `tdd` | In this session, one ticket at a time, tests only at the card's seams. Tick the ticket's acceptance boxes when its seam tests pass. After each ticket tell the person one plain line ("루프 2/3: …"). Stop on any of: all done; the same ticket fails 3 times; a new 판단 필요 appears; the next ticket is the person's; a ratchet block. Say which. Do not call `implement`; it is not installed. | boxes ticked |
+| ◆③ Review | you run `qh review`; person reads | Show the person the interface and the tests, not the whole diff. Then re-decide the tickets still open: a new `## 루프` round (back to ◆ Loop start) or end. | |
 | 5. Retro | person says so in words ("회고하자"); you open `.claude/skills/retro/SKILL.md` | Turn repeatable mistakes into lint, hooks or tests. | |
 
-Never pass a ◆ step on the person's behalf. When a step is the person's to start, end your turn with one line in plain Korean: what to say to you (for example "명세 만들어 줘"), and why now. Never ask them to type a command.
+Never pass a ◆ step (loop start included) on the person's behalf. When a step is the person's to start, end your turn with one line in plain Korean: what to say to you (for example "명세 만들어 줘"), and why now. Never ask them to type a command.
 
 ### Skills you cannot call
 

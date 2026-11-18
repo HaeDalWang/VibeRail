@@ -90,7 +90,7 @@ test('with only environment errors, stop says it could not judge instead of "che
   const root = repo({ ...BASIC, baseRef: 'origin/main' });
   write(root, 'src/a.js', '2');
   const d = stopDecision(qh(root, ['hook', 'stop'], '{}'));
-  assert.match(d.reason, /^qh: 환경 오류로 판정하지 못함/);
+  assert.match(d.reason, /^qh: could not judge because of an environment error/);
 });
 
 test('a branch with no common ancestor with the base is told to the person once, not passed silently', () => {
@@ -112,7 +112,7 @@ test('stop hands the agent a plain sentence for the person, and shows the person
   write(root, 'docs/decisions.md', '- 2026-11-16 · unit을 true로 · 예시 · 없음\n');
   qh(root, ['check']);
   const first = stopDecision(qh(root, ['hook', 'stop'], '{}'));
-  assert.match(first.reason, /checks\.unit\.cmd[\s\S]*사용자에게는 이렇게 말한다: /);
+  assert.match(first.reason, /checks\.unit\.cmd[\s\S]*Tell the user: /);
   const repeat = stopDecision(qh(root, ['hook', 'stop'], '{}'));
   assert.match(repeat.systemMessage, /관리자는 모든 회사를 보나/);
   assert.doesNotMatch(repeat.systemMessage, DEVELOPER_WORDS);
