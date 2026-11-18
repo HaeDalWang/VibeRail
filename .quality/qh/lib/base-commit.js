@@ -14,7 +14,7 @@ const CONFIG_FILE = '.quality/config.json';
 function workBase(root, git, ref, mergeBase) {
   const head = git(root, ['rev-parse', 'HEAD']);
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  if (mergeBase !== head || !(ref === branch || ref.endsWith(`/${branch}`))) return mergeBase;
+  if (mergeBase !== head || branch === 'HEAD' || !(ref === branch || ref.endsWith(`/${branch}`))) return mergeBase;
   const passed = stopState.lastPassed(root);
   if (passed && isAncestor(root, git, passed, head)) return passed;
   // Newest add: a config removed and put back means the current install. Not in HEAD at all: nothing to anchor on.

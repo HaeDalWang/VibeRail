@@ -75,6 +75,9 @@ document.querySelectorAll('article').forEach(function(a){
 });
 </script>`;
 
+// The same id twice would make one pick ambiguous.
+const duplicateIds = (items, noun) => [...new Set(items.map((x) => x?.id).filter((id, i, ids) => typeof id === 'string' && ids.indexOf(id) !== i))].map((id) => `${noun} id가 겹친다: ${id}`);
+
 // Problems with the agent's JSON, in words the agent can fix; [] when fine.
 function optionProblems(spec) {
   if (!spec || typeof spec.title !== 'string' || !Array.isArray(spec.options)) return ['{ title, options: [...] } 모양이어야 한다'];
@@ -83,7 +86,7 @@ function optionProblems(spec) {
     const missing = REQUIRED.filter((k) => typeof o?.[k] !== 'string' || !o[k].trim());
     if (missing.length) out.push(`${i + 1}번째 안에 빠진 항목: ${missing.join(', ')}`);
   });
-  return out;
+  return [...out, ...duplicateIds(spec.options, '안')];
 }
 
 function interfacePage(spec, level) {
@@ -105,7 +108,7 @@ function candidateProblems(spec) {
     if (missing.length) out.push(`${i + 1}번째 후보에 빠진 항목: ${missing.join(', ')}`);
     for (const k of ['mermaidBefore', 'mermaidAfter', 'detail']) if (c?.[k] !== undefined && !isText(c[k])) out.push(`${i + 1}번째 후보의 ${k}는 비어 있지 않은 글이어야 한다`);
   });
-  return out;
+  return [...out, ...duplicateIds(spec.candidates, '후보')];
 }
 
 const picture = (label, src) => (src ? `<h3>${label}</h3><div class="diagram"></div><pre class="mermaid-src">${esc(src)}</pre>` : '');

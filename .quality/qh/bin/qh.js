@@ -24,7 +24,7 @@ const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
 const PROBE_FILE = '.quality/probe.mjs';
-const { triage, aiFixUser, aiFixKind, criteriaWords, ACCESS_FILE } = require('../lib/triage');
+const { triage, aiFixUser, aiFixKind, criteriaWords, criteriaUser, ACCESS_FILE } = require('../lib/triage');
 const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
@@ -315,11 +315,10 @@ function criteriaFingerprint(root) {
   return createHash('sha256').update(`${read(CONFIG_FILE)}\n${read(ACCESS_FILE)}`).digest('hex').slice(0, 12);
 }
 
-// A confirmation line counts only for a version of the criteria the person was shown (lib/waivers.js).
-const isCriteriaConfirmed = (root) => {
+// `qh confirm` recorded this exact version of the criteria in the decision log.
+const isCriteriaRecorded = (root) => {
   const file = path.join(root, DECISIONS_FILE);
-  const fp = criteriaFingerprint(root);
-  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${fp}`) && stopState.askedRoutes(root).has(waivers.criteriaKey(fp));
+  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${criteriaFingerprint(root)}`);
 };
 
 // In words a non-developer can answer "is this what you want?" about.
@@ -327,11 +326,14 @@ const criteriaSummary = (root, config) => criteriaWords(config, Object.keys(read
 
 // What the gate measures against (checks, risks, the access table) changed in this work.
 // A person who confirmed this exact version (qh confirm) is not asked again.
-function configChanges(root, base, config) {
-  if (isCriteriaConfirmed(root)) return [];
-  const confirm = '사용자가 이대로 쓰겠다고 하면 `qh confirm` 실행';
+function configChanges(root, base, config, card) {
+  const isFirstInstall = !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]);
+  // The person's answer is the card line for this question (lib/waivers.js); an unchecked line is an open decision.
+  const state = waivers.answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
+  if (state === 'open' || (state === 'yes' && isCriteriaRecorded(root))) return [];
+  const confirm = '사용자가 답하면 작업 카드 `## 판단 필요`에 `- [x] <Tell the user 문장 그대로> · <답>`을 쓰고 `qh confirm` 실행';
   const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
-  if (!git(root, ['ls-tree', '--name-only', base, CONFIG_FILE])) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
+  if (isFirstInstall) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
   // baseRef is where to compare from, not what is checked (`status --base` overrides it).
   const a = flatten({ ...readJsonAt(root, base, CONFIG_FILE), baseRef: undefined, access: readJsonAt(root, base, ACCESS_FILE) });
   const b = flatten({ ...config, baseRef: undefined, access: readJsonAt(root, null, ACCESS_FILE) });
@@ -396,7 +398,7 @@ function assess(root, phase = 'stop', baseRef) {
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root);
-  const criteria = changed.length ? configChanges(root, base, config) : [];
+  const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
     config,
@@ -418,7 +420,7 @@ function assess(root, phase = 'stop', baseRef) {
     structureWarnings: shape.warnings,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
-    waivers: waivers.pendingWaivers(root, { card: card.text, changed, asked: stopState.askedRoutes(root) }),
+    waivers: waivers.pendingWaivers(root, { card: card.text, changed }),
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],
@@ -431,7 +433,10 @@ function assess(root, phase = 'stop', baseRef) {
 // ---------- review ----------
 
 function runReview(root, config, baseArg) {
-  if (isReviewSkipped(root, config)) return EXIT.ok;
+  if (isReviewSkipped(root, config)) {
+    console.log('AI 리뷰: 사용자가 검토 생략을 골라 돌리지 않았다');
+    return EXIT.ok;
+  }
   if (!config.review?.cmd) throw new EnvError('config.review.cmd 없음');
   const base = mergeBase(root, baseArg || config.baseRef);
   const hash = treeHash(root);
@@ -445,7 +450,9 @@ function runReview(root, config, baseArg) {
   const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
-  const cmd = config.review.cmd.replaceAll('{workdir}', shellQuote(root)).replaceAll('{task}', shellQuote(taskFile)).replaceAll('{out}', shellQuote(outDir));
+  // A placeholder the user already wrapped in matching quotes is the bare placeholder: quoted once, not twice.
+  const slots = { workdir: root, task: taskFile, out: outDir };
+  const cmd = config.review.cmd.replace(/(["']?)\{(workdir|task|out)\}\1/g, (_, _q, name) => shellQuote(slots[name]));
   const evidence = { check: 'review', cmd, treeHash: hash, base, startedAt: new Date().toISOString() };
   const missing = toolExists(root, cmd);
   if (missing) return writeEvidence(root, 'review', { ...evidence, envError: `도구 없음: ${missing}` }) || EXIT.env;
@@ -471,13 +478,14 @@ function readFindings(file) {
 
 // ---------- commands ----------
 
-// Nothing left to fix, ask or report: this commit is where the next work on the base branch starts.
+// Nothing left to fix, ask or report in a PR-phase run: this commit is where the next work on the
+// base branch starts. Stop and a plain check skip the PR-only checks and the review: never recorded there.
 function recordPassed(root, a) {
   const t = triage(a);
   if (!(t.aiFix.length || t.human.length || t.env.length)) stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
 }
 
-function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
+function cmdCheck(root, names, { builtinOnly = false, phase = 'stop', record = phase === 'pr' } = {}) {
   const config = loadConfig(root);
   const env = envProblems(root, config);
   if (env.length) {
@@ -491,7 +499,7 @@ function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
   for (const n of targets) runCheck(root, n, config.checks?.[n]);
   const after = assess(root, phase);
   if (!builtinOnly) console.log(formatStatus(after));
-  if (!builtinOnly && !names.length) recordPassed(root, after);
+  if (!builtinOnly && !names.length && record) recordPassed(root, after);
   const isAllowed = (c) => c.state === '실패' && after.allowedFailures.includes(c.name);
   const failing = after.checks.filter((c) => targets.includes(c.name) && c.state !== '통과' && !isAllowed(c));
   if (!failing.length) return EXIT.ok;
@@ -514,14 +522,15 @@ function isPrBlocked(a, t, setup) {
 
 function cmdPr(root) {
   if (envProblems(root, loadConfig(root)).length) return cmdCheck(root, [], { phase: 'pr' });
-  cmdCheck(root, [], { phase: 'pr' });
+  cmdCheck(root, [], { phase: 'pr', record: false });
   const reviewExit = runReview(root, loadConfig(root));
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  const declared = waivers.declaredWaivers(taskCard(root).text);
+  const declared = waivers.declaredWaivers(taskCard(root).text, root, a.changed);
   console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}${declared.length ? `\n에이전트가 작업 카드에서 면제한 것 (리뷰어 확인):\n${declared.map((d) => `  - ${d}`).join('\n')}` : ''}`);
   const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
+  if (!isBlocked) stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
@@ -529,7 +538,7 @@ function cmdPr(root) {
 // Only after the person said yes: binds their confirmation to this exact version of the criteria.
 function cmdConfirm(root) {
   const fp = criteriaFingerprint(root);
-  if (isCriteriaConfirmed(root)) {
+  if (isCriteriaRecorded(root)) {
     console.log(`이미 확인됨 (기준 확인: ${fp})`);
     return EXIT.ok;
   }
@@ -609,7 +618,6 @@ function hookStop(root) {
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
-  recordPassed(root, a);
   // The agent writes the card's open decisions itself, so a last answer that asks something has
   // asked them; turning it back makes the person read the same question twice. Agents ask in
   // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
@@ -631,8 +639,8 @@ function judgeStop(root, config, host) {
   const pending = host.isOneShot ? (forPerson.length ? userLines(forPerson) : null) : undefined;
   if (fresh.length || (askPart !== '' && askPart !== last.askPart)) {
     stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
-    // What this block shows the person counts as asked: routes, waivers, and this version of the criteria.
-    stopState.markAsked(root, [...a.undeclared, ...a.waivers.map((w) => w.key), ...(a.configChanges.length ? [waivers.criteriaKey(criteriaFingerprint(root))] : [])]);
+    // What this block shows the person counts as asked: the routes (waivers are answered on the task card).
+    stopState.markAsked(root, a.undeclared);
     require('../lib/measure').logStop(root, t);
     const head = fresh.length ? `qh: fix these before ending\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: could not judge because of an environment error (환경 오류).' : 'qh: checks passed.';
     return block(`${head}${askPart}${host.isOneShot ? oneShotTail(userLines(forPerson)) : ''}`, warningNote(t));
