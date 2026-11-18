@@ -33,3 +33,4 @@ ADR 불필요: 제품 동작·구조 변경 없음, 저장소 밖 임시 폴더�
 - reference.md의 Mermaid 설명이 지금 동작(로컬 사본으로 그림)과 달라 맞춤
 - interface 화면 복사가 무거워 사용자가 채팅으로 바로 답함 → 화면·에이전트 안내에 "말로 해도 된다" → test/view.test.js
 - 훅이 카드 줄을 그대로 보여 사람 말이 아님 → 규칙: 판단 필요 항목은 사용자가 그대로 읽고 답할 수 있는 질문 한 줄로 → test/user-facing.test.js
+- 에이전트가 테스트 검사 넣는 법을 몰라 qh 코드를 뒤짐 → 설치되는 질문 안내에 "검사 넣기"(묻고, 예면 checks에 test/test-work) → test/user-facing.test.js

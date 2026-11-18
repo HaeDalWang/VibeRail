@@ -145,3 +145,9 @@ test('the qh-cycle skill never asks the person to type a slash command; the agen
   assert.doesNotMatch(skill, /(^|[\s`(])\/(to-spec|to-tickets|retro|improve-codebase-architecture|grill-with-docs)\b|command to type/);
   for (const name of ['to-spec', 'to-tickets', 'retro', 'improve-codebase-architecture']) assert.match(skill, new RegExp(`\\.claude/skills/${name}/SKILL\\.md`), name);
 });
+
+test('the installed agent guide shows how to add a test check after the person says yes', () => {
+  const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
+  const section = guide.slice(guide.indexOf('## 검사 넣기'));
+  for (const re of [/^## 검사 넣기/, /묻는다/, /예라고 한 뒤에만/, /"cmd"/, /\{tests\}/, /"on": \["pr"\]/]) assert.match(section, re);
+});
