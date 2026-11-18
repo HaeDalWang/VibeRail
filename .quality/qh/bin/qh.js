@@ -612,9 +612,12 @@ function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
   // The agent writes the card's open decisions itself, so a last answer that asks something has
-  // asked them; turning it back makes the person read the same question twice.
-  // ponytail: "?" is the only signal, compare the decision text if agents ask without one.
-  const t = triage(/[?？]/.test(host.lastMessage) ? { ...a, decisions: [] } : a);
+  // asked them; turning it back makes the person read the same question twice. Agents ask in
+  // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
+  // blocks on any open decision, so a wrong guess here cannot let one through.
+  // ponytail: "?"/"주세요" is the only signal, compare the decision text if that misfires.
+  const isAsking = /[?？]|주세요/.test(host.lastMessage);
+  const t = triage(isAsking ? { ...a, decisions: [] } : a);
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 아래 "사용자에게는" 문장처럼 파일 경로·명령·커밋 해시·도구 이름 없이 묻는다):\n${askLines(t.human)}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;
