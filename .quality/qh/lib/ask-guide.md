@@ -20,7 +20,7 @@ When: tell the user when `qh doctor` or session start says "프로젝트 질문�
 
 When: at the end of a response, qh shows `작업 질문(<위험 영역>, …)`, meaning this task touched a risk area.
 
-- Ask briefly in chat. Use qh's question sentence and A/B options as they are, and add the changed files in one line.
+- Ask briefly. Use qh's question sentence and A/B options as they are, and add the changed files in one line.
 - Only after the answer, write `작업 질문 <위험 영역>: A 사유` or `B 사유` in the task card.
 - If A (there is a change), that task must have an ADR. `ADR 불필요` does not apply.
 
@@ -62,3 +62,15 @@ When the user must decide something qh's questions do not cover, ask in the same
 - For each option write three things: how it works (what turns on), the benefit, the cost / risk.
 - Attach one recommendation and its basis (what you saw in the repo). If the basis is a guess, say it is a guess.
 - Ask one decision at a time. If the user picks differently from the recommendation, get a one-line reason. Record that decision as one line in `docs/decisions.md`.
+
+## Adding a check (검사 넣기)
+
+When: the project now has a test or lint command that is not in `checks` of `.quality/config.json`.
+
+- Ask the user in words: "테스트를 만들 때마다 자동으로 돌려 확인할까요? 전체는 올리기 직전에만 돌리고, 평소에는 바뀐 부분 테스트만 돌립니다."
+- Add to `checks` only after they say yes (with this project's own commands). `{tests}` is filled with the test files changed in this task; with nothing to run, the check is skipped:
+  ```json
+  "test": { "cmd": "npm test", "on": ["pr"] },
+  "test-work": { "cmd": "npm test -- {tests}", "on": ["stop"] }
+  ```
+- If qh then shows `기준 변경(사람 확인 필요)`, confirm once more as in "Standard confirmation" above.

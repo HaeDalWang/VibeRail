@@ -575,7 +575,12 @@ function hookInput() {
   const raw = readStdin() || '{}';
   const data = parseJson(raw);
   const input = data && typeof data === 'object' ? data : {};
-  return { raw, session: typeof input.session_id === 'string' ? input.session_id : '', isOneShot: !('stop_hook_active' in input) };
+  return {
+    raw,
+    session: typeof input.session_id === 'string' ? input.session_id : '',
+    isOneShot: !('stop_hook_active' in input),
+    lastMessage: typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '',
+  };
 }
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
@@ -606,7 +611,13 @@ function hookStop(root) {
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
-  const t = triage(a);
+  // The agent writes the card's open decisions itself, so a last answer that asks something has
+  // asked them; turning it back makes the person read the same question twice. Agents ask in
+  // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
+  // blocks on any open decision, so a wrong guess here cannot let one through.
+  // ponytail: "?"/"주세요" is the only signal, compare the decision text if that misfires.
+  const isAsking = /[?？]|주세요/.test(host.lastMessage);
+  const t = triage(isAsking ? { ...a, decisions: [] } : a);
   const humanPart = t.human.length ? `\nAsk the user (ask in your response and end it. The user may not be a developer: ask like the "Tell the user:" sentences below, with no file paths, commands, commit hashes, or tool names):\n${askLines(t.human)}` : '';
   const envPart = t.env.length ? `\n환경 오류 (do not change code; report it to the user):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;
