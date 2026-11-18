@@ -26,10 +26,13 @@ test('committed work on the base branch is seen against the commit that added th
 });
 
 test('after qh saw everything pass, only later commits on the base branch count', () => {
-  const root = onMain();
+  const root = onMain({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
   commit(root, 'src/b.js', '2', 'work');
   commit(root, '.quality/tasks/main.md', DECLARED, 'card');
   assert.strictEqual(qh(root, ['check', '--pr']).status, 0);
+  assert.ok(statusJson(root).changed.includes('src/b.js'), 'check --pr skips the AI review: not a pass of the PR gate');
+  assert.strictEqual(qh(root, ['pr']).status, 0);
   assert.deepStrictEqual(statusJson(root).changed, [], 'what passed is not shown again');
   commit(root, 'src/c.js', '3', 'more work');
   assert.deepStrictEqual(statusJson(root).changed, ['src/c.js']);
