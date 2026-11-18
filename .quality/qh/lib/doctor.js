@@ -194,7 +194,7 @@ function answerProblems(root, config) {
   if (a.team === 'A') {
     const dir = path.join(root, '.github/workflows');
     const ci = fs.existsSync(dir) && fs.readdirSync(dir).some((f) => /qh\.js/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
-    write(!ci, '"팀 협업 개발" → CI에서 qh를 돌리지 않는다', '.github/workflows/에 `node .quality/qh/bin/qh.js check`를 PR마다 돌리는 단계');
+    write(!ci, '"팀 협업 개발" → CI에서 qh를 돌리지 않는다', '.github/workflows/에 `node .quality/qh/bin/qh.js check --pr`와 `node .quality/qh/bin/qh.js status --pr --base <합칠 브랜치>`를 PR마다 돌리는 단계 (막히는 문제가 있으면 status --pr이 실패로 끝난다)');
   }
   if (a.deploy === 'A') docs('docs/operations.md', '운영 배포 대상', '배포 전 확인 목록과 장애 회고 방법');
   return out;

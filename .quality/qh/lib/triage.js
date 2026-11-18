@@ -168,6 +168,7 @@ function triage(a) {
       routeUser(r, a.accessLevels),
     )),
     ...envChecks.filter((c) => c.envKind === 'probe-todo').map(probeTodoItem),
+    ...(a.waivers || []).map((w) => item(w.agent, w.user)),
     ...a.decisions.map((d) => item(`작업 카드: ${d} → 사용자에게 묻고, 답을 받으면 \`- [x]\`로 바꾼다`, /[?？]\s*$/.test(d) ? d : `정해 주세요: ${d}`)),
     ...a.taskQuestions.map((q) => item(q, taskQuestionUser(q))),
     ...a.configChanges.map((c) => item(`기준 변경(사람 확인 필요): ${c}`, criteriaUser(a.criteria))),

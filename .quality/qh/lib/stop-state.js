@@ -55,4 +55,11 @@ function markAsked(root, routes) {
 }
 const askedRoutes = (root) => new Set(readAll(root).askedRoutes || []);
 
-module.exports = { readSession, writeSession, takePending, markAsked, askedRoutes, STOP_STATE };
+// The HEAD commit at the last time nothing was left to block or ask (folder-wide). On the base
+// branch itself (merge-base == HEAD) the work is whatever came after it.
+function markPassed(root, commit) {
+  writeAll(root, { ...readAll(root), passedCommit: commit });
+}
+const lastPassed = (root) => readAll(root).passedCommit || null;
+
+module.exports = { readSession, writeSession, takePending, markAsked, askedRoutes, markPassed, lastPassed, STOP_STATE };

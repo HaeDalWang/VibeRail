@@ -21,7 +21,7 @@ State lives in the branch's task card `.quality/tasks/<branch>.md`. These sectio
 - `## 테스트 위치(seam)` — the agreed seams, one path per line. TDD is judged at these paths.
 - `## 루프` — the ticket files of the current round, one path per line (`.scratch/<feature>/issues/NN-*.md`), at most 3.
 
-Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`.
+Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`. The waiver counts only after qh has shown the person the question "may we skip scoping this?" (the Stop hook hands it to you to ask); ask it in those words and wait for the answer.
 
 ## The loop
 
@@ -49,7 +49,7 @@ Where any vendored skill says to call `code-review`, run `qh review` instead. qh
 
 ## Architecture check
 
-`qh cycle` says when it is due (three cards finished or seven days since the last check). Then tell the person in one plain line that an architecture check is due and what to say ("구조 점검하자"). When they say it, Read `.claude/skills/improve-codebase-architecture/SKILL.md` and follow it. They pick one candidate and give a reason (◆④). Record it in `docs/decisions.md` as `아키텍처 점검: <date> · <candidate> · <reason>`. Only the picked candidate is refactored, as its own card. Existing duplicates qh reported as warnings are good input for this step.
+`qh cycle` says when it is due (three cards finished or seven days since the last check). Then tell the person in one plain line that an architecture check is due and what to say ("구조 점검하자"). When they say it, Read `.claude/skills/improve-codebase-architecture/SKILL.md` and follow it, except its HTML report step (the HTML-REPORT file loads CDN scripts and is English): instead write the candidates to a JSON file `{ "title", "candidates": [{ "id", "name", "problem", "solution", "gain", "cost", "strength", "mermaidBefore"?, "mermaidAfter"?, "detail"? }] }` (plain Korean; `detail` holds files and function names for level B) and run `qh view architecture <json>`; ask the person to open the page it prints. They pick one candidate and give a reason (◆④). Record it in `docs/decisions.md` as `아키텍처 점검: <date> · <candidate> · <reason>`. Only the picked candidate is refactored, as its own card. Existing duplicates qh reported as warnings are good input for this step.
 
 ## Talking to the person
 
