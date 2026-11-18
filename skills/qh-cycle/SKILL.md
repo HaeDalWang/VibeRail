@@ -27,8 +27,8 @@ Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `
 | Step | Who starts it | What happens | Card |
 |---|---|---|---|
 | 1. Grill | you: Skill `grilling`, then `domain-modeling` | Interview until the plan has no silent assumptions. Update `GLOSSARY.md` and ADRs inline as terms and decisions settle. | `## 의도`, `## 용어` |
-| ◆① Scope | person | Show the scope in plain Korean, ask them to confirm. | scope appended to `## 의도` |
-| 2. Interface | you: Skill `codebase-design` | Design at least two interfaces (DESIGN-IT-TWICE). Write them to a JSON file and run `qh view interface <file>` to make the local HTML. Give the person the path. | |
+| ◆① Scope | person | Show the scope in plain Korean, ask them to confirm. If they already said yes to this exact scope during grilling, record that answer; do not ask again. | scope appended to `## 의도` |
+| 2. Interface | you: Skill `codebase-design` | Design at least two interfaces (DESIGN-IT-TWICE). Write them to a JSON file `{ "title", "options": [{ "id", "name", "summary", "mermaid", "gain", "cost", "signature"?, "seam"? }] }` (all strings, 2+ options) and run `qh view interface <file>` to make the local HTML. Give the person the path. | |
 | ◆② Pick | person | They pick one and must give a reason. No reason, no next step. | `## interface 결정` with `이유:`; the seams go to `## 테스트 위치(seam)` |
 | 3. Spec, tickets | person says so in words ("명세 만들어 줘", then "작업 나눠 줘"); you open `.claude/skills/to-spec/SKILL.md`, then `.claude/skills/to-tickets/SKILL.md` | Upstream writes `.scratch/<feature>/spec.md` and `issues/NN-*.md`. Link them in the card. | link |
 | 4. Build | you: Skill `tdd` | One ticket at a time, tests only at the card's seams. Do not call `implement`; it is not installed. | |

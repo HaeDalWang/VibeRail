@@ -117,3 +117,15 @@ test('stop hands the agent a plain sentence for the person, and shows the person
   assert.match(repeat.systemMessage, /관리자는 모든 회사를 보나/);
   assert.doesNotMatch(repeat.systemMessage, DEVELOPER_WORDS);
 });
+
+test('a decision the agent already asked about in its last message is not asked again', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 범위 확인\n');
+  qh(root, ['check']);
+  const asked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '이 범위로 만들어도 될까요?' });
+  const out = stopDecision(qh(root, ['hook', 'stop'], asked));
+  assert.notStrictEqual(out?.decision, 'block', 'the agent asked: handing it back makes the person read the same question twice');
+  assert.doesNotMatch(out?.systemMessage || '', /범위 확인/);
+  const notAsked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '다 만들었습니다.' });
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], notAsked)).decision, 'block', 'an answer that asks nothing still gets turned back');
+});

@@ -575,7 +575,12 @@ function hookInput() {
   const raw = readStdin() || '{}';
   const data = parseJson(raw);
   const input = data && typeof data === 'object' ? data : {};
-  return { raw, session: typeof input.session_id === 'string' ? input.session_id : '', isOneShot: !('stop_hook_active' in input) };
+  return {
+    raw,
+    session: typeof input.session_id === 'string' ? input.session_id : '',
+    isOneShot: !('stop_hook_active' in input),
+    lastMessage: typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '',
+  };
 }
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
@@ -606,7 +611,10 @@ function hookStop(root) {
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
-  const t = triage(a);
+  // The agent writes the card's open decisions itself, so a last answer that asks something has
+  // asked them; turning it back makes the person read the same question twice.
+  // ponytail: "?" is the only signal, compare the decision text if agents ask without one.
+  const t = triage(/[?？]/.test(host.lastMessage) ? { ...a, decisions: [] } : a);
   const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 아래 "사용자에게는" 문장처럼 파일 경로·명령·커밋 해시·도구 이름 없이 묻는다):\n${askLines(t.human)}` : '';
   const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;

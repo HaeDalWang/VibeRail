@@ -35,7 +35,7 @@ test('the criteria summary names checks and risk areas in plain words', () => {
   assert.match(words, /로그인·권한/);
   assert.match(words, /결제/);
   assert.match(words, /264/);
-  assert.match(criteriaWords({ checks: {} }, 0), /켜진 검사: 없음/);
+  assert.match(criteriaWords({ checks: {} }, 0), /^아직 켜 둔 자동 검사가 없음/, 'a bare "없음" after a label means nothing to a non-developer');
 });
 
 test('a first-install question to the person carries no check or risk names', () => {

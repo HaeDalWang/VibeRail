@@ -104,3 +104,8 @@ test('a new config draft needs no duplicates setting (existing copies never bloc
   qh(old, ['init', old]);
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(old, '.quality/config.json'), 'utf8')).structure, undefined);
 });
+
+test('qh-cycle tells the agent the interface JSON shape that qh view accepts, so it need not read qh code', () => {
+  const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  for (const key of ['title', 'options', 'id', 'name', 'summary', 'mermaid', 'gain', 'cost']) assert.match(skill, new RegExp(`\\b${key}\\b`), key);
+});
