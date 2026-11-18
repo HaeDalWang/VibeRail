@@ -67,10 +67,13 @@ test('A-level question page, measure report and interface screen contain no deve
   const root = repo({ ...BASIC, answers: { level: { choice: 'A' } } }, { 'package.json': JSON.stringify({ dependencies: { express: '^4' } }) });
   write(root, 'opts.json', JSON.stringify({ title: '주문 묶기', options: [{ id: 'A', name: '하나로', summary: '묶는다', mermaid: 'graph TD\n  A-->B', gain: '단순', cost: '커진다' }, { id: 'B', name: '둘로', summary: '나눈다', mermaid: 'graph TD\n  A-->C', gain: '작음', cost: '늘어남' }] }));
   const view = qh(root, ['view', 'interface', 'opts.json']);
+  write(root, 'cands.json', JSON.stringify({ title: '구조 점검', candidates: [{ id: '1', name: '합치기', problem: '흩어져 있다', solution: '모은다', gain: '단순', cost: '많이 옮긴다', strength: '높음', mermaidBefore: 'graph TD\n  A-->B' }] }));
+  const arch = qh(root, ['view', 'architecture', 'cands.json']);
   const screens = {
     질문: fs.readFileSync(ask(root, { answers: {} }), 'utf8'),
     결과지: page('demo', [{ date: '2026-11-01', sha: 'abc' }], GROUPS),
     '설계안 선택': fs.readFileSync(view.stdout.match(/(\S+\.html)/)[1], 'utf8'),
+    '구조 점검': fs.readFileSync(arch.stdout.match(/(\S+\.html)/)[1], 'utf8'),
   };
   for (const [name, html] of Object.entries(screens)) {
     const text = html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<script id="pure">[\s\S]*?<\/script>/, '');

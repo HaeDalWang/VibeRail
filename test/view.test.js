@@ -120,3 +120,70 @@ test('the interface page says the person may just tell the AI their pick instead
   assert.match(html, /AI 창에[^<]*말해도 됩니다/);
   assert.match(r.stdout, /채팅으로 말해도/, 'the agent accepts a pick said in chat');
 });
+
+// ---------- architecture candidates ----------
+
+const CANDIDATES = {
+  title: '구조 점검 후보',
+  candidates: [
+    { id: '1', name: '주문 묶음 합치기', problem: '주문 코드가 세 곳에 흩어져 있다 <i>', solution: '한 곳으로 모은다', gain: '고칠 곳이 하나', cost: '한 번에 많이 옮긴다', strength: '높음', mermaidBefore: 'graph TD\n  A-->B', mermaidAfter: 'graph TD\n  A-->C', detail: 'src/orders/*.js' },
+    { id: '2', name: '결제 호출 감싸기', problem: '결제 서비스를 여러 곳에서 직접 부른다', solution: '입구를 하나 둔다', gain: '테스트가 쉬워진다', cost: '입구 하나가 더 생긴다', strength: '중간' },
+  ],
+};
+
+function viewArchitecture(config, json = CANDIDATES) {
+  const root = repo(config);
+  write(root, 'cands.json', JSON.stringify(json));
+  const r = qh(root, ['view', 'architecture', 'cands.json']);
+  return { root, r, html: r.status === 0 ? htmlOf(root, r) : '' };
+}
+
+test('the architecture page lands under .quality/reports/ in Korean, escaped, one reason box per candidate', () => {
+  const { root, r, html } = viewArchitecture(level('A'));
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const file = r.stdout.match(/(\S+\.html)/)[1];
+  assert.ok(fs.realpathSync(file).startsWith(path.join(fs.realpathSync(root), '.quality', 'reports')));
+  assert.match(file, /architecture-cands\.html$/);
+  for (const t of ['구조 점검 후보', '주문 묶음 합치기', '고칠 곳이 하나', '한 번에 많이 옮긴다', '근거의 세기', '지금', '바꾼 뒤']) assert.ok(html.includes(t), t);
+  assert.match(html, /흩어져 있다 &lt;i&gt;/);
+  assert.doesNotMatch(html, /<i>/);
+  assert.strictEqual(html.match(/<textarea/g).length, 2);
+  assert.match(r.stdout, /아키텍처 점검:/, 'the agent is told how to record the pick');
+});
+
+test('the architecture page has no network address and carries a local Mermaid copy', () => {
+  const { r, html } = viewArchitecture(level('A'));
+  assert.doesNotMatch(html, /https?:\/\//i);
+  assert.doesNotMatch(html, /cdn|tailwind/i);
+  const src = html.match(/<script src="([^"]+)"/);
+  assert.ok(src && !/^[a-z]+:|^\//i.test(src[1]));
+  assert.ok(fs.existsSync(path.join(path.dirname(r.stdout.match(/(\S+\.html)/)[1]), src[1])));
+  assert.strictEqual(html.match(/class="mermaid-src"/g).length, 2, 'before and after of the first candidate; the second has no picture');
+});
+
+test('architecture: level A hides the developer detail, level B shows it', () => {
+  assert.ok(!viewArchitecture(level('A')).html.includes('src/orders/*.js'));
+  assert.ok(viewArchitecture(level('B')).html.includes('src/orders/*.js'));
+});
+
+test('the architecture copy button reuses the same two-line pick with the 5-character reason rule', () => {
+  const pure = viewArchitecture(level('A')).html.match(/<script id="pure">([\s\S]*?)<\/script>/)[1];
+  const ctx = {};
+  vm.runInNewContext(pure, ctx);
+  assert.strictEqual(ctx.decision('2', '결제가 흩어져 있어서'), '안: 2\n이유: 결제가 흩어져 있어서');
+  assert.strictEqual(ctx.decision('2', '짧음'), null);
+});
+
+test('a malformed architecture file says what is missing and writes nothing', () => {
+  const root = repo(BASIC);
+  write(root, 'c.json', JSON.stringify({ title: 'x', candidates: [] }));
+  assert.match(qh(root, ['view', 'architecture', 'c.json']).stdout, /후보가 1개 이상/);
+  write(root, 'c.json', JSON.stringify({ title: 'x', candidates: [{ id: '1', name: 'n' }] }));
+  const r = qh(root, ['view', 'architecture', 'c.json']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /1번째 후보[^\n]*problem[^\n]*solution/);
+  write(root, 'c.json', JSON.stringify({ ...CANDIDATES, candidates: [{ ...CANDIDATES.candidates[0], mermaidBefore: 5 }] }));
+  assert.match(qh(root, ['view', 'architecture', 'c.json']).stdout, /mermaidBefore/);
+  assert.strictEqual(qh(root, ['view', 'architecture']).status, 1);
+  assert.strictEqual(fs.existsSync(path.join(root, '.quality/reports')), false);
+});

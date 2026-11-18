@@ -709,7 +709,7 @@ const USAGE = `사용: qh <명령>
   answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
   cycle                카드가 어느 단계인지, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로
-  view interface <json> | view glossary  interface 선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
+  view interface <json> | view architecture <json> | view glossary  선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
   measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지를 .quality/reports/에 쌓음
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
