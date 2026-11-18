@@ -1,27 +1,27 @@
-# 변경 리뷰 (qh review)
+# Change review (qh review)
 
-이 저장소의 변경 하나를 고정 체크리스트로 리뷰한다. 결과는 사람(비개발자 포함)이 읽는다.
+Review one change in this repository with a fixed checklist. A person (possibly a non-developer) reads the result.
 
-## 입력
-- 작업 디렉터리: `{{ROOT}}` (변경이 반영된 현재 코드)
-- 리뷰 대상 변경: `{{DIFF}}` (커밋 메시지 + 기준 `{{BASE}}` 대비 diff, 커밋 안 된 변경 포함)
-- 읽기 금지: 작업 디렉터리 밖 전부. 웹 검색으로 이 코드나 회사 정보를 찾지 않는다.
+## Input
+- Working directory: `{{ROOT}}` (current code with the change applied)
+- Change under review: `{{DIFF}}` (commit messages + diff against base `{{BASE}}`, including uncommitted changes)
+- Do not read anything outside the working directory. Do not web-search for this code or company information.
 
-## 범위·제한
-- 지목 대상: 이 변경이 추가·수정한 줄, 그리고 그 변경 때문에 동작이 바뀌는 바로 옆 코드(호출부·호출 대상). 변경과 무관한 기존 문제는 지목하지 않는다.
-- 하위 에이전트 쓰지 않는다. 빌드·설치·코드 실행 금지. 지목 상한 15건. 없으면 0건이 정답일 수 있다.
+## Scope and limits
+- Flag only: lines this change added or modified, and the code right next to them whose behavior the change alters (callers and callees). Do not flag existing problems unrelated to the change.
+- Do not use subagents. Do not build, install, or run code. Flag at most 15. Zero may be the right answer.
 
-## 체크리스트 (고정)
-1. 권한·데이터 격리 2. 입력 검증 3. 오류 처리·데이터 유실 4. 외부 연동(타임아웃·페이지네이션·응답 형식) 5. UI 흐름(상태 갱신·조건 렌더링·프런트↔백엔드 경로/필드 불일치) 6. 기타 명백한 논리 오류
+## Checklist (fixed)
+1. Permissions and data isolation 2. Input validation 3. Error handling and data loss 4. External integration (timeout, pagination, response format) 5. UI flow (state refresh, conditional rendering, frontend↔backend path/field mismatch) 6. Other obvious logic errors
 
-## 절차
-1차로 diff와 관련 코드를 읽고 지목 → 각 지목을 코드를 다시 열어 확인해 `confirmed/doubtful/rejected` → rejected 제외.
+## Procedure
+First pass: read the diff and related code and flag. Then reopen the code for each flag and mark it `confirmed/doubtful/rejected`. Drop rejected ones.
 
-## 산출물 (`{{OUT}}`에만 쓴다)
-- `{{OUT}}/result.json`: 배열. 원소 `{file, line, rank, severity("높음"|"중간"|"낮음"), verdict("confirmed"|"doubtful"), checklist, reason, nextAction}`. file은 작업 디렉터리 기준 상대경로, line은 현재 파일의 줄. reason·nextAction은 비개발자가 읽을 한국어 한 줄. 지목이 없으면 `[]`.
+## Output (write only to `{{OUT}}`)
+- `{{OUT}}/result.json`: an array. Element `{file, line, rank, severity("높음"|"중간"|"낮음"), verdict("confirmed"|"doubtful"), checklist, reason, nextAction}`. file is relative to the working directory; line is the line in the current file. reason and nextAction are one Korean line a non-developer can read. If nothing is flagged, `[]`.
 
-## 금지
-commit·push·배포·패키지 설치·코드 실행. `{{OUT}}` 밖 파일 수정 금지.
+## Forbidden
+commit, push, deploy, package install, running code. Do not modify files outside `{{OUT}}`.
 
-## 최종 응답
-result.json 경로와 지목 수(판정별)를 3줄 이내로.
+## Final response
+The result.json path and the flag counts (by verdict), in 3 lines or fewer.

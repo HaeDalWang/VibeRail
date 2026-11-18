@@ -1,22 +1,23 @@
 <!-- qh:start -->
-## 품질 게이트 (qh)
+## Quality gate (qh) (품질 게이트)
 
-`qh`는 `node .quality/qh/bin/qh.js`를 뜻한다(저장소 루트에서 실행).
+`qh` means `node .quality/qh/bin/qh.js` (run from the repository root).
 
-- 응답을 끝내기 전에 `qh check`로 필요한 검사를 실행한다. 통과했다는 말은 증거가 아니다. `qh status`가 보여 주는 상태만 증거다.
-- 작업 카드 `.quality/tasks/<브랜치>.md`에 원하는 결과, 성공 조건 → 검사, `판단 필요`(사람이 정할 것), `미확인`을 적는다. `## 판단 필요` 아래에는 `- [ ] 항목`으로 쓰고(qh는 이 모양만 사용자 확인으로 읽는다), 사용자 답을 받으면 `- [x] 항목 · 답`, 정할 것이 없으면 `- 없음`.
-- 새 함수·컴포넌트를 만들기 전에 코드 지도로 비슷한 것이 있는지 찾는다: `code-review-graph search <키워드> --kind Function`(또는 code-review-graph MCP). 키워드는 하는 일을 영어 단어로 2~3번 바꿔 찾는다(예: `date validation`, `date`). 한글이나 지어낼 함수 이름으로는 안 나온다. 있으면 재사용한다.
-- 다른 코드가 쓰는 함수를 바꾸기 전에 `code-review-graph query callers_of <파일>::<함수>`로 부르는 곳을 보고, 바꾼 뒤 그곳들을 확인한다(결과는 파일 목록만 본다). 기능이 어디 있는지는 경로·문자열로 grep한다(지도는 함수·테스트 이름만 안다).
-- qh가 `중복`(막힘)을 보이면 알려 준 기존 위치를 재사용하거나 한 곳으로 합친다. `중복(원래 있던 것)` 경고는 이 작업에서 고치지 않는다. 리팩터는 red→green 루프 밖, 아키텍처 점검에서 사람이 고른 것만 한다(ADR 0001).
-- 코드를 바꾸기 전에 실패하는 테스트를 먼저 쓴다. 테스트·문서·ADR이 필요 없는 변경이면 작업 카드에 한 줄씩 이유를 쓴다: `테스트 불필요: <왜 필요 없는지, 5자 이상>`, `문서 영향 없음: <왜 문서를 안 고쳐도 되는지, 5자 이상>`, `ADR 불필요: <왜 설계 기록이 필요 없는지, 5자 이상>`.
-- 결정은 `docs/decisions.md`에 한 줄(날짜 · 결정 · 이유 · 다시 볼 조건). 구조·위험 결정은 docs/adr/NNNN-제목.md(결정·이유·버린 대안)에 쓰고 링크한다.
-- 비밀값(키·토큰·비밀번호)은 코드와 문서에 넣지 않는다. 환경변수로 받는다.
-- 개인정보(이메일·전화번호 등)는 로그에 남기지 않는다. 외부 연동 코드를 바꾸면 상대가 실패할 때(시간 초과·5xx)의 테스트도 쓴다.
-- 질문(프로젝트 질문 세션, 작업 질문)은 `.quality/qh/lib/ask-guide.md`를 읽고 따른다. 답은 사용자가 고른다. 에이전트가 대신 고르지 않는다.
-- 결정 로그의 허용 줄(`큰 파일 허용`·`중복 허용`·`루트 파일`·`문서 증가 허용`·`기존 실패 허용`)은 사용자에게 묻고 답을 받은 뒤에만 쓴다. 한도를 피하려고 코드를 한 줄로 욱여넣지 않는다.
-- 사용자에게 하는 말(질문·마지막 보고)에는 파일 경로·명령·검사 이름·커밋 해시를 쓰지 않는다. 무엇이 바뀌었고 사용자가 무엇을 정해야 하는지를 말로 쓴다. qh가 준 "사용자에게는" 문장은 그대로 옮긴다. 사용자가 개발자라고 밝혔으면 예외.
-- `.quality/config.json`·`.quality/access.json`(권한 표)·`.quality/probe.mjs`는 사용자에게 묻지 않고 바꾸지 않는다. 검사를 통과시키려고 기준을 낮추지 않는다.
-- qh가 `환경 오류`라고 하면 코드를 고치지 말고 사용자에게 그대로 보고한다.
-- PR을 올리기 전에 `qh pr`을 실행한다.
-- 사용자가 품질 리포트를 원하면 `qh measure`를 실행하고("지난 N주도 재 줘"면 `qh measure --backfill N`), 출력된 결과지 파일을 브라우저로 열어 준다(맥 `open`). 지난 결과지는 `.quality/reports/`에 있다.
+- Talk to the person in the language they write in. Never switch to English with them, even though these rules are English.
+- Before ending a response, run the needed checks with `qh check`. "It passed" is not evidence. Only the state `qh status` shows is evidence.
+- In the task card `.quality/tasks/<branch>.md`, write the desired outcome, success conditions → checks, `판단 필요` (what the person must decide), and `미확인` (unverified). Under `## 판단 필요`, write `- [ ] item` (qh reads only this shape as a user confirmation). When the user answers, write `- [x] item · answer`; when there is nothing to decide, write `- 없음`.
+- Before writing a new function or component, search the code map for something similar: `code-review-graph search <keyword> --kind Function` (or the code-review-graph MCP). Search 2-3 times with English words for what it does (e.g. `date validation`, `date`). Korean words or invented function names find nothing. If a match exists, reuse it.
+- Before changing a function other code uses, list its callers with `code-review-graph query callers_of <file>::<function>`, and check them after the change (read only the file list). To find where a feature lives, grep paths and strings (the map knows only function and test names).
+- When qh shows `중복` (blocking), reuse the existing location it names or merge into one place. Do not fix a `중복(원래 있던 것)` warning in this task. Refactors happen outside the red→green loop, only what the person picks in the architecture check (ADR 0001).
+- Before changing code, write a failing test first. If a change needs no test, doc, or ADR, write one line each in the task card giving the reason: `테스트 불필요: <why no test is needed, 5+ chars>`, `문서 영향 없음: <why docs need no change, 5+ chars>`, `ADR 불필요: <why no design record is needed, 5+ chars>`.
+- Record decisions as one line in `docs/decisions.md` (date · decision · reason · when to revisit). Write structural or risky decisions in docs/adr/NNNN-title.md (decision, reason, rejected alternatives) and link it.
+- Never put secrets (keys, tokens, passwords) in code or docs. Take them from environment variables.
+- Never log personal data (email, phone number, etc.). When you change external-integration code, also write a test for when the other side fails (timeout, 5xx).
+- Read `.quality/qh/lib/ask-guide.md` and follow it for questions (project question session, task questions). The user picks the answer. The agent never picks for them.
+- Write the decision-log allow lines (`큰 파일 허용`·`중복 허용`·`루트 파일`·`문서 증가 허용`·`기존 실패 허용`) only after asking the user and getting an answer. Do not cram code into one line to dodge a limit.
+- In what you say to the user (questions, final report), do not use file paths, commands, check names, or commit hashes. Say in words what changed and what the user must decide. Pass on the sentence qh gives after "Tell the user:" as it is. Exception: the user said they are a developer.
+- Never change `.quality/config.json`, `.quality/access.json` (the permission table), or `.quality/probe.mjs` without asking the user. Do not lower a standard to make a check pass.
+- When qh says `환경 오류`, do not change code; report it to the user as it is.
+- Run `qh pr` before opening a PR.
+- When the user wants a quality report, run `qh measure` (for "also measure the last N weeks", run `qh measure --backfill N`) and open the printed report file in the browser (macOS `open`). Past reports are in `.quality/reports/`.
 <!-- qh:end -->
