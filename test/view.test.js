@@ -114,3 +114,9 @@ test('the reason minimum on the interface screen follows config limits', () => {
   assert.match(html, /12자 이상/);
   assert.doesNotMatch(html, /5자 이상/);
 });
+
+test('the interface page says the person may just tell the AI their pick instead of copying', () => {
+  const { r, html } = view(level('A'));
+  assert.match(html, /AI 창에[^<]*말해도 됩니다/);
+  assert.match(r.stdout, /채팅으로 말해도/, 'the agent accepts a pick said in chat');
+});

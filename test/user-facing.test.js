@@ -115,6 +115,7 @@ test('environment and allowed-failure sentences name the check by what it does',
 test('the agent rules say how to write decisions, when allow lines may be written, and how to talk to the person', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
   assert.match(snippet, /`## 판단 필요`[^\n]*`- \[ \] /);
+  assert.match(snippet, /`## 판단 필요`[^\n]*사용자가 그대로 읽고 답할 수 있는 질문/, 'the gate shows the item to the person as is');
   assert.match(snippet, /허용[^\n]*사용자에게 묻고[^\n]*답을 받은 뒤에만/);
   assert.match(snippet, /사용자에게 하는 말[^\n]*경로·명령/);
   const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
