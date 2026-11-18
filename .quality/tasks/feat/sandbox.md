@@ -36,3 +36,17 @@ ADR 불필요: 제품 동작·구조 변경 없음, 저장소 밖 임시 폴더�
 - 에이전트가 테스트 검사 넣는 법을 몰라 qh 코드를 뒤짐 → 설치되는 질문 안내에 "검사 넣기"(묻고, 예면 checks에 test/test-work) → test/user-facing.test.js
 - README 설계안 캡처를 바뀐 화면으로 다시 찍고, 말로 답해도 된다는 한 줄 추가
 - 카드 질문이 질문 문장이면 "정해 주세요:"를 붙이지 않고 그대로 보임(이중으로 묻지 않게) → test/user-words.test.js
+
+## 추가: 새 눈 평가 HIGH 8건 고치기 (2026-11-18)
+- 1 기준 브랜치에서 커밋한 작업이 안 보임 → 마지막 통과 커밋(없으면 설정을 넣은 커밋)과 비교 → test/base-commit.test.js
+- 2 `qh status --pr`이 막힐 때 0으로 끝남 → 막히면 1, CI는 `check --pr` 다음 `status --pr` → test/pr-gate.test.js "status --pr exits non-zero..."
+- 3 에이전트가 사람 결정 면제를 글만으로 씀 → grilling 불필요·qh confirm·비밀값 허용 표시는 사용자에게 보인 뒤에만 인정 → test/waivers.test.js
+- 4 검토 생략(C)에서 `qh pr`이 exit 3 → 검토 건너뜀 → test/pr-gate.test.js "pr skips the review..."
+- 5 review.cmd 자리표시가 따옴표 없이 들어감 → 셋 다 따옴표 처리 → test/pr-gate.test.js "review.cmd placeholders are shell-quoted..."
+- 6 지우기(git revert)가 설치 뒤 충돌 → `qh uninstall` → test/uninstall.test.js
+- 7 아키텍처 점검 화면이 CDN·영어 → `qh view architecture <json>` → test/view.test.js
+- 8 README의 "코드는 밖으로 나가지 않습니다" 과장 → 문구 교체 → grep으로 옛 문구 0건
+- [x] 1 비교 기준 · 마지막 통과 커밋, 없으면 설정을 넣은 커밋 (사용자 선택 2026-11-18)
+- [x] 3 면제 범위 · 사람 결정을 건너뛰는 셋만 사용자에게 보인 뒤에 인정 (사용자 선택 2026-11-18)
+- [x] 7 아키텍처 화면 · `qh view architecture` 로컬 한국어 (사용자 선택 2026-11-18)
+- 미확인: 새 눈 평가가 다시 돌아 8건이 풀렸는지는 아직 안 봄.
