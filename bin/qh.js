@@ -471,13 +471,14 @@ function readFindings(file) {
 
 // ---------- commands ----------
 
-// Nothing left to fix, ask or report: this commit is where the next work on the base branch starts.
+// Nothing left to fix, ask or report in a PR-phase run: this commit is where the next work on the
+// base branch starts. Stop and a plain check skip the PR-only checks and the review: never recorded there.
 function recordPassed(root, a) {
   const t = triage(a);
   if (!(t.aiFix.length || t.human.length || t.env.length)) stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
 }
 
-function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
+function cmdCheck(root, names, { builtinOnly = false, phase = 'stop', record = phase === 'pr' } = {}) {
   const config = loadConfig(root);
   const env = envProblems(root, config);
   if (env.length) {
@@ -491,7 +492,7 @@ function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
   for (const n of targets) runCheck(root, n, config.checks?.[n]);
   const after = assess(root, phase);
   if (!builtinOnly) console.log(formatStatus(after));
-  if (!builtinOnly && !names.length) recordPassed(root, after);
+  if (!builtinOnly && !names.length && record) recordPassed(root, after);
   const isAllowed = (c) => c.state === '실패' && after.allowedFailures.includes(c.name);
   const failing = after.checks.filter((c) => targets.includes(c.name) && c.state !== '통과' && !isAllowed(c));
   if (!failing.length) return EXIT.ok;
@@ -514,7 +515,7 @@ function isPrBlocked(a, t, setup) {
 
 function cmdPr(root) {
   if (envProblems(root, loadConfig(root)).length) return cmdCheck(root, [], { phase: 'pr' });
-  cmdCheck(root, [], { phase: 'pr' });
+  cmdCheck(root, [], { phase: 'pr', record: false });
   const reviewExit = runReview(root, loadConfig(root));
   const a = assess(root, 'pr');
   const t = triage(a);
@@ -522,6 +523,7 @@ function cmdPr(root) {
   const declared = waivers.declaredWaivers(taskCard(root).text);
   console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}${declared.length ? `\n에이전트가 작업 카드에서 면제한 것 (리뷰어 확인):\n${declared.map((d) => `  - ${d}`).join('\n')}` : ''}`);
   const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
+  if (!isBlocked) stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
   console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
@@ -609,7 +611,6 @@ function hookStop(root) {
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
-  recordPassed(root, a);
   // The agent writes the card's open decisions itself, so a last answer that asks something has
   // asked them; turning it back makes the person read the same question twice. Agents ask in
   // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
