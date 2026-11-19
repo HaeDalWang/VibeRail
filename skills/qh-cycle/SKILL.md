@@ -9,7 +9,7 @@ The person picks and gives reasons. You ask, draw, build and review. The vendore
 
 ## Precedence
 
-The Pocock and Karpathy principles in the vendored skills win over any qh rule (docs/adr/0001). If a qh message tells you to do something those skills forbid (for example, refactor inside the red→green loop), follow the skill and tell the user which qh rule conflicted.
+The Pocock principles in the vendored skills and the Karpathy lines listed in docs/adr/0001 (its 출처 part) win over any qh rule. If a qh message tells you to do something those skills forbid (for example, refactor inside the red→green loop), follow the skill and tell the user which qh rule conflicted.
 
 ## The card
 
