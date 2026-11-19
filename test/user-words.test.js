@@ -85,6 +85,25 @@ test('A-level question page, measure report and interface screen contain no deve
   }
 });
 
+// The report is drawn by inline script: run it against a stub page and read the text it writes.
+function runtimeText(html) {
+  const els = {};
+  const document = { getElementById: (id) => (els[id] ||= {}) };
+  require('node:vm').runInNewContext(html.match(/<script>([\s\S]*)<\/script>/)[1], { document });
+  return Object.values(els).map((e) => `${e.textContent || ''} ${e.innerHTML || ''}`).join('\n').replace(/<[^>]*>/g, ' ');
+}
+
+test('the measure report text drawn at runtime has no commit hash and no developer words', () => {
+  const rows = [
+    { date: '2026-11-01', sha: 'f41eecd', rules: 1, files_over_800: '2', duplicated_pct: '4' },
+    { date: '2026-11-10', sha: '4551074', rules: 1, files_over_800: '1', duplicated_pct: '3', withQh: true },
+  ];
+  const text = runtimeText(page('demo', rows, GROUPS));
+  assert.match(text, /기간: 11\/1 ~ 11\/10/, 'the page really ran');
+  assert.doesNotMatch(text, /\b[0-9a-f]{7,}\b/, 'no commit hash');
+  assert.doesNotMatch(text, SCREEN_WORDS);
+});
+
 test('the sentences qh gives the agent to say hold no developer words either', () => {
   const t = triage(everyKind({ isFirstInstall: false, summary: '켜진 검사: unit' }));
   for (const item of [...t.human, ...t.env, ...t.warnings]) assert.doesNotMatch(item.user.replace('"/api/users"', ''), /\b(TDD|ADR|PR|CI|API|Stop|express)\b|에이전트|커밋/, item.user);
