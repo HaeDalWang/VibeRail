@@ -59,3 +59,34 @@ ADR 불필요: 제품 동작·구조 변경 없음, 저장소 밖 임시 폴더�
 - review.cmd에 이미 따옴표가 있는 자리표시, 검토 생략 안내 한 줄, 겹치는 id 거절 → test/pr-gate.test.js·test/view.test.js
 - [x] 면제 확인 방식 · 카드의 `- [x] 질문 · 답` 줄로 옮김 (조정자 결정 2026-11-18, 다른 사람 결정과 같은 방식)
 - 미확인: 파일 줄은 사람이 답했다는 증명이 못 된다. 다른 판단 필요 항목과 같은 신뢰 수준.
+
+## 추가: 평가 중간·낮음 (2026-11-19)
+- 9 허용 줄은 경로가 정확히 같을 때만 인정 → test/allow-line.test.js
+- 10 qh answer로 생긴 기준 변경은 질문마다 한 항목, 바뀐 답을 말로 → test/criteria-answers.test.js
+- 11 권한 질문은 한국어 수준 이름과 하는 일로 (`--labels`) → test/user-facing.test.js "a route question says what the route does…", test/route-access.test.js "routes --baseline --labels…"
+- 12 ADR 0001에 출처와 Karpathy 줄(2차 출처), 범위에서 implement 제거 → test/docs-facts.test.js "the ADR says where…"
+- 13 README에 먼저 묻고 설계안을 보여 주는 흐름은 Claude Code만 → test/docs-facts.test.js "the README says…"
+- 14 화면은 사용자 대신 열고 doctor 실패는 한 문장으로 → test/user-facing.test.js "pages are opened for the person…"
+- 15 결과지에서 저장한 버전 번호 제거, 실행 뒤 글도 검사 → test/user-words.test.js "the measure report text drawn at runtime…"
+- 16 문서가 판정한다고 쓴 곳 바로잡고 빠진 명령 행 추가 → test/docs-facts.test.js "reference.md lists every command…", "the docs do not say the report judges…"
+- 17 외부 연동 선택지: 외부망 차단은 내장 검사만 → test/user-facing.test.js "the external-integration option…"
+- 18 TDD·문서 규칙은 의도의 증거이지 옳은지의 증거는 아니라고 문서화 → test/docs-facts.test.js "the docs say the TDD and docs rules…"
+- 19 같은 항목 연속 차단 횟수를 limits.sameBlocks로, 근거 기록 → test/stop-limits.test.js, test/docs-facts.test.js "reference.md has a row…"
+- 20 init이 지도 설정을 ignore 목록에 넣고 코드 지도가 더하는 것을 알림, INSTALL의 .mcp.json 커밋 지시 삭제 → test/init-gitignore.test.js
+- 21 결과지와 큰 파일 검사가 같은 줄 수 계산 → test/line-count.test.js
+- 22 Stop 기록은 AI를 돌려보낸 때만, 종류는 한 번씩, 분류 바로잡음 → test/stop-log.test.js
+- 23 커밋 없는 저장소의 qh measure → test/measure-nocommit.test.js
+- 24 사용자에게 보이는 말에서 에이전트 대신 AI → test/hook-flow.test.js, test/user-words.test.js "the probe question…"
+- 25 qh answer도 사유 최소 길이 → test/criteria-answers.test.js "qh answer refuses a reason shorter…"
+- 26 MIN_REASON_CHARS 삭제, 부르는 곳 없는 export 정리, esc 한 곳 → 전체 테스트(삭제 확인은 grep)
+- 27 doctor 메시지를 질문 화면의 선택지 이름으로 → test/doctor-labels.test.js "every answer label…"
+- 28 고정 숫자 행 추가, 안내 문구의 6줄·5자를 limits에서 → test/docs-facts.test.js, test/init-skills.test.js "the installed agent rules…"
+- 30 init이 결과지·측정 기록을 ignore 목록에 → test/init-gitignore.test.js
+- 32 qh pr 통과 줄에 열린 AI 지목·기준 변경 건수 → test/pr-gate.test.js "the pr pass line…"
+- 33 협업 CI 검사는 qh.js를 부르는 run 단계만 인정 → test/doctor-labels.test.js "the team CI check…"
+- 건너뜀: 29(기본 리뷰 명령의 개인 도구·모델 이름), 31(stop-state 동시 쓰기 잠금)
+- [x] 11 · 등급 한국어 이름 + 하는 일로 설명 (사용자 선택 2026-11-19)
+- [x] 12 · 출처 적고 원칙 인용 (사용자 선택 2026-11-19)
+- [x] 13 · README에 Claude Code만 명시 (사용자 선택 2026-11-19)
+- [x] 17 · 선택지 문구를 내장 검사만으로 (사용자 선택 2026-11-19)
+- 미확인: README의 결과지 캡처(report.png)에는 옛 버전 번호가 남아 있다. 다시 찍어야 한다.
