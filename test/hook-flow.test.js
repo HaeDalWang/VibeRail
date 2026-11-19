@@ -23,6 +23,7 @@ test('when the agent gives up, the person hears plain words once, not every turn
   const stuck = stopDecision(qh(root, ['hook', 'stop'], CLAUDE));
   assert.notStrictEqual(stuck?.decision, 'block');
   assert.match(stuck.systemMessage, /고치지 못하고 멈췄습니다/);
+  assert.doesNotMatch(stuck.systemMessage, /에이전트/, 'the person reads "AI"');
   assert.match(stuck.systemMessage, /테스트/);
   assert.doesNotMatch(stuck.systemMessage, DEVELOPER_WORDS, stuck.systemMessage);
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], CLAUDE)), null, 'the same note is not repeated');

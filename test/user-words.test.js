@@ -109,6 +109,11 @@ test('the sentences qh gives the agent to say hold no developer words either', (
   for (const item of [...t.human, ...t.env, ...t.warnings]) assert.doesNotMatch(item.user.replace('"/api/users"', ''), /\b(TDD|ADR|PR|CI|API|Stop|express)\b|에이전트|커밋/, item.user);
 });
 
+test('the probe question and the generic fix sentence say AI, not 에이전트', () => {
+  const t = triage({ ...everyKind(null), checks: [{ name: 'p', state: '환경 오류', envKind: 'probe-todo', detail: ['todo'] }], taskQuestions: [], undeclared: [], decisions: [], configChanges: [], env: [], structureEnv: [], review: null, policy: ['알 수 없는 종류: x'] });
+  for (const x of [...t.human, ...t.aiFix.map((a) => ({ user: require('../lib/triage').aiFixUser(a, {}) }))]) assert.doesNotMatch(x.user, /에이전트/, x.user);
+});
+
 test('a card decision written as a question is shown as is; a bare note gets "정해 주세요"', () => {
   const human = (d) => triage({ ...everyKind(null), decisions: [d] }).human.find((x) => x.agent.startsWith('작업 카드')).user;
   assert.strictEqual(human('이 범위로 만들까요?'), '이 범위로 만들까요?');

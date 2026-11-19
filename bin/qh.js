@@ -558,7 +558,7 @@ const userLines = (items) => [...new Set(items.map((x) => `- ${x.user}`))].join(
 const warningNote = (t) => (t.warnings.length ? `품질 검사 경고 (막지 않음)\n${userLines(t.warnings)}` : null);
 const askLines = (items) => items.map((x) => `- ${x.agent}\n  Tell the user: ${x.user}`).join('\n');
 const plainFixes = (items, config) => items.map((x) => ({ user: aiFixUser(x, config) }));
-const stuckNote = (items, config) => `품질 검사: 에이전트가 아래 문제를 고치지 못하고 멈췄습니다. 에이전트에게 "남은 품질 문제 고쳐줘"라고 하거나, 그대로 둘지 정해 주세요.\n${userLines(plainFixes(items, config))}`;
+const stuckNote = (items, config) => `품질 검사: AI가 아래 문제를 고치지 못하고 멈췄습니다. AI에게 "남은 품질 문제 고쳐줘"라고 하거나, 그대로 둘지 정해 주세요.\n${userLines(plainFixes(items, config))}`;
 
 // Kiro sends no stop_hook_active, does not call Stop again after a block and shows no
 // systemMessage (Kiro CLI 3.3.0, /tmp/qh-e2e/B): the agent rechecks itself and carries the words.
@@ -633,7 +633,7 @@ function judgeStop(root, config, host) {
   }
   const note = [
     givenUp.length && stuckNote(givenUp, a.config),
-    askPart && `사람이 판단할 일 (에이전트에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
+    askPart && `사람이 판단할 일 (AI에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
     warningNote(t),
   ].filter(Boolean).join('\n');
   stopState.writeSession(root, host.session, { tree: last.tree, counts: nextCounts, askPart, notified: note }, pending);
