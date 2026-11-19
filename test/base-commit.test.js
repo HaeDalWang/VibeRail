@@ -66,6 +66,17 @@ test('qh pr moves the anchor only when it passes', () => {
   assert.deepStrictEqual(statusJson(root).changed, []);
 });
 
+test('a qh pr pass on a detached HEAD records no anchor', () => {
+  const root = onMain({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  commit(root, 'src/b.js', '2', 'work');
+  commit(root, '.quality/tasks/main.md', DECLARED, 'card');
+  sh(root, 'git', ['checkout', '-q', '--detach']);
+  assert.strictEqual(qh(root, ['pr']).status, 0);
+  sh(root, 'git', ['checkout', '-q', 'main']);
+  assert.ok(statusJson(root).changed.includes('src/b.js'), 'a pass off any branch is not a base-branch anchor');
+});
+
 test('a detached HEAD with --base HEAD has no anchor to fall back on', () => {
   const root = onMain();
   commit(root, 'src/b.js', '2', 'work');

@@ -76,6 +76,8 @@ test('a secret marked fake with the allow marker is asked about first; the agent
   assert.strictEqual(statusJson(root).waivers.length, 1, 'shown is not answered');
   write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] ${q} · 가짜가 맞습니다\n`);
   assert.deepStrictEqual(statusJson(root).waivers, []);
+  write(root, 'src/a.test.js', `const t = 'ghp_${'b'.repeat(36)}' // qh:allow-secret 테스트용 가짜\n`);
+  assert.strictEqual(statusJson(root).waivers.length, 1, 'an answer covers the values it was asked about, not a swapped one');
 });
 
 test('qh confirm counts only with the checked card line for the criteria question', () => {
