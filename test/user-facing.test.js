@@ -169,3 +169,11 @@ test('the installed agent guide shows how to add a test check after the person s
   const section = guide.slice(guide.indexOf('## Adding a check'));
   for (const re of [/^## Adding a check \(검사 넣기\)/, /Ask the user/, /only after they say yes/i, /"cmd"/, /\{tests\}/, /"on": \["pr"\]/]) assert.match(section, re);
 });
+
+test('the external-integration option says the network block covers the built-in checks only', () => {
+  const { QUESTIONS } = require('../lib/questions');
+  const a = QUESTIONS.find((q) => q.id === 'external').options.find((o) => o.id === 'A');
+  assert.match(a.on, /내장 검사만/);
+  assert.match(a.cost, /프로젝트의 테스트 명령은 막지 않는다/);
+  assert.doesNotMatch(a.gain, /^테스트가 실제 서비스를 부르지 못한다/);
+});
