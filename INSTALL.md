@@ -11,7 +11,7 @@
 3. **VibeRail 최신화**: `git -C ~/VibeRail pull --ff-only` (실패해도 계속).
 4. **설치**: 먼저 `git status --short --untracked-files=all`을 기억해 둔다. 프로젝트 맨 위 폴더에서 `node ~/VibeRail/bin/qh.js init .`
    - 멈추면(커밋 안 된 변경, 규칙이 두 곳에 있음 등) 출력의 이유를 한 문장으로 쉽게 바꿔 사용자에게 말하고, 네가 할 수 있는 해결(예: 그 파일을 먼저 커밋)을 제안한다.
-5. **설치 저장**: 설치 전과 비교해 새로 생기거나 바뀐 파일을 모두 `git add`한다(코드 지도가 만든 `.mcp.json`·`.claude/skills/` 등 포함, `*.bak`은 제외). 설치 전부터 있던 사용자의 변경은 넣지 않는다. `git commit -m "chore: qh 설치"`. push하지 않는다.
+5. **설치 저장**: 설치 전과 비교해 새로 생기거나 바뀐 파일을 모두 `git add`한다(코드 지도가 만든 `.claude/skills/` 등 포함, `*.bak`은 제외. `.mcp.json`·`.kiro/settings/mcp.json`은 이 컴퓨터의 절대 경로가 들어 있어 커밋하지 않는다: `init`이 .gitignore에 넣는다). 설치 전부터 있던 사용자의 변경은 넣지 않는다. `git commit -m "chore: qh 설치"`. push하지 않는다.
 6. **질문 화면**: `.quality/qh/lib/ask-guide.md`의 "프로젝트 질문 세션"대로 한다. `qh ask`가 준 화면 파일은 네가 연다(맥 `open`, 리눅스 `xdg-open`, 윈도 `start`). 사용자에게: "화면에서 답을 고르고 '프롬프트 복사'를 눌러 여기 붙여 넣어 주세요. 모르는 건 그대로 두면 돼요."
 7. **처음 리포트**: 답을 저장한 뒤 `node .quality/qh/bin/qh.js measure --backfill 8`을 돌리고 결과지를 연다.
 8. **끝 인사** (이 세 줄만):
