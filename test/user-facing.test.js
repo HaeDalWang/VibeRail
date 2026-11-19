@@ -155,7 +155,7 @@ test('the report page tells the person what to say to the agent, not a command',
 test('the agent rules show the declaration reason as a placeholder, not a pasteable word', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
   assert.doesNotMatch(snippet, /불필요: (reason|이유)`|영향 없음: (reason|이유)`/);
-  assert.match(snippet, /`테스트 불필요: <why no test is needed, 5\+ chars>`/);
+  assert.match(snippet, /`테스트 불필요: <why no test is needed, \{\{REASON_CHARS\}\}\+ chars>`/);
 });
 
 test('the qh-cycle skill never asks the person to type a slash command; the agent opens the installed skill file', () => {

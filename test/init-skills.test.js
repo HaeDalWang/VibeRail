@@ -15,6 +15,25 @@ const VENDOR = path.join(ROOT, 'skills/vendor/mattpocock-skills');
 const SKILLS = ['grill-with-docs', 'domain-modeling', 'codebase-design', 'improve-codebase-architecture', 'tdd', 'to-spec', 'to-tickets', 'retro', 'grilling', 'writing-for-agents'];
 const NOT_INSTALLED = ['implement', 'code-review', 'setup-matt-pocock-skills'];
 
+test('the installed agent rules and the report take the minimum reason length and duplicate size from limits', () => {
+  const root = project();
+  write(root, '.quality/config.json', JSON.stringify({ baseRef: 'main', checks: {}, limits: { reasonChars: 8 } }));
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', 'config']);
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /<why no test is needed, 8\+ chars>/);
+  assert.doesNotMatch(agents, /\{\{|5\+ chars/);
+  const { LIMITS } = require('../lib/policy');
+  const saved = LIMITS.duplicateLines;
+  LIMITS.duplicateLines = 9;
+  try {
+    assert.match(require('../lib/measure-page').page('p', [], []), /의미 있는 9줄/);
+  } finally {
+    LIMITS.duplicateLines = saved;
+  }
+});
+
 function project() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-skills-'));
   sh(root, 'git', ['init', '-q', '-b', 'main']);
