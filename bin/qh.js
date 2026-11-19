@@ -517,7 +517,9 @@ function cmdPr(root) {
   const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
   // Only a full qh pr pass (checks and the AI review) is where the next work on the base branch starts.
   if (!isBlocked) stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
-  console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
+  const found = a.review.findings || [];
+  const open = `AI 리뷰 지목 ${found.length}건(높음 ${found.filter((f) => f.severity === '높음').length}건)과 기준 변경 ${a.configChanges.length}건이 열려 있다`;
+  console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : `\nqh pr: 통과 (${open}: PR 리뷰어가 확인)`);
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
 

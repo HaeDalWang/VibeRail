@@ -61,6 +61,15 @@ test('pr passes with a check failure the decision log allows as already failing'
   assert.strictEqual(r.status, 0, r.stdout);
 });
 
+test('the pr pass line says how many AI findings and criteria changes were left open', () => {
+  const finding = { file: 'src/a.js', line: 1, rank: 1, severity: '높음', verdict: 'confirmed', checklist: 'x', reason: '문제', nextAction: '고친다' };
+  const cmd = `node -e "require('fs').writeFileSync(process.argv[1]+'/result.json', JSON.stringify([${JSON.stringify(finding).replace(/"/g, '\\"')}]))" {out}`;
+  const root = installed({ ...BASIC, review: { cmd } });
+  const r = qh(root, ['pr']);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /qh pr: 통과 \(AI 리뷰 지목 1건\(높음 1건\)과 기준 변경 \d+건이 열려 있다/);
+});
+
 test('pr skips the review when the reviewer answer is "검토 생략" (C), without needing review.cmd', () => {
   const root = installed({ ...BASIC, answers: { reviewer: { choice: 'C', date: '2026-11-18' } } });
   const r = qh(root, ['pr']);
