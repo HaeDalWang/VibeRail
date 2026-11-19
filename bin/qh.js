@@ -129,14 +129,13 @@ function writeEvidence(root, name, data) {
 
 // ---------- environment & requirements ----------
 
+const NO_COMMIT = '커밋 없음: 이 저장소에 아직 커밋이 없어 비교할 기준이 없다 → 사용자에게 알리고, 원하면 첫 커밋을 만든다. 첫 커밋 뒤부터 판정한다';
+const hasCommit = (root) => spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], { cwd: root }).status === 0;
+
 function envProblems(root, config) {
   const problems = doctor(root, { light: true }).map((p) => `설정: ${p.msg} → ${p.fix}`);
   if (problems.length) return problems;
-  try {
-    git(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
-  } catch {
-    return ['커밋 없음: 이 저장소에 아직 커밋이 없어 비교할 기준이 없다 → 사용자에게 알리고, 원하면 첫 커밋을 만든다. 첫 커밋 뒤부터 판정한다'];
-  }
+  if (!hasCommit(root)) return [NO_COMMIT];
   try {
     git(root, ['rev-parse', '--verify', '--quiet', `${config.baseRef}^{commit}`]);
   } catch {
@@ -742,6 +741,7 @@ function main(argv) {
       console.log('사용: qh measure [--backfill <주 수>]');
       return EXIT.failed;
     }
+    if (!hasCommit(root)) throw new EnvError(NO_COMMIT);
     const r = require('../lib/measure').measure(root, { weeks });
     console.log(`측정: ${r.added}줄 추가 → ${METRICS_FILE}\n결과지: ${r.page}\n브라우저로 연다. 지난 결과지도 ${REPORTS_DIR}/에 날짜순으로 남는다.`);
     return EXIT.ok;
