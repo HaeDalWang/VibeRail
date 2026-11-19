@@ -6,7 +6,7 @@
 
 When: tell the user when `qh doctor` or session start says "프로젝트 질문에 아직 답하지 않았다". Open the session when the user wants it (e.g. "품질 기준을 같이 정하자") or when the product's nature changed (login, personal data, DB, external integration, or deployment newly appeared).
 
-1. Run `qh ask` and give the user the path printed after `질문 화면:`. Tell them to open it in the browser. The page exists only on this computer. Upload it nowhere.
+1. Run `qh ask`, then open it for the person (macOS `open`, Linux `xdg-open`) with the path printed after `질문 화면:`. Say in one plain line that the question page is open. The page exists only on this computer. Upload it nowhere.
 2. Pass the `qh 답` block the user pasted via "프롬프트 복사" through unchanged:
    ```sh
    node .quality/qh/bin/qh.js answer <<'QH'
@@ -14,7 +14,7 @@ When: tell the user when `qh doctor` or session start says "프로젝트 질문�
    QH
    ```
 3. If the output says `저장하지 않음:`, show that line to the user and have them choose again on the page. Never edit the block yourself.
-4. When saved, run `qh doctor`. If it prints a `[실패]` saying something the answers require (a check, risk area, or doc) is missing, show it to the user. Decide together what to do. Do not change `.quality/config.json` without the user's confirmation.
+4. When saved, run `qh doctor`. If it prints a `[실패]` saying something the answers require (a check, risk area, or doc) is missing, translate each doctor failure into one plain sentence (what is missing and what it would protect, with no file names, keys or commands) and ask the user what to do. Do not change `.quality/config.json` without the user's confirmation.
 
 ## Task question (작업 질문)
 
@@ -37,7 +37,7 @@ When: qh shows `기준 변경(사람 확인 필요)`. The quality-check settings
 When: a check fails regardless of this task, and fails for the same reason on the base branch.
 
 - Fix it if you can. If you cannot, ask the user: "이 검사는 이 작업 전부터 실패합니다. 따로 고칠 일로 두고 이번에는 막지 않을까요?"
-- Only after asking, and only if the user says yes, write one line in `docs/decisions.md`: `- 날짜 · 기존 실패 허용: <검사 이름> · <user's answer and reason, 5+ chars> · 고쳐지면`. Never write it without asking.
+- Only after asking, and only if the user says yes, write one line in `docs/decisions.md`: `- 날짜 · 기존 실패 허용: <검사 이름> · <user's answer and reason, at least limits.reasonChars> · 고쳐지면`. Never write it without asking.
 - That check's failure then shows only as a warning. When it is fixed, delete the line.
 
 ## Allow lines (허용 줄)

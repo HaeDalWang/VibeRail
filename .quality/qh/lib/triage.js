@@ -7,6 +7,8 @@
 // file paths, commands, commit hashes or tool names. aiFix items are the agent's alone;
 // aiFixUser says one in plain words when the agent gave up on it.
 
+const { QUESTIONS } = require('./questions');
+
 const ACCESS_FILE = '.quality/access.json';
 const PROBE_FILE = '.quality/probe.mjs';
 
@@ -60,7 +62,7 @@ const CHECK_ENV_WORDS = {
 };
 const checkEnvUser = (c, config) => (CHECK_ENV_WORDS[c.envKind] || CHECK_ENV_WORDS.builtin)(labelOf(config, c.name));
 
-const PROBE_TODO_USER = '앱을 어떻게 띄우고 로그인하는지 적어 두는 설정이 아직 비어 있어 검사 일부를 못 했습니다. 에이전트가 채워도 될까요? 채우면 그 검사를 시작하고, 아니면 그 검사는 꺼 둡니다.';
+const PROBE_TODO_USER = '앱을 어떻게 띄우고 로그인하는지 적어 두는 설정이 아직 비어 있어 검사 일부를 못 했습니다. AI가 채워도 될까요? 채우면 그 검사를 시작하고, 아니면 그 검사는 꺼 둡니다.';
 
 function setupEnvUser(text) {
   if (text.startsWith('설정:')) return '품질 검사 설정에 잘못 적힌 곳이 있어 검사를 못 했습니다. 설정을 고칠지 정해 주세요. 고치기 전까지는 검사 결과가 없습니다.';
@@ -83,15 +85,46 @@ function criteriaUser(criteria) {
   return `무엇을 검사하고 무엇을 막을지 정한 기준이 이번 작업에서 바뀌었습니다${summary}. 이대로 쓸지 정해 주세요. 그대로 쓰면 다음부터 묻지 않고, 아니면 원래대로 되돌립니다.`;
 }
 
-const METHOD_WORDS = { GET: '보기', POST: '새로 만들기', PUT: '고치기', PATCH: '고치기', DELETE: '지우기' };
+// One answered project question, said by what it became ("AI 검토" 답이 "검토 생략"으로 바뀌었습니다).
+function answerChangeUser(id, choice) {
+  const q = QUESTIONS.find((x) => x.id === id);
+  const label = q?.options.find((o) => o.id === choice)?.label;
+  const now = label ? `"${label}"(으)로 바뀌었습니다` : '지워졌습니다';
+  return `"${q ? q.short : id}" 질문의 답이 ${now}. 이대로 쓸지 정해 주세요. 그대로 쓰면 다음부터 묻지 않고, 아니면 원래 답으로 되돌립니다.`;
+}
+
+// qh's own line for an answered question: "answers.<id>: <choice>" (see configChanges in bin/qh.js).
+const ANSWER_CHANGE = /^answers\.([a-z]+): (\S+)/;
+const METHOD_WORDS = { POST: '새로 만들기', PUT: '고치기', PATCH: '고치기', DELETE: '지우기' };
+// ponytail: a small noun list; a route not in it is named by its address (below). Extend when a common one is missed.
+const NOUN_WORDS = { users: '사용자', user: '사용자', me: '내 정보', profile: '프로필', orders: '주문', order: '주문', products: '상품', product: '상품', items: '항목', posts: '글', comments: '댓글', files: '파일', payments: '결제', settings: '설정', stats: '통계', reports: '보고서', logs: '기록', messages: '메시지', teams: '팀', members: '멤버', invoices: '청구서' };
+// Words that are an action whatever the method: POST /login logs in, it does not make a login.
+const ACTION_WORDS = { login: '로그인', logout: '로그아웃', signup: '회원 가입', register: '회원 가입', search: '검색' };
 const DEFAULT_LEVELS = '누구나, 로그인한 회원만, 관리자만';
 
-// The address itself is what is decided, so it stays in; the levels are this project's own.
-function routeUser(route, levels) {
-  const [method, address] = route.includes(' ') ? [route.slice(0, route.indexOf(' ')), route.slice(route.indexOf(' ') + 1)] : ['', route];
-  const what = METHOD_WORDS[method] ? `(${METHOD_WORDS[method]})` : '';
-  const choices = levels?.length ? levels.join(', ') : DEFAULT_LEVELS;
-  return `새로 생긴 주소 "${address}"${what}에 누가 들어올 수 있는지 정해지지 않았습니다. ${choices} 중에서 골라 주세요. 고른 대로 막혀 있는지 검사합니다.`;
+// "GET /api/users/:id" → "사용자 정보 보기"; null when the last word of the path is not one we know.
+function routeWhat(method, address) {
+  const parts = address.split('/').filter((x) => x && x !== 'api' && !/^v\d+$/.test(x));
+  const hasId = /^[:{]/.test(parts.at(-1) || '');
+  const last = parts.filter((x) => !/^[:{]/.test(x)).at(-1);
+  if (ACTION_WORDS[last]) return `${ACTION_WORDS[last]} 하기`;
+  const noun = NOUN_WORDS[last];
+  if (!noun) return null;
+  if (!METHOD_WORDS[method]) return `${noun} ${hasId ? '정보' : '목록'} 보기`;
+  return `${noun} ${METHOD_WORDS[method]}`;
+}
+
+const splitRoute = (route) => (route.includes(' ') ? [route.slice(0, route.indexOf(' ')), route.slice(route.indexOf(' ') + 1)] : ['', route]);
+const routeName = (route) => routeWhat(...splitRoute(route));
+
+// What the route does, not its address; the address stays only when the purpose cannot be told.
+// withAddress: another route in the same batch reads the same, so the address tells them apart.
+function routeUser(route, levels, labels, withAddress = false) {
+  const [method, address] = splitRoute(route);
+  const what = routeWhat(method, address);
+  const named = what ? `"${what}" 기능${withAddress ? `(주소 "${address}")` : ''}` : `새로 생긴 기능(주소 "${address}")`;
+  const choices = levels?.length ? levels.map((l) => labels?.[l] || l).join(', ') : DEFAULT_LEVELS;
+  return `${named}에 누가 들어올 수 있는지 정해지지 않았습니다. ${choices} 중에서 골라 주세요. 고른 대로 막혀 있는지 검사합니다.`;
 }
 
 // aiFix items start with "<kind>: ". Unknown kinds still get a sentence.
@@ -115,7 +148,7 @@ const AI_FIX_WORDS = [
   [/^(interface 결정|아키텍처 점검)$/, '구조를 고른 이유가 기록에 없습니다.'],
   [/^작업 카드$/, '작업 기록에 사람이 정할 일이 정해진 모양으로 적혀 있지 않습니다.'],
 ];
-const AI_FIX_OTHER = '에이전트가 고칠 품질 문제가 하나 남아 있습니다.';
+const AI_FIX_OTHER = 'AI가 고칠 품질 문제가 하나 남아 있습니다.';
 
 // "검사 <name>" items: named by what the check does.
 function checkFixUser(name, rest, config) {
@@ -165,13 +198,16 @@ function triage(a) {
   const human = [
     ...a.undeclared.map((r) => item(
       `${r}: 접근 수준 미선언${levels} → 누가 접근할 수 있는지 사용자에게 묻고, 답을 받은 뒤 ${ACCESS_FILE}의 routes에 적기`,
-      routeUser(r, a.accessLevels),
+      routeUser(r, a.accessLevels, a.accessLabels, a.undeclared.some((o) => o !== r && routeName(o) && routeName(o) === routeName(r))),
     )),
     ...envChecks.filter((c) => c.envKind === 'probe-todo').map(probeTodoItem),
     ...(a.waivers || []).map((w) => item(`${w.agent}. 답을 받으면 작업 카드 \`## 판단 필요\`에 \`- [x] <아래 Tell the user 문장 그대로> · <답>\`을 쓴다`, w.user)),
     ...a.decisions.map((d) => item(`작업 카드: ${d} → 사용자에게 묻고, 답을 받으면 \`- [x]\`로 바꾼다`, /[?？]\s*$/.test(d) ? d : `정해 주세요: ${d}`)),
     ...a.taskQuestions.map((q) => item(q, taskQuestionUser(q))),
-    ...a.configChanges.map((c) => item(`기준 변경(사람 확인 필요): ${c}`, criteriaUser(a.criteria))),
+    ...a.configChanges.map((c) => {
+      const ans = ANSWER_CHANGE.exec(c);
+      return item(`기준 변경(사람 확인 필요): ${c}`, ans ? answerChangeUser(ans[1], ans[2]) : criteriaUser(a.criteria));
+    }),
   ];
   const env = [
     ...a.env.map((e) => item(e, setupEnvUser(e))),
@@ -184,4 +220,4 @@ function triage(a) {
   return { aiFix, human, env, warnings };
 }
 
-module.exports = { triage, aiFixUser, aiFixKind, criteriaWords, criteriaUser, checkLabel, ACCESS_FILE };
+module.exports = { triage, answerChangeUser, aiFixUser, aiFixKind, criteriaWords, criteriaUser, checkLabel, ACCESS_FILE };

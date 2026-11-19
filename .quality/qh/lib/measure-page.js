@@ -4,7 +4,9 @@
 // history with a date column added per measurement (like a body-composition sheet).
 // One local file, no fonts or scripts from the network.
 
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const { LIMITS } = require('./policy');
+const { esc } = require('./ask');
+
 const TILES = [['files_over_800', '개'], ['duplicated_pct', '%'], ['untested_pct', '%'], ['dead_doc_links', '개'], ['flat_root_files', '개']];
 
 function page(project, rows, groups) {
@@ -53,7 +55,7 @@ th.qhstart,td.qhstart{border-left:2px solid var(--accent)}
 <div class="wrap"><table class="hist" id="hist"></table></div></section>
 <footer class="foot">
 <span>측정 기준: 측정할 때마다 지금 저장한 버전을 재서 기록 파일에 한 줄씩 더합니다(지우지 않음). 소급 값은 과거 주별 버전 하나를 임시 복사본에서 같은 방식으로 잰 것입니다.</span>
-<span>코드 수치는 버전 관리에 올라간 파일만, 테스트와 DB 변경 파일은 코드에서 뺍니다(중복 비율도 같은 기준). 중복은 의미 있는 6줄이 같은 덩어리, "같은 이름 테스트"는 이름이 같은 테스트 파일이 있는지입니다.</span>
+<span>코드 수치는 버전 관리에 올라간 파일만, 테스트와 DB 변경 파일은 코드에서 뺍니다(중복 비율도 같은 기준). 중복은 의미 있는 ${LIMITS.duplicateLines}줄이 같은 덩어리, "같은 이름 테스트"는 이름이 같은 테스트 파일이 있는지입니다.</span>
 <span>품질 검사 작동 수치는 이 컴퓨터에 남은 "AI가 답을 끝낼 때" 기록(저장한 버전에는 안 올라감)에서 셉니다. 소급 구간에는 없습니다. 차단이 많다는 건 나쁜 게 아니라 품질 검사가 일을 했다는 뜻입니다.</span>
 </footer></main>
 <script>
@@ -83,7 +85,7 @@ const d=s.map((p,i)=>(i?'L':'M')+x(p).toFixed(1)+','+y(p).toFixed(1)).join('');
 const pts=s.map((p,i)=>'<circle class="'+(i===s.length-1?'end':'pt')+'" cx="'+x(p).toFixed(1)+'" cy="'+y(p).toFixed(1)+'" r="'+(i===s.length-1?4:3)+'"><title>'+md(p.date)+' · '+fmt(p.v)+'</title></circle>').join('');
 return'<svg class="spark" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+label+' 추이"><path class="ln" d="'+d+'"></path>'+pts+'</svg>'}
 const before=days.filter(d=>d.row.backfill==='1'||d.row.backfill===1).length;
-document.getElementById('meta').textContent='측정 이력: '+rows.length+'회'+(before?' (소급 '+before+'회)':'')+(older?' | 측정 방식이 바뀌기 전 기록 '+older+'회는 비교에서 뺌'+(before?'':' (같은 방식으로 다시 보려면 AI에게 "지난 8주도 다시 재 줘"라고 하세요)'):'')+' | 기간: '+md(days[0].date)+' ~ '+md(last.date)+' (저장한 버전 '+last.row.sha+')';
+document.getElementById('meta').textContent='측정 이력: '+rows.length+'회'+(before?' (소급 '+before+'회)':'')+(older?' | 측정 방식이 바뀌기 전 기록 '+older+'회는 비교에서 뺌'+(before?'':' (같은 방식으로 다시 보려면 AI에게 "지난 8주도 다시 재 줘"라고 하세요)'):'')+' | 기간: '+md(days[0].date)+' ~ '+md(last.date);
 // Plain first -> now numbers per metric; nothing here calls a change good or bad.
 const moved=(lo,hi)=>items.filter(([k,,,dir])=>dir==='lower'&&series(k,lo,hi).length>1).map(([k,l])=>({l,c:change(k,lo,hi)})).filter(x=>x.c.d!==0);
 const names=xs=>xs.map(x=>x.l+' '+fmt(x.c.first.v)+' → '+fmt(x.c.last.v)).join(', ');

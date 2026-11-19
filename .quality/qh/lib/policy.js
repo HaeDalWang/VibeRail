@@ -14,8 +14,7 @@ const { SECTIONS, section, seamPaths, addedLines } = require('./card');
 const DECISIONS_FILE = 'docs/decisions.md';
 const ADR_GLOB = 'docs/adr/*.md';
 // Defaults with no outside basis (docs/reference.md): a project changes them in config `limits`.
-const DEFAULT_LIMITS = { reasonChars: 5, duplicateLines: 6, duplicateLineChars: 8, architectureCards: 3, architectureDays: 7, loopTickets: 3, stopSeconds: 10 };
-const MIN_REASON_CHARS = DEFAULT_LIMITS.reasonChars;
+const DEFAULT_LIMITS = { reasonChars: 5, duplicateLines: 6, duplicateLineChars: 8, architectureCards: 3, architectureDays: 7, loopTickets: 3, stopSeconds: 10, sameBlocks: 2 };
 // ponytail: one process-wide copy, set once per run by bin/qh.js; pass limits down if a run ever serves two projects.
 const LIMITS = { ...DEFAULT_LIMITS };
 // A value that is not a positive whole number keeps the default; a missing or broken config is loadConfig's to report.
@@ -87,11 +86,14 @@ const isRealReason = (reason) => reason.length >= LIMITS.reasonChars && !/^<[^>]
 // (the same rule as a task-card declaration: the hint's placeholder or "이유" does not count).
 const isAllowedBy = (decisions, label, f) => decisions.split('\n').some((l) => {
   const at = l.indexOf(label);
-  const rest = at === -1 ? '' : l.slice(at + label.length).replace(/`/g, '');
-  const p = rest.indexOf(f);
-  if (p === -1) return false;
-  const after = rest.slice(p + f.length);
-  return isRealReason((after.includes('·') ? after.split('·')[1] : after.replace(/^[\s:：,-]+/, '')).trim());
+  if (at === -1) return false;
+  const rest = l.slice(at + label.length).replace(/`/g, '').replace(/^[\s:：]+/, '');
+  if (!rest.includes('·')) {
+    const [word = '', ...tail] = rest.split(/\s+/);
+    return word === f && isRealReason(tail.join(' ').replace(/^[\s:：,-]+/, '').trim());
+  }
+  const [named, reason = ''] = rest.split('·');
+  return named.split(',').map((x) => x.trim()).includes(f) && isRealReason(reason.trim());
 });
 const declared = (card, label) => isRealReason(declaredReason(card, label) || '');
 // What a hint shows in place of the reason, so a pasted hint is visibly unfinished.
@@ -277,4 +279,4 @@ function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPat
   return [...out, ...conflictProblems(root, changed), ...secretProblems(root, changed)];
 }
 
-module.exports = { policyProblems, secretWaivers, piiWaivers, isOwnCode, isAllowedBy, declared, declaredReason, MIN_REASON_CHARS, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, CODE_EXT, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
+module.exports = { policyProblems, secretWaivers, piiWaivers, isOwnCode, isAllowedBy, declared, declaredReason, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
