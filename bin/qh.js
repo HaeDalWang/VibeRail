@@ -628,7 +628,7 @@ function judgeStop(root, config, host) {
     stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
     // What this block shows the person counts as asked: the routes (waivers are answered on the task card).
     stopState.markAsked(root, a.undeclared);
-    require('../lib/measure').logStop(root, t);
+    if (fresh.length) require('../lib/measure').logStop(root, { aiFix: fresh, human: t.human });
     const head = fresh.length ? `qh: fix these before ending\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: could not judge because of an environment error (환경 오류).' : 'qh: checks passed.';
     return block(`${head}${askPart}${host.isOneShot ? oneShotTail(userLines(forPerson)) : ''}`, warningNote(t));
   }
