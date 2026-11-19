@@ -25,6 +25,14 @@ test('the ADR says where the Pocock and Karpathy principles come from, and the s
   for (const name of scope.replace(/^.*범위:/, '').split('.')[0].split(',').map((x) => x.trim())) assert.ok(vendored.includes(name), `${name} is in the vendored folder`);
 });
 
+test('the README says the asking-first and design-choice flow works in Claude Code only, while Kiro gets checks and hooks', () => {
+  const line = read('README.md').split('\n').find((l) => /Kiro/.test(l));
+  assert.match(line, /Claude Code/);
+  assert.match(line, /먼저 묻고/);
+  assert.match(line, /설계안/);
+  assert.match(line, /Kiro[^.]*검사[^.]*훅|훅[^.]*검사/);
+});
+
 test('qh-cycle does not claim the Karpathy principles are inside the vendored skills', () => {
   assert.doesNotMatch(read('skills/qh-cycle/SKILL.md'), /Karpathy principles in the vendored skills/);
   assert.match(read('skills/qh-cycle/SKILL.md'), /docs\/adr\/0001/);

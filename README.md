@@ -10,7 +10,7 @@
 https://github.com/HaeDalWang/VibeRail 을 ~/VibeRail 에 받고(이미 있으면 그대로 써), ~/VibeRail/INSTALL.md 를 읽고 그대로 이 프로젝트에 설치해줘.
 ```
 
-Claude Code나 Kiro에서 내 프로젝트를 연 다음에 붙여 넣으면 됩니다.
+Claude Code나 Kiro에서 내 프로젝트를 연 다음에 붙여 넣으면 됩니다. 먼저 묻고 설계안을 그림으로 보여 주는 흐름(3~4번)은 Claude Code에서만 되고, Kiro에서는 검사와 훅이 돕니다.
 
 ## 2. 이 화면이 뜨면 고르세요
 
