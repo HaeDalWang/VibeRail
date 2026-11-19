@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems, relatedTests, isRealReason, loadLimits, DECISIONS_FILE } = require('../lib/policy');
+const { policyProblems, relatedTests, isRealReason, loadLimits, LIMITS, DECISIONS_FILE } = require('../lib/policy');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
@@ -578,12 +578,10 @@ function hookInput() {
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
 // - An AI-fix item (by kind: "TDD", "검사 unit") blocks again only after the tree changed, and at
-//   most MAX_SAME_BLOCKS times in a row; another item coming or going does not reset it.
+//   most limits.sameBlocks times in a row (default 2, rationale in docs/reference.md); another item coming or going does not reset it.
 // - Questions for the person and environment errors are handed back once per distinct content.
 // What is not handed back goes to the person as a systemMessage, once per distinct content.
 // State is per agent session (lib/stop-state.js).
-// ponytail: fixed cap of 2 same-item blocks, make it config if a project needs more retries.
-const MAX_SAME_BLOCKS = 2;
 
 function hookStop(root) {
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
@@ -617,7 +615,7 @@ function judgeStop(root, config, host) {
 
   const last = stopState.readSession(root, host.session);
   const counts = last.counts || {};
-  const isGivenUp = (x) => Boolean(counts[aiFixKind(x)]) && (last.tree === a.treeHash || counts[aiFixKind(x)] >= MAX_SAME_BLOCKS);
+  const isGivenUp = (x) => Boolean(counts[aiFixKind(x)]) && (last.tree === a.treeHash || counts[aiFixKind(x)] >= LIMITS.sameBlocks);
   const fresh = t.aiFix.filter((x) => !isGivenUp(x));
   const givenUp = t.aiFix.filter(isGivenUp);
   const nextCounts = Object.fromEntries(t.aiFix.map(aiFixKind).map((k) => [k, fresh.some((x) => aiFixKind(x) === k) ? (counts[k] || 0) + 1 : counts[k]]));

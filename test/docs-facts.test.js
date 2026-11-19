@@ -33,6 +33,30 @@ test('the README says the asking-first and design-choice flow works in Claude Co
   assert.match(line, /Kiro[^.]*검사[^.]*훅|훅[^.]*검사/);
 });
 
+test('reference.md lists every command qh prints in its usage', () => {
+  const usage = fs.readFileSync(path.join(ROOT, 'bin/qh.js'), 'utf8').match(/const USAGE = `([\s\S]*?)`;/)[1];
+  const commands = [...usage.matchAll(/^ {2}(\w+)/gm)].map((m) => m[1]).filter((c) => c !== 'hook');
+  assert.ok(commands.includes('confirm') && commands.includes('review') && commands.includes('baseline'));
+  const table = read('docs/reference.md').split('## 명령')[1].split('## 측정 결과지')[0];
+  for (const c of commands) assert.ok(table.includes(`\`qh ${c}`), `qh ${c} has a row`);
+});
+
+test('reference.md has a row for every limits key and for the fixed numbers, with the 2-block rationale', () => {
+  const { DEFAULT_LIMITS } = require('../lib/policy');
+  const table = read('docs/reference.md').split('## 기본값과 근거')[1].split('## 명령')[0];
+  for (const k of Object.keys(DEFAULT_LIMITS)) assert.ok(table.includes(`limits.${k}`), `limits.${k}`);
+  for (const sec of ['90초', '300초', '900초']) assert.ok(table.includes(sec), sec);
+  assert.match(table, /같은 항목으로 연속[\s\S]*gureumi/);
+});
+
+test('the docs do not say the report judges: no 판정 지표, no 개선·악화를 매기는 지표', () => {
+  for (const f of ['docs/reference.md', 'docs/architecture.md']) assert.doesNotMatch(read(f), /판정 지표|개선·악화를 매기는/, f);
+});
+
+test('the docs say the TDD and docs rules are evidence of intent, not of correctness', () => {
+  for (const f of ['docs/reference.md', 'docs/architecture.md']) assert.match(read(f), /증거이지 .{0,12}옳은지의 증거는 아니다/, f);
+});
+
 test('qh-cycle does not claim the Karpathy principles are inside the vendored skills', () => {
   assert.doesNotMatch(read('skills/qh-cycle/SKILL.md'), /Karpathy principles in the vendored skills/);
   assert.match(read('skills/qh-cycle/SKILL.md'), /docs\/adr\/0001/);
