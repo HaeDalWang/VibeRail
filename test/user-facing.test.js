@@ -119,6 +119,17 @@ test('environment and allowed-failure sentences name the check by what it does',
   assert.match(t.env[0].user, /전체 테스트/);
 });
 
+test('pages are opened for the person and doctor failures are said in plain words, never handed over as paths or commands', () => {
+  const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
+  const cycle = fs.readFileSync(path.join(LIB, '..', 'skills/qh-cycle/SKILL.md'), 'utf8');
+  const view = fs.readFileSync(path.join(LIB, 'view.js'), 'utf8');
+  for (const [name, text] of [['ask-guide', guide], ['qh-cycle', cycle]]) assert.match(text, /open it for the person \(macOS `open`, Linux `xdg-open`\)/, name);
+  assert.match(view, /open it for the person \(macOS `open`, Linux `xdg-open`\)/);
+  assert.doesNotMatch(guide, /give the user the path|show it to the user\./i);
+  assert.match(guide, /translate each doctor failure into one plain sentence/i);
+  assert.doesNotMatch(cycle, /Give the person the path/);
+});
+
 test('the agent rules say how to write decisions, when allow lines may be written, and how to talk to the person', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
   assert.match(snippet, /`## 판단 필요`[^\n]*`- \[ \] /);
