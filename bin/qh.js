@@ -24,7 +24,7 @@ const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
 const PROBE_FILE = '.quality/probe.mjs';
-const { triage, aiFixUser, aiFixKind, criteriaWords, criteriaUser, ACCESS_FILE } = require('../lib/triage');
+const { triage, answerChangeUser, aiFixUser, aiFixKind, criteriaWords, criteriaUser, ACCESS_FILE } = require('../lib/triage');
 const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
@@ -329,12 +329,20 @@ function configChanges(root, base, config, card) {
   const asked = stopState.askedRoutes(root);
   const isAnswer = (k) => hadTable && a[k] === undefined && asked.has(k.replace(/^access\.routes\./, '').replace(/\.(level|check)$/, ''));
   const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k] && !isAnswer(k)).sort();
-  if (keys.length > MAX_LISTED_CHANGES) {
+  // `qh answer` writes choice, date and reason per question: one item per question, said by what it became.
+  const answered = [...new Set(keys.filter((k) => k.startsWith('answers.')).map((k) => k.split('.')[1]))];
+  const answerItems = answered.flatMap((id) => {
+    const choice = b[`answers.${id}.choice`]?.replaceAll('"', '');
+    const state = waivers.answerState(card, answerChangeUser(id, choice));
+    return state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root)) ? [] : [`answers.${id}: ${choice ?? '(삭제)'} (이전 ${a[`answers.${id}.choice`]?.replaceAll('"', '') ?? '(없음)'}). ${confirm}`];
+  });
+  const rest = keys.filter((k) => !k.startsWith('answers.'));
+  if (rest.length > MAX_LISTED_CHANGES) {
     // A first baseline adds hundreds of routes: one line per section, read it in the diff.
-    const sections = Map.groupBy(keys, (k) => k.split('.').slice(0, 2).join('.'));
-    return [...sections].map(([section, ks]) => `${section}: ${ks.length}개 항목 바뀜 → ${diffHint}`);
+    const sections = Map.groupBy(rest, (k) => k.split('.').slice(0, 2).join('.'));
+    return [...answerItems, ...[...sections].map(([section, ks]) => `${section}: ${ks.length}개 항목 바뀜 → ${diffHint}`)];
   }
-  return [...keys.map((k) => `${k}: ${a[k] ?? '(없음)'} → ${b[k] ?? '(삭제)'}`), ...repoTools.baselineChanges(root, base)];
+  return [...answerItems, ...rest.map((k) => `${k}: ${a[k] ?? '(없음)'} → ${b[k] ?? '(삭제)'}`), ...repoTools.baselineChanges(root, base)];
 }
 
 // Whole-repository tools take seconds to minutes; `qh pr` assesses three times on one tree.
