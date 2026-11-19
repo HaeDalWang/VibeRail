@@ -90,3 +90,16 @@ ADR 불필요: 제품 동작·구조 변경 없음, 저장소 밖 임시 폴더�
 - [x] 13 · README에 Claude Code만 명시 (사용자 선택 2026-11-19)
 - [x] 17 · 선택지 문구를 내장 검사만으로 (사용자 선택 2026-11-19)
 - 미확인: README의 결과지 캡처(report.png)에는 옛 버전 번호가 남아 있다. 다시 찍어야 한다.
+
+## 추가: 2차 수정분 새 눈 검토 지적 (2026-11-19)
+- review.cmd 자리표시가 따옴표 안에서 다른 글과 붙으면 경로가 깨짐 → 셸 따옴표 상태를 따라가며 채움 → test/shell-words.test.js
+- 분리된 HEAD에서 qh pr 통과가 기준점을 기록함 → 브랜치 위에서만 기록 → test/base-commit.test.js "a qh pr pass on a detached HEAD records no anchor"
+- 비밀값 면제 답이 개수만 같으면 바뀐 값도 덮음 → 질문에 표시된 값으로 만든 확인 번호 → test/waivers.test.js "...asked about first..."
+- 결정 로그의 기준점 기록 조건 문구를 실제 동작(qh pr 통과만)에 맞춤
+- 미확인: CI에서 기준이 얕은 clone이면 기준 확인 질문 문장이 로컬과 달라질 수 있음(추정, 재현 안 함).
+
+## 추가: 평가 중간·낮음 수정분 새 눈 검토 지적 (2026-11-19)
+- 서로 다른 주소가 같은 질문 문장이 되어 한 질문으로 합쳐짐 → 겹치면 주소를 괄호로 붙임 → test/user-facing.test.js "two routes that would read the same..."
+- 로그인 주소가 "로그인 새로 만들기"로 읽힘 → 로그인·로그아웃·가입·검색은 "하기" → 같은 테스트
+- 허용 줄에 경로 여럿(쉼표)을 쓰면 모두 안 맞음 → 쉼표로 나눠 각각 정확히 비교 → test/allow-line.test.js "several paths"
+- 그대로 둠: 모르는 주소는 괄호 안 주소로(의도한 대체), uninstall이 사용자가 직접 넣은 같은 무시 줄도 지움, 새 clone에서 코드 지도 경고(init 다시 실행 안내), CI 검사 판독의 YAML 경계 사례, doctor 실패 문장 번역은 안내 규칙에만 기댐, AGENTS 블록의 사유 글자 수는 init 때 채움.

@@ -177,3 +177,11 @@ test('the external-integration option says the network block covers the built-in
   assert.match(a.cost, /프로젝트의 테스트 명령은 막지 않는다/);
   assert.doesNotMatch(a.gain, /^테스트가 실제 서비스를 부르지 못한다/);
 });
+
+test('two routes that would read the same keep apart by address, and login-like words are actions, not things made', () => {
+  const t = triage({ ...base(), undeclared: ['GET /api/users', 'GET /api/admin/users', 'POST /api/login'] });
+  const [a, b, login] = t.human.map((x) => x.user);
+  assert.notStrictEqual(a, b, 'one question per route: the person may give them different levels');
+  assert.match(login, /"로그인 하기" 기능/);
+  assert.doesNotMatch(login, /새로 만들기/);
+});

@@ -15,3 +15,10 @@ test('an allow line without the dot separator still reads the first word as the 
   assert.strictEqual(isAllowedBy('- 중복 허용: src/a.js 외부 계약이라 따로 둔다\n', '중복 허용', 'src/a.js'), true);
   assert.strictEqual(isAllowedBy('- 중복 허용: src/a.js 외부 계약이라 따로 둔다\n', '중복 허용', 'a.js'), false);
 });
+
+test('an allow line may name several paths separated by commas, each exactly', () => {
+  const multi = '- 큰 파일 허용: a.js, src/b.js · 표 데이터라 나눌 수 없음\n';
+  assert.strictEqual(isAllowedBy(multi, '큰 파일 허용', 'a.js'), true);
+  assert.strictEqual(isAllowedBy(multi, '큰 파일 허용', 'src/b.js'), true);
+  assert.strictEqual(isAllowedBy(multi, '큰 파일 허용', 'b.js'), false);
+});
