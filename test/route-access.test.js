@@ -136,6 +136,22 @@ test('baseline records the lowest level each route lets through, and marks non-2
   assert.deepStrictEqual(r.uncertain, ['GET /items/:id']);
 });
 
+test('routes --baseline --labels stores a Korean label per level, and refuses a count that does not match', () => {
+  const { qh, repo, write } = require('./helpers');
+  const root = repo({ baseRef: 'main', checks: {} }, { 'package.json': '{"name":"t","private":true}', 'src/app.js': APP(), '.quality/probe.mjs': PROBE });
+  fs.symlinkSync(NODE_MODULES, path.join(root, 'node_modules'));
+  write(root, '.gitignore', 'node_modules/\n');
+  const bad = qh(root, ['routes', '--baseline', '--levels', 'public,member,admin', '--labels', '누구나,회원']);
+  assert.strictEqual(bad.status, 1);
+  assert.match(bad.stdout, /이름/);
+  assert.ok(!fs.existsSync(path.join(root, '.quality/access.json')));
+  const ok = qh(root, ['routes', '--baseline', '--levels', 'public,member,admin', '--labels', '누구나,회원,관리자']);
+  assert.strictEqual(ok.status, 0, ok.stderr + ok.stdout);
+  const access = JSON.parse(fs.readFileSync(path.join(root, '.quality/access.json'), 'utf8'));
+  assert.deepStrictEqual(access.labels, { public: '누구나', member: '회원', admin: '관리자' });
+  assert.deepStrictEqual(access.levels, ['public', 'member', 'admin']);
+});
+
 test('a missing probe is an environment problem, not a code failure', async () => {
   await assert.rejects(runRouteAccess(project(APP(), BASE_ACCESS, null)), (err) => err.qhEnv === true && /probe\.mjs 없음/.test(err.message));
 });

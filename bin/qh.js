@@ -18,6 +18,7 @@ const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
 const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
+const routesBaseline = require('../lib/routes-baseline');
 const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
 const QH_HOME = path.join(__dirname, '..');
@@ -28,7 +29,6 @@ const { triage, answerChangeUser, aiFixUser, aiFixKind, criteriaWords, criteriaU
 const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
-const BASELINE_EXAMPLES = 3;
 const DEFAULT_TIMEOUT_SEC = 300;
 // Stop runs built-in checks inside the host's 120-second hook limit (lib/init.js).
 const BUILTIN_TIMEOUT_SEC = 90;
@@ -419,6 +419,7 @@ function assess(root, phase = 'stop', baseRef) {
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],
+    accessLabels: readJsonAt(root, null, ACCESS_FILE).labels,
     configChanges: criteria,
     criteria: { isFirstInstall: !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]), summary: criteriaSummary(root, config) },
     review: reviewStatus(root, now, config),
@@ -648,26 +649,19 @@ function cmdRoutesBaseline(root, args) {
     console.log(`${ACCESS_FILE}이 이미 있다. 사람이 정한 내용이 지워지니 덮어쓰지 않는다 (다시 만들려면 파일을 직접 옮긴 뒤 실행).`);
     return EXIT.failed;
   }
-  const levelsArg = args.includes('--levels') ? args[args.indexOf('--levels') + 1] : null;
-  if (!levelsArg) {
-    console.log('사용: qh routes --baseline --levels public,member,admin  (낮은 수준부터, 첫 수준은 비로그인)');
+  const given = routesBaseline.parseOptions(args);
+  if (given.error) {
+    console.log(given.error);
     return EXIT.failed;
   }
+  const { levels, labels } = given;
   const runner = path.join(QH_HOME, 'lib', 'run-builtin.js');
-  const opts = JSON.stringify({ baseline: true, levels: levelsArg.split(',') });
+  const opts = JSON.stringify({ baseline: true, levels });
   const r = spawnSync(process.execPath, [runner, 'route-access', root, opts], { cwd: root, encoding: 'utf8', maxBuffer: MAX_BUFFER, timeout: DEFAULT_TIMEOUT_SEC * 1000 });
   const result = parseJson(r.stdout);
   if (!result?.baseline) throw new EnvError(`기준선을 만들지 못함: ${result?.envError || result?.error || (r.stderr || '').trim().split('\n')[0]}`);
-  fs.writeFileSync(path.join(root, ACCESS_FILE), `${JSON.stringify(result.baseline, null, 2)}\n`);
-  const total = Object.keys(result.baseline.routes).length;
-  console.log(`${ACCESS_FILE}: 라우트 ${total}개를 현재 동작으로 기록. 사람이 확인할 추정 ${result.uncertain.length}개("check" 표시):`);
-  const byReason = Map.groupBy(result.uncertain, (route) => result.baseline.routes[route].check);
-  for (const [reason, routes] of [...byReason].sort((a, b) => b[1].length - a[1].length)) {
-    const more = routes.length > BASELINE_EXAMPLES ? ` 외 ${routes.length - BASELINE_EXAMPLES}개` : '';
-    console.log(`  - ${reason}: ${routes.length}개 (${routes.slice(0, BASELINE_EXAMPLES).join(', ')}${more})`);
-  }
-  console.log('"X에서 4xx/5xx"는 X가 거부되지 않았다는 뜻일 뿐, 그 뒤 역할 검사가 있는지는 모른다. 해당 라우트를 보고 수준을 고치고 check를 지운다.');
-  console.log('현재 동작이라 기존 버그도 들어 있다. 커밋 전에 사람이 한 번 훑는다.');
+  fs.writeFileSync(path.join(root, ACCESS_FILE), `${JSON.stringify({ levels: result.baseline.levels, labels, routes: result.baseline.routes }, null, 2)}\n`);
+  console.log(routesBaseline.reportLines(ACCESS_FILE, result).join('\n'));
   return EXIT.ok;
 }
 
@@ -709,7 +703,7 @@ const USAGE = `사용: qh <명령>
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
   status [--json] [--pr] [--base ref]  상태표 (--pr: PR 기준, --base: config.baseRef 대신 비교할 ref)
-  routes --baseline --levels a,b,c  현재 동작으로 권한 표 첫 버전 만들기
+  routes --baseline --levels a,b,c [--labels 이름,이름,이름]  현재 동작으로 권한 표 첫 버전 만들기
   uninstall            qh가 init으로 더한 것(복사본·hook·규칙 블록·skill)을 걷어내고 사용자의 내용은 둠
   confirm              사용자가 지금 품질 기준(설정·권한 표)을 확인했다고 결정 로그에 기록 (바뀌면 다시 물음)
   baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록

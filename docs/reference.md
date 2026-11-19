@@ -97,7 +97,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh check [이름…] [--pr]` | 필요한 검사 실행. `--pr`은 올리기 직전에만 도는 검사까지 돌린다 |
 | `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다. `--pr`은 PR이 막힐 문제가 남아 있으면 0이 아닌 값으로 끝난다(AI 리뷰는 돌리지 않음). CI는 `qh check --pr` 다음 이것을 돈다 |
 | `qh pr` | PR 직전 판정 (검사 전부 + 점검 + AI 리뷰) |
-| `qh routes --baseline --levels a,b,c` | 지금 앱 동작으로 권한 표 첫 버전 만들기 |
+| `qh routes --baseline --levels a,b,c --labels 이름,이름,이름` | 지금 앱 동작으로 권한 표 첫 버전 만들기. `--labels`는 수준마다 사용자에게 보여 줄 한국어 이름(권한 표의 `labels`에 저장, 없으면 수준 이름을 그대로 보여 줌) |
 | `qh measure [--backfill 주]` | 지금 상태를 재서 `.quality/metrics.csv`에 한 줄 더하고 결과지(HTML)를 `.quality/reports/날짜-커밋.html`로 쌓는다. `--backfill 8`은 지난 8주를 소급해 qh 전 흐름도 남긴다 |
 
 ## 측정 결과지

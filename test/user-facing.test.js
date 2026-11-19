@@ -76,14 +76,21 @@ test('every kind of item the agent gives up on has a plain sentence for the pers
   assert.match(sentences[13], /바뀐 코드의 테스트/, 'a failing check is named by what it does');
 });
 
-test('a route question names the address and the levels of this project, one sentence per route', () => {
-  const t = triage({ ...base(), undeclared: ['GET /admin/users', 'GET /admin/stats'], accessLevels: ['public', 'admin'] });
-  const [users, stats] = t.human.map((x) => x.user);
-  assert.match(users, /\/admin\/users/);
-  assert.match(stats, /\/admin\/stats/);
-  assert.match(users, /public, admin/);
-  assert.doesNotMatch(users, /로그인한 회원만/);
-  assert.doesNotMatch(users.replace('/admin/users', ''), DEVELOPER_WORDS, users);
+test('a route question says what the route does and names the levels in Korean, with no address or level id', () => {
+  const access = { accessLevels: ['public', 'member', 'admin'], accessLabels: { public: '누구나', member: '회원', admin: '관리자' } };
+  const t = triage({ ...base(), undeclared: ['GET /api/users/:id', 'DELETE /api/orders/:id'], ...access });
+  const [info, del] = t.human.map((x) => x.user);
+  assert.match(info, /사용자 정보 보기/);
+  assert.match(del, /주문 지우기/);
+  assert.match(info, /누구나, 회원, 관리자/);
+  for (const s of [info, del]) assert.doesNotMatch(s, /\/|public|member|admin|api/, s);
+});
+
+test('a route whose purpose cannot be derived is named as a new feature with the address in parentheses', () => {
+  const t = triage({ ...base(), undeclared: ['GET /zzqx'], accessLevels: ['public', 'admin'] });
+  const [s] = t.human.map((x) => x.user);
+  assert.match(s, /^새로 생긴 기능\(주소 "\/zzqx"\)/);
+  assert.match(s, /public, admin/, 'without labels the level ids are shown, as before');
 });
 
 test('a route qh asked the person about and then placed in the existing access table is not asked about again', () => {
