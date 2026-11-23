@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { repo, write, qh, BASIC } = require('./helpers');
+const { load } = require('./mini-dom');
 
 const OPTIONS = {
   title: '주문 묶기',
@@ -185,8 +186,27 @@ test('an option\'s questions show inside that option\'s card only, after its des
   assert.ok(b.includes('품목 수 상한은?'));
   assert.ok(b.indexOf('품목 수 상한은?') > b.indexOf('작게 나뉜다') && b.indexOf('품목 수 상한은?') < b.indexOf('<textarea'), 'after the description, before the reason');
   assert.strictEqual(html.slice(0, html.indexOf('<article')).includes('품목 수 상한은?'), false, 'not among the common questions');
-  const scriptAt = html.indexOf('answers(document.querySelector(\'section.common\')).concat(answers(a))');
-  assert.ok(scriptAt > 0, 'the copy asks the common questions, then only the picked card\'s questions');
+});
+
+test('clicking a pick: unanswered questions are named, other options\' questions are ignored, 기타 is one line', async () => {
+  const json = { ...OPTIONS, questions: [Q_KEEP], options: [OPTIONS.options[0], { ...OPTIONS.options[1], questions: [Q_NAME] }] };
+  const { document, copied } = load(view(level('A'), json).html);
+  const [a, b] = document.querySelectorAll('article');
+  const pick = async (card, reason) => {
+    card.querySelector('textarea').value = reason;
+    await card.querySelector('button').onclick();
+    return card.querySelector('.msg').textContent;
+  };
+  assert.match(await pick(b, '작게 나뉘어서'), /먼저 답해 주세요: 옛 주문 형식도 계속 읽을까요\? \/ 이름 <규칙>은\?/);
+  assert.strictEqual(copied.length, 0);
+  document.querySelector('section.common').querySelector('input[value=예]').checked = true;
+  b.querySelector('input[data-other]').checked = true;
+  b.querySelector('input[type=text]').value = '  한국어로 \n 하되 ';
+  assert.match(await pick(b, '작게 나뉘어서'), /복사됨/);
+  assert.strictEqual(copied.pop(), '안: B\n이유: 작게 나뉘어서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예\n- [x] 이름 <규칙>은? · 한국어로 하되');
+  assert.match(await pick(a, '호출이 단순해서'), /복사됨/, 'B\'s question is not asked when A is picked');
+  assert.strictEqual(copied.pop(), '안: A\n이유: 호출이 단순해서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예');
+  assert.match(await pick(a, '짧음'), /5자 이상/);
 });
 
 test('the same question in the common list and an option is rejected; the same question in two options is fine', () => {

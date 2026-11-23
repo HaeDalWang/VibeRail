@@ -38,7 +38,7 @@ test/view.test.js
 - 아키텍처 점검 화면도 같음 → "the architecture page shows common and per-candidate questions…"
 - 순환 안내에 JSON 모양 → test/init-skills.test.js "qh-cycle tells the agent the optional questions shape…"
 - 질문 없는 화면은 그대로 → 기존 view 테스트 전부 통과
-- 브라우저에서 실제 클릭 흐름(미답 막기·다른 안 질문 무시·기타 한 줄) → playwright 헤드리스로 확인함(2026-11-23, 자동 테스트 아님)
+- 클릭 흐름(미답 막기·다른 안 질문 무시·기타 한 줄) → test/view.test.js "clicking a pick…" (test/mini-dom.js로 화면 스크립트 실행, 일부러 망가뜨린 두 경우를 잡는 것 확인)
 
 ## 판단 필요
 - [x] 설계안 화면에 질문을 어디에 둘까요? · 안마다 + 화면 공통
@@ -49,6 +49,12 @@ test/view.test.js
 - [x] 질문에 답하지 않고 복사를 누르면? · 막고 빠진 질문 알려줌
 
 ## 미확인
-- 브라우저 클릭 흐름은 자동 테스트가 아니다(DOM 도구 없음). 손으로 한 번 확인함.
+- mini-dom은 qh view가 쓰는 HTML만 읽는다. 실제 브라우저와 다른 점(라디오 하나만 체크 등)은 손 확인(playwright, 2026-11-23)으로만 봄.
 
 ADR 불필요: 화면 JSON에 선택 항목 하나 추가, 구조 변경 없음
+
+## 회고 (2026-11-23)
+- [x] 회고에서 나온 개선 후보 중 어느 것을 적용할까요? · 1. 화면 클릭 흐름 자동 테스트, 2. 개발 중 화면은 작업본으로
+- 1 → test/mini-dom.js + view 클릭 흐름 테스트, 코드 글자를 찾던 테스트 줄 삭제
+- 2 → CLAUDE.local.md 한 줄(로컬 전용)
+- 3 커밋마다 코드 지도 출력 줄이기: 사용자가 고르지 않음
