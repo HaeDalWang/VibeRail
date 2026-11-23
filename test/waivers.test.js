@@ -74,7 +74,10 @@ test('a secret marked fake with the allow marker is asked about first; the agent
   write(root, 'src/a.test.js', `const t = '${key}' // qh:allow-secret 테스트용 가짜\n`);
   stop(root);
   assert.strictEqual(statusJson(root).waivers.length, 1, 'shown is not answered');
-  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] ${q} · 가짜가 맞습니다\n`);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] ${q} · 아니요, 운영 키예요\n`);
+  const [no] = statusJson(root).waivers;
+  assert.match(no?.agent || '', /사용자가 "아니요, 운영 키예요"라고 답했다/, 'a no is not an approval');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [x] ${q} · 네, 가짜예요\n`);
   assert.deepStrictEqual(statusJson(root).waivers, []);
   write(root, 'src/a.test.js', `const t = 'ghp_${'b'.repeat(36)}' // qh:allow-secret 테스트용 가짜\n`);
   assert.strictEqual(statusJson(root).waivers.length, 1, 'an answer covers the values it was asked about, not a swapped one');
