@@ -1,0 +1,25 @@
+{
+  "title": "확인 번호 — 어디에 넣을까",
+  "options": [
+    {
+      "id": "A",
+      "name": "확인 번호 전용 모듈 하나",
+      "summary": "새 모듈 하나가 확인 번호 계산, 예전 내용 찾기, 다시 물을 질문 만들기를 모두 맡는다. qh 검사와 완료 리뷰 화면은 이 모듈에 한 번씩 묻기만 한다.",
+      "mermaid": "flowchart LR\n  V[설계안 화면] -->|번호 넣어 복사| C[작업 카드]\n  C --> M[확인 번호 모듈]\n  F[설계안 파일·명세] --> M\n  G[git 기록] -->|예전 내용| M\n  M -->|다시 물을 질문| Q[qh 검사: 응답 끝·PR 전 막음]\n  M -->|바뀐 줄| R[완료 리뷰 화면]",
+      "gain": "확인 번호에 관한 규칙이 한곳에 모인다. 나중에 '무엇을 바뀐 것으로 볼지'를 고칠 때 이 모듈만 보면 된다. 기존 면제 질문 코드는 그대로.",
+      "cost": "새 파일 하나와 qh 검사에 한 줄이 는다(그 파일은 한도 800줄 중 794줄). 질문을 모으는 곳이 두 군데(기존 면제 질문 + 확인 번호)가 된다.",
+      "signature": "lib/confirm.js\n  confirmNumber(text) → '1234'  // 공백·줄바꿈 접은 뒤 해시, 4자리\n  optionNumber(option) → '1234'  // 고른 안의 칸만\n  pendingConfirms(root, { card }) → [{ agent, user, changes }]\n    // changes: { kind: 'option'|'spec', lines: [...] | null(예전 내용 못 찾음) }\nview.js: 각 안 카드에 data-number, 복사 글 '안: B · 확인 번호 1234'\nqh.js gather: waivers: [...pendingWaivers(...), ...pendingConfirms(...)]\nreview-page.js: pendingConfirms 결과로 '고른 안'·'남은 판단'에 바뀐 줄",
+      "seam": "test/confirm.test.js (번호·질문·바뀐 줄)\ntest/view.test.js (복사 글에 번호)\ntest/review-page.test.js (바뀐 줄 표시)"
+    },
+    {
+      "id": "B",
+      "name": "기존 면제 질문에 끼워 넣기",
+      "summary": "사람에게 다시 물을 질문을 이미 모으는 곳(면제 질문)에 확인 번호 질문 두 가지를 더한다. qh 검사 쪽은 손대지 않는다. 바뀐 줄 찾기만 작은 도우미로 뺀다.",
+      "mermaid": "flowchart LR\n  V[설계안 화면] -->|번호 넣어 복사| C[작업 카드]\n  C --> W[면제 질문 모듈<br/>+ 확인 번호 질문]\n  F[설계안 파일·명세] --> W\n  W --> D[바뀐 줄 도우미]\n  G[git 기록] --> D\n  W -->|다시 물을 질문| Q[qh 검사: 응답 끝·PR 전 막음]\n  W -->|바뀐 줄| R[완료 리뷰 화면]",
+      "gain": "사람에게 물을 질문이 원래대로 한곳에서 나온다. qh 검사 코드는 바뀌지 않는다. 비밀값 확인 번호(이미 있음)와 같은 방식이라 읽기 쉽다.",
+      "cost": "면제 질문 모듈이 76줄에서 두 배쯤 커지고, '면제'가 아닌 '다시 확인'까지 맡게 되어 이름과 하는 일이 조금 어긋난다.",
+      "signature": "lib/waivers.js\n  pendingWaivers(root, { card, changed }) → [{ agent, user, changes? }]  // 확인 번호 질문 2가지 추가\n  contentNumber(text) → '1234'  // valuesCode 일반화\nlib/content-diff.js\n  previousVersion(root, file, number, pick) → text | null  // git log를 거슬러 번호가 맞는 판\nview.js: 복사 글 '안: B · 확인 번호 1234'\nreview-page.js: pendingWaivers 결과의 changes로 바뀐 줄",
+      "seam": "test/waivers.test.js (번호·질문)\ntest/view.test.js (복사 글에 번호)\ntest/review-page.test.js (바뀐 줄 표시)"
+    }
+  ]
+}
