@@ -79,6 +79,14 @@ test('D19-b: with seams in the card, TDD is judged at the seam paths', () => {
   assert.doesNotMatch(policyOf(root), /TDD/, 'a test named for the seam satisfies it');
 });
 
+test('a line in the seam section that is not a path (a stray `명세:` link) is named for the agent to move', () => {
+  const root = repo(BASIC);
+  card(root, `${GRILLED}## 테스트 위치(seam)\ntest/a.test.js\n\n명세: .scratch/f/spec.md\n\n## 판단 필요\n- 없음\n`);
+  assert.match(policyOf(root), /작업 카드: [^\n]*테스트 위치[^\n]*경로가 아닌 줄[^\n]*"명세: \.scratch\/f\/spec\.md"/);
+  card(root, `${GRILLED}## 테스트 위치(seam)\n- \`test/a.test.js\`\n- test/not-yet-written.test.js\n\n## 판단 필요\n- 없음\n`);
+  assert.doesNotMatch(policyOf(root), /경로가 아닌 줄/, 'a seam file not written yet is fine');
+});
+
 test('D19-b: a test under the seam folder satisfies it; no seam section keeps the package rule', () => {
   const root = repo(BASIC, { 'package.json': '{}', 'src/orders/index.js': '1', 'src/orders/orders.spec.js': '1', 'test/other.test.js': '1' });
   card(root, `${GRILLED}## 테스트 위치(seam)\n\`src/orders/\`\n\n문서 영향 없음: 사용자에게 안 보임\n`);
