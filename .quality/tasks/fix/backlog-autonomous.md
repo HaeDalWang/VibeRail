@@ -16,6 +16,8 @@
 - R6·R7 리뷰어가 카드·명세를 받고 커밋 메시지는 안 받음, 점검표에 거짓 테스트 → test/qh.test.js
 - R12 한 번 잰 지표에 이전 값 없음, 요약이 주요 지표라고 밝힘 → test/measure-page.test.js
 - R12 390px에서 값 열 보임 → playwright-cli로 확인(표 폭 356px, 이름·변화·값 보임)
+- R16 하위 폴더(backend/)의 express·DB 감지 → test/init-detect.test.js
+- R16 코드 지도에서 qh 사본·가져온 스킬 제외(중복 없이) → test/init-gitignore.test.js
 - 기존 동작 유지 → npm test 전체
 
 ## 판단 필요
