@@ -25,6 +25,9 @@ test/view.test.js
 작업: .scratch/view-questions/issues/ (01 공통 질문 → 02 안마다 질문 → 03 아키텍처 화면)
 
 ## 루프
+.scratch/view-questions/issues/01-common-questions.md
+.scratch/view-questions/issues/02-option-questions.md
+.scratch/view-questions/issues/03-architecture-questions.md
 
 ## 성공 조건 → 검사
 

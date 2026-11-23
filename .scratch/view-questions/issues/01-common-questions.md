@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] Common questions render above the options, escaped, with the recommended mark and "기타"
-- [ ] The pure copy function returns pick, reason and answer lines; a free-text answer is collapsed to one line
-- [ ] The pure copy function reports missing common questions; a short reason still returns null
-- [ ] Malformed questions are rejected with Korean messages and no page is written
-- [ ] The success message tells the agent where the answer lines go
-- [ ] Existing view tests still pass unchanged
+- [x] Common questions render above the options, escaped, with the recommended mark and "기타"
+- [x] The pure copy function returns pick, reason and answer lines; a free-text answer is collapsed to one line
+- [x] The pure copy function reports missing common questions; a short reason still returns null
+- [x] Malformed questions are rejected with Korean messages and no page is written
+- [x] The success message tells the agent where the answer lines go
+- [x] Existing view tests still pass unchanged

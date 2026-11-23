@@ -121,6 +121,73 @@ test('the interface page says the person may just tell the AI their pick instead
   assert.match(r.stdout, /채팅으로 말해도/, 'the agent accepts a pick said in chat');
 });
 
+// ---------- questions beside the options ----------
+
+const Q_KEEP = { text: '옛 주문 형식도 계속 읽을까요?', choices: ['예', '아니요'], recommended: '예' };
+const Q_NAME = { text: '이름 <규칙>은?', choices: ['영어', '한국어', '섞어서'] };
+const WITH_COMMON = { ...OPTIONS, questions: [Q_KEEP, Q_NAME] };
+const pureOf = (html) => {
+  const ctx = {};
+  vm.runInNewContext(html.match(/<script id="pure">([\s\S]*?)<\/script>/)[1], ctx);
+  return ctx;
+};
+
+test('common questions show once above the options, escaped, with the recommended choice marked and a free-text 기타', () => {
+  const { html } = view(level('A'), WITH_COMMON);
+  const top = html.slice(0, html.indexOf('<article'));
+  assert.ok(top.includes('옛 주문 형식도 계속 읽을까요?'), 'common question above the first option');
+  assert.ok(top.includes('이름 &lt;규칙&gt;은?'), 'escaped');
+  assert.doesNotMatch(html, /<규칙>/);
+  assert.strictEqual(html.match(/옛 주문 형식도 계속 읽을까요\?/g).length, 2, 'shown once, kept once as the line the copy carries');
+  assert.strictEqual(top.match(/type="radio"/g).length, 2 + 1 + 3 + 1, 'each choice plus 기타 per question');
+  assert.strictEqual(top.match(/추천/g).length, 1, 'only the recommended choice is marked');
+  assert.strictEqual(top.match(/기타/g).length, 2);
+  assert.strictEqual(top.match(/type="text"/g).length, 2, 'a free-text box per question');
+});
+
+test('the copy carries one card-ready line per common answer and names the unanswered questions', () => {
+  const { decision } = pureOf(view(level('A'), WITH_COMMON).html);
+  assert.strictEqual(
+    decision('B', '호출이 단순해서', [[Q_KEEP.text, '예'], [Q_NAME.text, '  한국어로   하되\n 약어는 영어 ']]),
+    '안: B\n이유: 호출이 단순해서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예\n- [x] 이름 <규칙>은? · 한국어로 하되 약어는 영어',
+  );
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(decision('B', '호출이 단순해서', [[Q_KEEP.text, ''], [Q_NAME.text, '  ']]))), { missing: [Q_KEEP.text, Q_NAME.text] });
+  assert.strictEqual(decision('B', '짧음', [[Q_KEEP.text, '']]), null, 'a short reason is refused first');
+  assert.strictEqual(decision('B', '호출이 단순해서', []), '안: B\n이유: 호출이 단순해서');
+});
+
+test('a malformed question writes no page and says what to fix', () => {
+  const root = repo(BASIC);
+  const bad = (q, re) => {
+    write(root, 'q.json', JSON.stringify({ ...OPTIONS, questions: [q] }));
+    const r = qh(root, ['view', 'interface', 'q.json']);
+    assert.strictEqual(r.status, 1, JSON.stringify(q));
+    assert.match(r.stdout, re);
+  };
+  bad({ choices: ['예', '아니요'] }, /1번째 공통 질문[^\n]*text/);
+  bad({ text: '두 줄\n질문', choices: ['예', '아니요'] }, /1번째 공통 질문[^\n]*한 줄/);
+  bad({ text: 'q', choices: ['예'] }, /1번째 공통 질문[^\n]*2~4개/);
+  bad({ text: 'q', choices: ['1', '2', '3', '4', '5'] }, /1번째 공통 질문[^\n]*2~4개/);
+  bad({ text: 'q', choices: ['예', 7] }, /1번째 공통 질문[^\n]*2~4개/);
+  bad({ text: 'q', choices: ['예', '아니요'], recommended: '모름' }, /1번째 공통 질문[^\n]*추천/);
+  write(root, 'q.json', JSON.stringify({ ...OPTIONS, questions: [Q_KEEP, Q_KEEP] }));
+  assert.match(qh(root, ['view', 'interface', 'q.json']).stdout, /같은 질문이 두 번/);
+  write(root, 'q.json', JSON.stringify({ ...OPTIONS, questions: 'q' }));
+  assert.match(qh(root, ['view', 'interface', 'q.json']).stdout, /questions는 목록/);
+  assert.strictEqual(fs.existsSync(path.join(root, '.quality/reports')), false);
+});
+
+test('the agent is told to write the copied answer lines under 판단 필요 unchanged', () => {
+  const { r } = view(level('A'), WITH_COMMON);
+  assert.match(r.stdout, /## 판단 필요/);
+  assert.match(r.stdout, /- \[x\]/);
+});
+
+test('a page without questions has no question boxes', () => {
+  const { html } = view(level('A'));
+  assert.doesNotMatch(html, /type="radio"/);
+});
+
 // ---------- architecture candidates ----------
 
 const CANDIDATES = {
