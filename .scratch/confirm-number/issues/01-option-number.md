@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] The copied pick line carries the option's number
-- [ ] Whitespace-only edits to the picked option ask nothing; edits to an unpicked option ask nothing
-- [ ] A field edit to the picked option asks the changed sentence; an answered line settles it; a second edit asks again
-- [ ] A pick line without a number asks the unbound sentence once
-- [ ] No design link, a missing file or a missing id asks nothing
-- [ ] The question blocks the Stop hook through the existing question list
+- [x] The copied pick line carries the option's number
+- [x] Whitespace-only edits to the picked option ask nothing; edits to an unpicked option ask nothing
+- [x] A field edit to the picked option asks the changed sentence; an answered line settles it; a second edit asks again
+- [x] A pick line without a number asks the unbound sentence once
+- [x] No design link, a missing file or a missing id asks nothing
+- [x] The question blocks the Stop hook through the existing question list

@@ -414,7 +414,7 @@ function assess(root, phase = 'stop', baseRef) {
     structureWarnings: shape.warnings,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: taskDecisions(card.text),
-    waivers: waivers.pendingWaivers(root, { card: card.text, changed }),
+    waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...require('../lib/confirm').pendingConfirms(root, { card: card.text })],
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],

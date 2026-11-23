@@ -203,9 +203,9 @@ test('clicking a pick: unanswered questions are named, other options\' questions
   b.querySelector('input[data-other]').checked = true;
   b.querySelector('input[type=text]').value = '  한국어로 \n 하되 ';
   assert.match(await pick(b, '작게 나뉘어서'), /복사됨/);
-  assert.strictEqual(copied.pop(), '안: B\n이유: 작게 나뉘어서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예\n- [x] 이름 <규칙>은? · 한국어로 하되');
+  assert.strictEqual(copied.pop().replace(/ · 확인 번호 \d{4}\n/, '\n'), '안: B\n이유: 작게 나뉘어서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예\n- [x] 이름 <규칙>은? · 한국어로 하되');
   assert.match(await pick(a, '호출이 단순해서'), /복사됨/, 'B\'s question is not asked when A is picked');
-  assert.strictEqual(copied.pop(), '안: A\n이유: 호출이 단순해서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예');
+  assert.strictEqual(copied.pop().replace(/ · 확인 번호 \d{4}\n/, '\n'), '안: A\n이유: 호출이 단순해서\n- [x] 옛 주문 형식도 계속 읽을까요? · 예');
   assert.match(await pick(a, '짧음'), /5자 이상/);
 });
 
@@ -325,4 +325,22 @@ test('the architecture page shows common and per-candidate questions with the sa
   assert.match(qh(root, ['view', 'architecture', 'c.json']).stdout, /같은 질문이 두 번 있다/);
   write(root, 'c.json', JSON.stringify({ ...CANDIDATES, questions: [{ text: 'q', choices: ['예', '아니요'], recommended: '모름' }] }));
   assert.match(qh(root, ['view', 'architecture', 'c.json']).stdout, /공통 1번째 질문[^\n]*추천/);
+});
+
+// ---------- confirmation number (backlog 3) ----------
+
+const pickOf = (html, id) => {
+  const number = html.match(new RegExp(`<article data-id="${id}" data-number="(\\d{4})"`))[1];
+  return pureOf(html).decision(id, '호출이 단순해서', [], number).split('\n')[0];
+};
+
+test("the copied pick line carries the option's confirmation number", () => {
+  const { html } = view(level('A'));
+  const a = pickOf(html, 'A');
+  assert.match(a, /^안: A · 확인 번호 \d{4}$/);
+  assert.notStrictEqual(a.slice(-4), pickOf(html, 'B').slice(-4), 'different options, different numbers');
+  const spaced = { ...OPTIONS, options: [{ ...OPTIONS.options[0], gain: '  호출이\n   단순 ' }, OPTIONS.options[1]] };
+  assert.strictEqual(pickOf(view(level('A'), spaced).html, 'A'), a, 'whitespace does not change the number');
+  const edited = { ...OPTIONS, options: [{ ...OPTIONS.options[0], gain: '호출이 단순하다' }, OPTIONS.options[1]] };
+  assert.notStrictEqual(pickOf(view(level('A'), edited).html, 'A'), a, 'a changed field changes the number');
 });
