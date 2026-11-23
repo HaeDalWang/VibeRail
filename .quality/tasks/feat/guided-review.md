@@ -21,6 +21,8 @@
 ## 테스트 위치(seam)
 test/review-page.test.js
 
+명세: .scratch/guided-review/spec.md
+
 ## 루프
 
 ## 성공 조건 → 검사
