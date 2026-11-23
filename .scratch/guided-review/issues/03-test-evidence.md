@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] 통과, 실패 and 찾지 못함 each shown for a matching condition line
-- [ ] A name cut with "…" matches on its prefix
-- [ ] Stale warning when the test record's tree differs from the current tree
-- [ ] No-record warning when there is no test evidence
+- [x] 통과, 실패 and 찾지 못함 each shown for a matching condition line
+- [x] A name cut with "…" matches on its prefix
+- [x] Stale warning when the test record's tree differs from the current tree
+- [x] No-record warning when there is no test evidence

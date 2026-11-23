@@ -149,3 +149,42 @@ test('signature and seam of the picked option show only on level B', () => {
   assert.match(step, /f\(x\)/);
   assert.match(step, /test\/x\.js/);
 });
+
+const LOG_CMD = `node -e "console.log('✔ 마감일을 저장한다 (3ms)'); console.log('  ✖ 마감일이 지나면 빨갛게 보인다 (2ms)')"`;
+const CRITERIA = `${CARD}
+## 성공 조건 → 검사
+- 저장된다 → test/a.test.js "마감일을 저장한다"
+- 지나면 빨갛다 → test/a.test.js "마감일이 지나면…"
+- 정렬된다 → test/a.test.js "마감일 순으로 정렬한다"
+- 손으로 확인한다
+`;
+
+function evidenced({ run = true, touch = false } = {}) {
+  const root = repo({ ...BASIC, checks: { unit: { cmd: LOG_CMD } }, review: resultCmd([]) });
+  write(root, '.quality/tasks/work.md', CRITERIA);
+  if (run) qh(root, ['check', 'unit']);
+  if (touch) write(root, 'src/a.js', '3');
+  qh(root, ['review']);
+  const html = fs.readFileSync(path.join(root, PAGE), 'utf8');
+  return html.slice(html.indexOf('<h2>테스트 증거'), html.indexOf('<h2>리뷰 지적'));
+}
+
+const stateOfLine = (step, desc) => step.split('<li>').find((l) => l.includes(desc));
+
+test('each success condition shows 통과, 실패 or 찾지 못함 from the last test log', () => {
+  const step = evidenced();
+  assert.match(stateOfLine(step, '저장된다'), /통과/);
+  assert.match(stateOfLine(step, '지나면 빨갛다'), /실패/);
+  assert.match(stateOfLine(step, '정렬된다'), /찾지 못함/);
+  assert.match(stateOfLine(step, '손으로 확인한다'), /찾지 못함/);
+  assert.match(step, /출처: \.quality\/evidence\/unit\.log/);
+  assert.doesNotMatch(step, /오래된|기록이 없다/);
+});
+
+test('a test record older than the current code shows a stale warning', () => {
+  assert.match(evidenced({ touch: true }), /지금 코드보다 오래된 기록/);
+});
+
+test('no test record at all shows a no-record warning', () => {
+  assert.match(evidenced({ run: false }), /테스트 기록이 없다/);
+});
