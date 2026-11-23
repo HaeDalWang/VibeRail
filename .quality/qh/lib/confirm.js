@@ -9,7 +9,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { section, SECTIONS } = require('./card');
+const { section, decisions, SECTIONS } = require('./card');
 
 const flat = (v) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v)).replace(/\s+/g, ' ').trim();
 
@@ -89,8 +89,8 @@ const NOT_FOUND = '예전 내용을 찾지 못했습니다. 지금 내용 전체
 
 // The numbers the person approved in answered `- [x] <sentence> · <answer>` lines starting with `head`, oldest first.
 // Each sentence ends with the number it binds: "(확인 번호 <old> → <new>)" or "(확인 번호 <new>)".
-const approvedNumbers = (card, head) => cardLines(card, '판단 필요')
-  .filter((l) => l.startsWith(`- [x] ${head}`) && / · \S/.test(l))
+const approvedNumbers = (card, head) => decisions(card).answered
+  .filter((t) => t.startsWith(head) && / · \S/.test(t))
   .map((l) => (l.match(/확인 번호 (?:\d{4} → )?(\d{4})\)/) || [])[1])
   .filter(Boolean);
 
@@ -132,8 +132,8 @@ function specConfirm(root, card) {
 // Questions still owed to the person: [{ agent, user, changes }] (the shape of pendingWaivers, plus changes).
 // A question the card already holds as an open `- [ ]` line is an open decision there, not a second question.
 const pendingConfirms = (root, { card }) => {
-  const open = new Set(cardLines(card, '판단 필요'));
-  return [...optionConfirm(root, card), ...specConfirm(root, card)].filter((q) => !open.has(`- [ ] ${q.user}`));
+  const { open } = decisions(card);
+  return [...optionConfirm(root, card), ...specConfirm(root, card)].filter((q) => !open.includes(q.user));
 };
 
 module.exports = { confirmNumber, optionNumber, pickedOption, pendingConfirms };

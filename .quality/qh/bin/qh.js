@@ -18,6 +18,7 @@ const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
 const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
+const { answerState, decisions } = require('../lib/card');
 const routesBaseline = require('../lib/routes-baseline');
 const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
@@ -279,13 +280,9 @@ function taskCard(root) {
   return { rel, text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
 }
 
-const decisionSection = (text) => text.split(/^## /m).find((s) => s.startsWith('판단 필요')) || '';
-const taskDecisions = (text) => [...decisionSection(text).matchAll(/^- \[ \] (.+)$/gm)].map((m) => m[1].trim());
-const NOTHING = /^\(?(없음|없다|none|n\/a)\)?\.?$/i;
-
 // Only `- [ ] ` items reach the person; a plain list item there would be silently skipped.
 function cardFormatProblems(card) {
-  const plain = [...decisionSection(card.text).matchAll(/^[-*+]\s+(?!\[[ xX]\])(.+)$/gm)].map((m) => m[1].trim()).filter((x) => !NOTHING.test(x));
+  const { plain } = decisions(card.text);
   if (!plain.length) return [];
   return [`작업 카드: ${card.rel} \`## 판단 필요\`에 체크박스 없는 항목이 있어 사람 확인으로 잡히지 않는다 → 사람이 정할 것이면 \`- [ ] 항목\`으로 바꿔 사용자에게 묻고, 아니면 다른 절로 옮긴다: ${plain.map((x) => `"${x}"`).join(', ')}`];
 }
@@ -315,7 +312,7 @@ const criteriaSummary = (root, config) => criteriaWords(config, Object.keys(read
 function configChanges(root, base, config, card) {
   const isFirstInstall = !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]);
   // The person's answer is the card line for this question (lib/waivers.js); an unchecked line is an open decision.
-  const state = waivers.answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
+  const state = answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
   if (state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root))) return [];
   const confirm = '사용자가 답하면 작업 카드 `## 판단 필요`에 `- [x] <Tell the user 문장 그대로> · <답>`을 쓰고 `qh confirm` 실행';
   const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
@@ -332,7 +329,7 @@ function configChanges(root, base, config, card) {
   const answered = [...new Set(keys.filter((k) => k.startsWith('answers.')).map((k) => k.split('.')[1]))];
   const answerItems = answered.flatMap((id) => {
     const choice = b[`answers.${id}.choice`]?.replaceAll('"', '');
-    const state = waivers.answerState(card, answerChangeUser(id, choice));
+    const state = answerState(card, answerChangeUser(id, choice));
     return state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root)) ? [] : [`answers.${id}: ${choice ?? '(삭제)'} (이전 ${a[`answers.${id}.choice`]?.replaceAll('"', '') ?? '(없음)'}). ${confirm}`];
   });
   const rest = keys.filter((k) => !k.startsWith('answers.'));
@@ -413,7 +410,7 @@ function assess(root, phase = 'stop', baseRef) {
     structureEnv: shape.env,
     structureWarnings: shape.warnings,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
-    decisions: taskDecisions(card.text),
+    decisions: decisions(card.text).open,
     waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...require('../lib/confirm').pendingConfirms(root, { card: card.text })],
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,

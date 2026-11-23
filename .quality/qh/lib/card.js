@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const SECTIONS = { intent: '의도', interface: 'interface 결정', seam: '테스트 위치(seam)', loop: '루프' };
+const SECTIONS = { intent: '의도', interface: 'interface 결정', seam: '테스트 위치(seam)', loop: '루프', decisions: '판단 필요' };
 
 // Text under `## <name>` up to the next `##`, HTML comments removed; null when the heading is absent.
 function section(card, name) {
@@ -21,6 +21,31 @@ function section(card, name) {
 const seamPaths = (card) => (section(card, SECTIONS.seam) || '').split('\n')
   .map((l) => l.replace(/`/g, '').replace(/^\s*([-*+]\s+)?/, '').replace(/\/+$/, '').trim()).filter(Boolean);
 
+// `## 판단 필요`, read one way for every caller: a list line (`-`, `*` or `+`, any indentation) with
+// `[ ]` is an open question, with `[x]`/`[X]` an answered line (`question · answer`). A top-level list
+// line without a checkbox is plain (the format check flags it); indented ones are notes under an item.
+const NOTHING = /^\(?(없음|없다|none|n\/a)\)?\.?$/i;
+function decisions(card) {
+  const out = { open: [], plain: [], answered: [] };
+  for (const line of (section(card, SECTIONS.decisions) || '').split('\n')) {
+    const m = line.match(/^(\s*)[-*+]\s+(?:\[([ xX])\](?:\s+|$))?(.*)$/);
+    const text = m ? m[3].trim() : '';
+    if (!text) continue;
+    if (m[2] === ' ') out.open.push(text);
+    else if (m[2]) out.answered.push(text);
+    else if (!m[1] && !NOTHING.test(text)) out.plain.push(text);
+  }
+  return out;
+}
+
+// 'yes' (an answered line for the question with a non-empty answer), 'open' (an open line), or 'none'.
+function answerState(card, question) {
+  const d = decisions(card);
+  const head = `${question} ·`;
+  if (d.answered.some((t) => t.startsWith(head) && t.slice(head.length).trim() !== '')) return 'yes';
+  return d.open.includes(question) ? 'open' : 'none';
+}
+
 // Lines this work added to f: all of them for a file that is new since base, else the diff's + lines.
 function addedLines(root, base, f) {
   const inBase = spawnSync('git', ['cat-file', '-e', `${base}:${f}`], { cwd: root }).status === 0;
@@ -32,4 +57,4 @@ function addedLines(root, base, f) {
   return (r.stdout || '').split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1));
 }
 
-module.exports = { SECTIONS, section, seamPaths, addedLines };
+module.exports = { SECTIONS, section, seamPaths, decisions, answerState, addedLines };

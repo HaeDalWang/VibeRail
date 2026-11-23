@@ -6,14 +6,14 @@
 //   and the secret allow marker (a person says the value is fake).
 // qh shows the person a plain-Korean question; the waiver counts when the card's `## 판단 필요` holds
 // `- [x] <that exact question> · <answer>`. The card is committed, so CI sees the same answer.
-// An unchecked `- [ ] <question>` is an open decision (the PR gate blocks on it, taskDecisions).
+// An unchecked `- [ ] <question>` is an open decision (the PR gate blocks on it, card.js decisions).
 // A file line cannot prove a human answered: the same trust level as every other 판단 필요 item.
 // The other task-card waivers (테스트·문서·ADR) stay the agent's, and `qh pr` lists them for the reviewer.
 
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { section } = require('./card');
+const { answerState } = require('./card');
 const { declaredReason, isRealReason, isOwnCode, secretWaivers, piiWaivers, DECISIONS_FILE } = require('./policy');
 
 const CRITERIA_FILES = ['.quality/config.json', '.quality/access.json'];
@@ -35,14 +35,6 @@ const GRILLING = 'grilling 불필요';
 // Binds a secret-waiver answer to the marked values themselves: a swapped value asks again.
 const valuesCode = (secrets) => String(parseInt(createHash('sha256').update(secrets.map((w) => w.text).join('\n')).digest('hex').slice(0, 8), 16) % 10000).padStart(4, '0');
 const AGENT_WRITABLE = ['테스트 불필요', '문서 영향 없음', 'ADR 불필요', '연동 실패 테스트 불필요'];
-
-// 'yes' (a checked line with an answer), 'open' (an unchecked line), or 'none'.
-function answerState(card, question) {
-  const lines = (section(card, '판단 필요') || '').split('\n').map((l) => l.trim());
-  const head = `- [x] ${question} ·`;
-  if (lines.some((l) => l.startsWith(head) && l.slice(head.length).trim() !== '')) return 'yes';
-  return lines.includes(`- [ ] ${question}`) ? 'open' : 'none';
-}
 
 // Questions still owed to the person: [{ agent, user }]. user is the sentence the card line must carry.
 function pendingWaivers(root, { card, changed }) {
@@ -73,4 +65,4 @@ function declaredWaivers(card, root, changed = []) {
   return [...labelled, ...piiWaivers(root, changed).map((w) => `qh:allow-pii: ${w}`)];
 }
 
-module.exports = { pendingWaivers, declaredWaivers, answerState, criteriaFingerprint, isCriteriaRecorded };
+module.exports = { pendingWaivers, declaredWaivers, criteriaFingerprint, isCriteriaRecorded };
