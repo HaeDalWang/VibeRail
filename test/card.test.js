@@ -159,3 +159,12 @@ test('answerState needs a non-empty answer', () => {
   assert.strictEqual(answerState(card, '없는 질문'), 'none');
   assert.strictEqual(answerState('# 카드\n', '답한 질문'), 'none');
 });
+
+test('an indented or star open question reaches the PR gate and the format check reads plain items the same way', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/tasks/work.md', '## 판단 필요\n  - [ ] 들여쓴 질문\n* [ ] 별표 질문\n- [X] 끝난 질문 · 네\n- 체크 없는 항목\n  - 참고 설명\n');
+  const s = statusJson(root);
+  assert.deepStrictEqual(s.decisions, ['들여쓴 질문', '별표 질문']);
+  assert.match(policyOf(root), /체크박스 없는 항목[\s\S]*"체크 없는 항목"/);
+  assert.doesNotMatch(policyOf(root), /참고 설명/);
+});

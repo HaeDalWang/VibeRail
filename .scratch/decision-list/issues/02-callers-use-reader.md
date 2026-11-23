@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] The PR gate's open questions come from the reader (an indented open question blocks)
-- [ ] The format check's items come from the reader, same message
-- [ ] Approved confirmation numbers and the open-question filter come from the reader
-- [ ] The review page's open questions come from the reader
-- [ ] No other code parses the `판단 필요` section; all existing tests pass
+- [x] The PR gate's open questions come from the reader (an indented open question blocks)
+- [x] The format check's items come from the reader, same message
+- [x] Approved confirmation numbers and the open-question filter come from the reader
+- [x] The review page's open questions come from the reader
+- [x] No other code parses the `판단 필요` section; all existing tests pass
