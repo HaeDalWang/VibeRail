@@ -140,6 +140,23 @@ test('a failing assertion stays a code failure even when the log mentions a refu
   assert.strictEqual(statusJson(root).checks.find((x) => x.name === 'db').state, '실패');
 });
 
+test('a failed Jest expectation stays a code failure even when a test logged a refused connection', () => {
+  const jest = [
+    'FAIL src/sum.test.js',
+    '  console.error',
+    '    Error: connect ECONNREFUSED 127.0.0.1:6379',
+    '  ● sum › adds',
+    '    expect(received).toBe(expected) // Object.is equality',
+    '    Expected: 3',
+    '    Received: 4',
+    'Tests:       1 failed, 1 total',
+  ].join('\n');
+  const root = repo({ baseRef: 'main', checks: { db: { cmd: 'cat jest.log; exit 1' } }, common: ['db'] }, { 'jest.log': jest });
+  write(root, 'src/a.js', '2');
+  assert.strictEqual(qh(root, ['check', 'db']).status, 1);
+  assert.strictEqual(statusJson(root).checks.find((x) => x.name === 'db').state, '실패');
+});
+
 test('the PR status blocks on a secret added and removed again in this branch, without printing it', () => {
   const root = repo(NO_CHECKS);
   const key = `${'AKIA'}QHTESTFAKE000002`;

@@ -20,6 +20,7 @@
 - R16 코드 지도에서 qh 사본·가져온 스킬 제외(중복 없이) → test/init-gitignore.test.js
 - R8 테스트 실행 명령이 없으면 질문 화면이 "테스트 통과 필수"라고 하지 않음 → test/qh.test.js
 - 세션 시작 hook 지시·설치되는 hook 설명이 영어 → test/hook-flow.test.js
+- Jest 기대값 실패 기록에 연결 거부 줄이 섞여도 코드 실패로 판정 → test/hook-flow.test.js
 - 기존 동작 유지 → npm test 전체
 
 ## 판단 필요
