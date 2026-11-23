@@ -28,6 +28,8 @@
 test/card.test.js
 
 ## 루프
+.scratch/decision-list/issues/01-decisions-reader.md
+.scratch/decision-list/issues/02-callers-use-reader.md
 
 ## 성공 조건 → 검사
 - 들여쓴 `- [ ] 질문`도 열린 질문이다 → test/card.test.js "indented checkbox lines are read"
@@ -49,5 +51,6 @@ test/card.test.js
 - [x] 테스트는 카드 모듈 테스트 한 곳에서만 새로 쓰고, 다섯 곳은 기존 테스트로 확인할까요? · 카드 모듈 한 곳
 - [x] 질문 밑에 들여써서 단 설명 줄(체크 칸 없음)은 어떻게 볼까요? · 설명으로 두고 넘어감
 - [x] 작업을 두 개(1. 카드 모듈에 읽기 넣기 → 2. 나머지 네 곳 옮기기)로 나눠도 될까요? · 두 개로
+- [x] 명세(확인 번호 6308)대로 작업을 시작할까요? · 돌려
 
 ## 미확인

@@ -18,6 +18,7 @@ const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
 const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
+const { answerState } = require('../lib/card');
 const routesBaseline = require('../lib/routes-baseline');
 const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
@@ -315,7 +316,7 @@ const criteriaSummary = (root, config) => criteriaWords(config, Object.keys(read
 function configChanges(root, base, config, card) {
   const isFirstInstall = !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]);
   // The person's answer is the card line for this question (lib/waivers.js); an unchecked line is an open decision.
-  const state = waivers.answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
+  const state = answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
   if (state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root))) return [];
   const confirm = '사용자가 답하면 작업 카드 `## 판단 필요`에 `- [x] <Tell the user 문장 그대로> · <답>`을 쓰고 `qh confirm` 실행';
   const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
@@ -332,7 +333,7 @@ function configChanges(root, base, config, card) {
   const answered = [...new Set(keys.filter((k) => k.startsWith('answers.')).map((k) => k.split('.')[1]))];
   const answerItems = answered.flatMap((id) => {
     const choice = b[`answers.${id}.choice`]?.replaceAll('"', '');
-    const state = waivers.answerState(card, answerChangeUser(id, choice));
+    const state = answerState(card, answerChangeUser(id, choice));
     return state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root)) ? [] : [`answers.${id}: ${choice ?? '(삭제)'} (이전 ${a[`answers.${id}.choice`]?.replaceAll('"', '') ?? '(없음)'}). ${confirm}`];
   });
   const rest = keys.filter((k) => !k.startsWith('answers.'));

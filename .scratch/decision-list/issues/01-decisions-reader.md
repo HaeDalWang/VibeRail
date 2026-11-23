@@ -6,10 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] Indented checkbox lines are read (open and answered)
-- [ ] Upper-case `X` counts as answered
-- [ ] `*` and `+` markers are read like `-`
-- [ ] Only the section headed exactly `판단 필요` is read, HTML comments dropped
-- [ ] Plain items are top-level list lines without a checkbox; indented notes and "없음"-style lines are not plain
-- [ ] `answerState` is 'yes' only with a non-empty answer after ` · `, 'open' for an exact open line, else 'none'
-- [ ] The waivers module no longer has its own section parsing; all existing tests pass
+- [x] Indented checkbox lines are read (open and answered)
+- [x] Upper-case `X` counts as answered
+- [x] `*` and `+` markers are read like `-`
+- [x] Only the section headed exactly `판단 필요` is read, HTML comments dropped
+- [x] Plain items are top-level list lines without a checkbox; indented notes and "없음"-style lines are not plain
+- [x] `answerState` is 'yes' only with a non-empty answer after ` · `, 'open' for an exact open line, else 'none'
+- [x] The waivers module no longer has its own section parsing; all existing tests pass

@@ -110,3 +110,52 @@ test('a card section that ends the file with no newline after its heading reads 
   assert.strictEqual(section('# 카드\n## 의도\n고칠 것\n', '의도'), '고칠 것');
   assert.strictEqual(section('# 카드\n', '의도'), null);
 });
+
+// The 판단 필요 section, read one way for every caller (decision-list spec).
+const decisionCard = (body) => `# 카드\n## 의도\n고친다\n\n## 판단 필요\n${body}\n## 미확인\n`;
+
+test('indented checkbox lines are read', () => {
+  const { decisions } = require('../lib/card');
+  const d = decisions(decisionCard('  - [ ] 들여쓴 질문\n\t- [x] 들여쓴 답 · 네'));
+  assert.deepStrictEqual(d.open, ['들여쓴 질문']);
+  assert.deepStrictEqual(d.answered, ['들여쓴 답 · 네']);
+});
+
+test('upper-case X counts as answered', () => {
+  const { decisions, answerState } = require('../lib/card');
+  const card = decisionCard('- [X] 큰 X 질문 · 네');
+  assert.deepStrictEqual(decisions(card).answered, ['큰 X 질문 · 네']);
+  assert.strictEqual(answerState(card, '큰 X 질문'), 'yes');
+});
+
+test('star and plus markers are read like dashes', () => {
+  const { decisions } = require('../lib/card');
+  const d = decisions(decisionCard('* [ ] 별표 질문\n+ [ ] 더하기 질문\n* [x] 별표 답 · 네'));
+  assert.deepStrictEqual(d.open, ['별표 질문', '더하기 질문']);
+  assert.deepStrictEqual(d.answered, ['별표 답 · 네']);
+});
+
+test('only the exact heading is read, comments dropped', () => {
+  const { decisions } = require('../lib/card');
+  const card = `${decisionCard('<!-- - [ ] 예시 질문 -->\n<!--\n- [ ] 여러 줄 예시\n-->\n- [ ] 진짜 질문')}## 판단 필요 메모\n- [ ] 메모 칸 질문\n`;
+  assert.deepStrictEqual(decisions(card).open, ['진짜 질문']);
+  assert.deepStrictEqual(decisions('# 카드\n## 판단 필요 메모\n- [ ] 메모 칸 질문\n'), { open: [], plain: [], answered: [] });
+});
+
+test('plain items are top-level non-checkbox lines', () => {
+  const { decisions } = require('../lib/card');
+  const d = decisions(decisionCard('- [ ] 질문\n  - 참고: 설명 줄\n- 체크 없는 항목\n* 별표 항목\n- 없음\n- (없음)\n그냥 글'));
+  assert.deepStrictEqual(d.plain, ['체크 없는 항목', '별표 항목']);
+  assert.deepStrictEqual(d.open, ['질문']);
+});
+
+test('answerState needs a non-empty answer', () => {
+  const { answerState } = require('../lib/card');
+  const card = decisionCard('- [x] 답한 질문 · 네\n- [x] 답 없는 질문\n- [x] 빈 답 질문 · \n- [ ] 열린 질문');
+  assert.strictEqual(answerState(card, '답한 질문'), 'yes');
+  assert.strictEqual(answerState(card, '답 없는 질문'), 'none');
+  assert.strictEqual(answerState(card, '빈 답 질문'), 'none');
+  assert.strictEqual(answerState(card, '열린 질문'), 'open');
+  assert.strictEqual(answerState(card, '없는 질문'), 'none');
+  assert.strictEqual(answerState('# 카드\n', '답한 질문'), 'none');
+});
