@@ -441,11 +441,13 @@ function runReview(root, config, baseArg) {
   const outDir = path.join(root, EVIDENCE_DIR, 'review');
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const messages = git(root, ['log', '--format=%s%n%b', `${base}..HEAD`]);
+  // The reviewer judges against what the person agreed (card, spec), not the author's own account (commit messages).
   const diffFile = path.join(outDir, 'change.diff');
-  fs.writeFileSync(diffFile, `${messages}\n\n${git(root, ['diff', base, hash])}\n`);
+  fs.writeFileSync(diffFile, `${git(root, ['diff', base, hash])}\n`);
+  const card = taskCard(root, base);
+  const spec = (card.text.match(/^명세:\s*`?([^`\n]+?)`?\s*$/m) || [])[1] || '없음';
   const taskFile = path.join(outDir, 'task.md');
-  const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base);
+  const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base).replaceAll('{{CARD}}', card.text ? card.rel : '없음').replaceAll('{{SPEC}}', spec);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
   const cmd = fillReviewCmd(config.review.cmd, { workdir: root, task: taskFile, out: outDir });

@@ -131,6 +131,22 @@ test('review runs the configured command and records findings bound to the tree'
   assert.strictEqual(statusJson(root).review.state, '이전 상태에서 완료');
 });
 
+test('the reviewer gets the card and spec, not the author\'s commit messages, and checks for fake tests', () => {
+  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" } });
+  write(root, 'src/a.js', '2');
+  write(root, '.scratch/f/spec.md', '# Spec\n');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## interface 결정\n명세: .scratch/f/spec.md\n`);
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', '작성자 설명: 안전하다고 믿어 주세요']);
+  assert.strictEqual(qh(root, ['review']).status, 0);
+  const dir = path.join(root, '.quality/evidence/review');
+  assert.doesNotMatch(fs.readFileSync(path.join(dir, 'change.diff'), 'utf8'), /작성자 설명/);
+  const task = fs.readFileSync(path.join(dir, 'task.md'), 'utf8');
+  assert.match(task, /\.quality\/tasks\/work\.md/);
+  assert.match(task, /\.scratch\/f\/spec\.md/);
+  assert.match(task, /cannot fail/);
+});
+
 test('review without a result file is an environment problem', () => {
   const root = repo({ ...BASIC, review: { cmd: 'true' } });
   write(root, 'src/a.js', '2');

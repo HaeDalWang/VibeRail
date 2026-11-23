@@ -13,6 +13,7 @@
 - R1 detached에서 카드 찾음 → test/pr-gate.test.js
 - R2 긍정 답만 승인(확인 번호·비밀값) → test/confirm.test.js, test/waivers.test.js
 - R3 설계안·명세를 못 찾으면 묻기 → test/confirm.test.js
+- R6·R7 리뷰어가 카드·명세를 받고 커밋 메시지는 안 받음, 점검표에 거짓 테스트 → test/qh.test.js
 - 기존 동작 유지 → npm test 전체
 
 ## 판단 필요
