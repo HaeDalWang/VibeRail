@@ -20,6 +20,7 @@
 이유: 따로 두는 편이 찾기 쉽다
 설계안: .scratch/confirm-number/interface.json
 명세: .scratch/confirm-number/spec.md
+작업: .scratch/confirm-number/issues/01-option-number.md, 02-option-changes.md, 03-spec-number.md, 04-review-page-docs.md
 
 ## 테스트 위치(seam)
 test/confirm.test.js
@@ -27,8 +28,21 @@ test/view.test.js
 test/review-page.test.js
 
 ## 루프
+.scratch/confirm-number/issues/01-option-number.md
+.scratch/confirm-number/issues/02-option-changes.md
+.scratch/confirm-number/issues/03-spec-number.md
 
 ## 성공 조건 → 검사
+- 복사 글에 고른 안의 확인 번호가 들어간다 → test/view.test.js "the copied pick line carries the option's confirmation number"
+- 공백만 바뀌거나 고르지 않은 안이 바뀌면 묻지 않는다 → test/confirm.test.js "whitespace edits and unpicked options ask nothing"
+- 고른 안이 바뀌면 다시 묻고, 답하면 풀리고, 또 바뀌면 또 묻는다 → test/confirm.test.js "a changed pick asks again until answered…"
+- 번호 없는 예전 카드는 한 번 묻는다 → test/confirm.test.js "a pick without a number asks once"
+- 설계안 링크·파일·안이 없으면 묻지 않는다 → test/confirm.test.js "no design link, file or option asks nothing"
+- 확인 질문이 응답 끝을 막는다 → test/confirm.test.js "a confirmation question blocks the stop hook"
+- 바뀐 칸을 예전 → 지금으로 보인다 → test/confirm.test.js "changed fields come from the committed old version"
+- 예전 판을 못 찾으면 다시 보라고만 한다 → test/confirm.test.js "an uncommitted old version gives the plain note"
+- 작업 목록이 생기면 명세 확인을 한 번 묻는다 → test/confirm.test.js "the spec is asked once the loop lists tickets"
+- 명세가 바뀌면 바뀐 줄을 보이며 다시 묻는다 → test/confirm.test.js "a changed spec asks again with the changed lines"
 
 ## 판단 필요
 - [x] 사람이 고른 것 중 무엇에 확인 번호를 붙일까요? · 고른 안 + 명세
