@@ -696,9 +696,9 @@ function cmdBaseline(root) {
 function hookSessionStart(root) {
   const unasked = loadConfig(root)?.answers ? '' : '\n(qh) The project questions are not answered yet → tell the user, and if they want, open a question session as .quality/qh/lib/ask-guide.md says.';
   const pending = stopState.takePending(root);
-  const left = pending ? `\n(qh) 지난 세션이 끝날 때 남은 품질 문제가 있었다(그 호스트는 알림을 보여 주지 않는다). 위 상태에 아직 남았으면 사용자에게 이렇게 전한다:\n${pending}` : '';
+  const left = pending ? `\n(qh) The last session ended with quality problems left (that host does not show notices). If the status above still has them, tell the user:\n${pending}` : '';
   const cycle = require('../lib/cycle').cycleLines(root, taskCard(root).text).map((l) => `\n(qh) ${l}`).join('');
-  console.log(`${formatStatus(assess(root))}${unasked}${cycle}${left}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
+  console.log(`${formatStatus(assess(root))}${unasked}${cycle}${left}\n\n(qh) Before ending a response, run the needed checks with \`qh check\` to leave evidence. \`qh status\` shows their state.`);
   return EXIT.ok;
 }
 

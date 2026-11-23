@@ -87,9 +87,17 @@ test('what a Kiro turn left unresolved is told again at the next session start, 
   write(root, 'src/a.js', '2');
   qh(root, ['hook', 'stop'], kiro());
   const first = qh(root, ['hook', 'session-start']).stdout;
-  assert.match(first, /지난 세션이 끝날 때 남은 품질 문제/);
+  assert.match(first, /\(qh\) The last session ended with quality problems left/);
   assert.match(first, /테스트/);
-  assert.doesNotMatch(qh(root, ['hook', 'session-start']).stdout, /지난 세션이 끝날 때/);
+  assert.doesNotMatch(qh(root, ['hook', 'session-start']).stdout, /The last session ended/);
+});
+
+test('session start talks to the agent in English (decision 2026-11-18), and so do the installed hook descriptions', () => {
+  const out = qh(repo(NO_CHECKS), ['hook', 'session-start']).stdout;
+  assert.match(out, /\(qh\) Before ending a response, run the needed checks with `qh check`/);
+  assert.doesNotMatch(out, /응답을 끝내기 전에/);
+  const { HOOKS } = require('../lib/init');
+  for (const h of HOOKS) assert.doesNotMatch(h.description, /[가-힣]/, h.name);
 });
 
 test('each session gets the fix list once, even when another session in the folder already got it', () => {
