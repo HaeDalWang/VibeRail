@@ -112,3 +112,14 @@ test('qh review says in one Korean line that the review is off when the person c
   assert.strictEqual(r.status, 0);
   assert.match(r.stdout, /검토 생략을 골라/);
 });
+
+test('a detached checkout still finds the task card from the changed files', () => {
+  const root = repo(BASIC);
+  write(root, 'src/a.js', '2');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 판단 필요\n- [ ] 열린 질문\n`);
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', 'work']);
+  sh(root, 'git', ['checkout', '-q', '--detach']);
+  const s = JSON.parse(qh(root, ['status', '--json']).stdout);
+  assert.deepStrictEqual(s.decisions, ['열린 질문']);
+});

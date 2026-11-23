@@ -273,9 +273,12 @@ function describeResult(ev) {
   return out;
 }
 
-function taskCard(root) {
+// On a branch the card is named after it; detached (CI PR checkouts), it is the card this work changed.
+function taskCard(root, base) {
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  const rel = path.join('.quality', 'tasks', `${branch}.md`);
+  const rel = branch === 'HEAD'
+    ? changedFiles(root, base || mergeBase(root, loadConfig(root).baseRef)).find((f) => f.startsWith('.quality/tasks/') && f.endsWith('.md')) || path.join('.quality', 'tasks', 'HEAD.md')
+    : path.join('.quality', 'tasks', `${branch}.md`);
   const file = path.join(root, rel);
   return { rel, text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
 }
@@ -388,7 +391,7 @@ function assess(root, phase = 'stop', baseRef) {
   const req = requirements(config, changed, phase, root);
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
-  const card = taskCard(root);
+  const card = taskCard(root, base);
   const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
@@ -464,7 +467,7 @@ function runReview(root, config, baseArg) {
 
 function reviewPage(root, config, base, findings) {
   const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
-  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
+  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root, base).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
   console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
 }
@@ -519,7 +522,7 @@ function cmdPr(root) {
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  const declared = waivers.declaredWaivers(taskCard(root).text, root, a.changed);
+  const declared = waivers.declaredWaivers(taskCard(root, a.base).text, root, a.changed);
   console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}${declared.length ? `\n에이전트가 작업 카드에서 면제한 것 (리뷰어 확인):\n${declared.map((d) => `  - ${d}`).join('\n')}` : ''}`);
   const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
   // Only a full qh pr pass (checks and the AI review) is where the next work on the base branch starts.
