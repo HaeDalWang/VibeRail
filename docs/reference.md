@@ -93,8 +93,8 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh init [경로]` | 설치·연결 |
 | `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
 | `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
-| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
-| `qh view architecture <json>` | 아키텍처 점검 후보(JSON: `title`, `candidates[{id, name, problem, solution, gain, cost, strength, mermaidBefore?, mermaidAfter?, detail?}]`)를 한국어 로컬 HTML로 만든다. 후보마다 이유 칸·복사 버튼은 interface 화면과 같고, `detail`은 사용자 수준 B에만 보인다. 외부 주소를 부르지 않는다(Mermaid도 로컬 사본). improve-codebase-architecture skill의 HTML 보고서 단계(CDN·영어) 대신 쓴다 |
+| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 선택 `questions`(`[{text, choices 2~4개, recommended?}]`)는 맨 위에 두면 공통 질문, 안 안에 두면 그 안의 질문이다. 질문마다 하나 고르기·추천 표시·기타 칸이 붙고, 공통 질문과 고른 안의 질문에 답해야 복사되며, 답은 `- [x] 질문 · 답` 줄로 함께 복사된다(카드 `## 판단 필요`에 그대로 적는다). 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
+| `qh view architecture <json>` | 아키텍처 점검 후보(JSON: `title`, `candidates[{id, name, problem, solution, gain, cost, strength, mermaidBefore?, mermaidAfter?, detail?, questions?}]`, 선택 `questions`)를 한국어 로컬 HTML로 만든다. 후보마다 이유 칸·복사 버튼·질문 칸은 interface 화면과 같고, `detail`은 사용자 수준 B에만 보인다. 외부 주소를 부르지 않는다(Mermaid도 로컬 사본). improve-codebase-architecture skill의 HTML 보고서 단계(CDN·영어) 대신 쓴다 |
 | `qh view glossary` | `GLOSSARY.md`를 로컬 HTML로 만든다 |
 | `qh cycle` | 지금 카드의 단계, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로 |
 | `qh doctor` | 설치·설정 전체 점검 |
