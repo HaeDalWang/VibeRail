@@ -29,6 +29,14 @@ test/review-page.test.js
 .scratch/guided-review/issues/03-test-evidence.md
 
 ## 성공 조건 → 검사
+- AI 리뷰가 끝나면 화면이 생기고 열라고 알린다 → test/review-page.test.js "a finished review writes the review page and tells the agent to open it"
+- 다섯 단계가 읽는 순서로 나온다 → test/review-page.test.js "the page shows the five steps in reading order"
+- 무엇이 바뀜은 기록 그대로, 출처와 함께 → test/review-page.test.js "what changed comes from the card intent…"
+- 검토 생략이어도 화면이 생긴다 → test/review-page.test.js "a skipped review still writes the page, saying the review was skipped"
+- 리뷰가 고장 나면 화면을 만들지 않는다 → test/review-page.test.js "a review that breaks writes no page"
+- 고른 안의 그림·장점·비용을 다시 보인다 → test/review-page.test.js "the picked option shows its picture, gain and cost from the design file"
+- 성공 조건마다 통과·실패·찾지 못함 → test/review-page.test.js "each success condition shows 통과, 실패 or 찾지 못함 from the last test log"
+- 오래된 테스트 기록은 경고 → test/review-page.test.js "a test record older than the current code shows a stale warning"
 
 ## 판단 필요
 - [x] 완료 리뷰를 '무엇이 바뀜 → 고른 안 → 테스트 증거 → 남은 판단' 순서로 묶을 때, 설명 글은 누가 쓸까요? · AI 없이 기록만 모음
