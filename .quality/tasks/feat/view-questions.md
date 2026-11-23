@@ -22,6 +22,8 @@ test/view.test.js
 
 명세: .scratch/view-questions/spec.md
 
+작업: .scratch/view-questions/issues/ (01 공통 질문 → 02 안마다 질문 → 03 아키텍처 화면)
+
 ## 루프
 
 ## 성공 조건 → 검사
