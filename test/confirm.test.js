@@ -151,3 +151,24 @@ test('a changed spec asks again with the changed lines', () => {
   assert.strictEqual(lost.changes, null, 'the approved version was never committed');
   assert.match(lost.user, /예전 내용을 찾지 못했습니다/);
 });
+
+test('an open line for the question is a decision, not a second question', () => {
+  const { root, number } = picked();
+  write(root, DESIGN, design({ ...OPTION_A, gain: '바뀜' }));
+  const [q] = confirms(root);
+  write(root, '.quality/tasks/work.md', card(`안: A · 확인 번호 ${number}`, `- [ ] ${q.user}`));
+  const s = statusJson(root);
+  assert.deepStrictEqual(s.waivers.filter((w) => /확인 번호/.test(w.user)), []);
+  assert.ok(s.decisions.includes(q.user), 'the open line blocks as an open decision');
+});
+
+test('a fresh pick after an earlier answer is bound', () => {
+  const { root, number } = picked();
+  write(root, DESIGN, design({ ...OPTION_A, gain: '바뀜' }));
+  const [q] = confirms(root);
+  write(root, DESIGN, design({ ...OPTION_A, gain: '다시 고를 판' }));
+  const fresh = pageNumber(root, 'A');
+  write(root, '.quality/tasks/work.md', card(`안: A · 확인 번호 ${fresh}`, `- [x] ${q.user} · 네`));
+  assert.notStrictEqual(fresh, number);
+  assert.deepStrictEqual(confirms(root), []);
+});

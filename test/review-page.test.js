@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { repo, write, qh, sh, BASIC } = require('./helpers');
+const { repo, write, qh, sh, statusJson, BASIC } = require('./helpers');
 
 const PAGE = '.quality/reports/review.html';
 const resultCmd = (findings) => ({ cmd: `node -e "require('fs').writeFileSync(process.argv[1]+'/result.json', process.argv[2])" {out} '${JSON.stringify(findings)}'` });
@@ -221,6 +221,17 @@ function confirmed(edit, extra = '') {
 test('a matching confirmation is shown as such in the picked-option step', () => {
   const { number, picked: step } = confirmed(null);
   assert.match(step, new RegExp(`확인 번호 ${number}: 고른 뒤 바뀌지 않았다`));
+});
+
+test('a pick bound by an answer line shows its number as unchanged', () => {
+  const root = repo({ ...BASIC, review: resultCmd([]) });
+  write(root, '.scratch/f/interface.json', JSON.stringify(DESIGN));
+  write(root, '.quality/tasks/work.md', pickCard('A'));
+  const user = statusJson(root).waivers.find((w) => /확인 번호/.test(w.user)).user;
+  write(root, '.quality/tasks/work.md', pickCard('A').replace('- [x] 이미 답한 질문 · 예', `- [x] 이미 답한 질문 · 예\n- [x] ${user} · 네`));
+  qh(root, ['review']);
+  const step = stepOf(fs.readFileSync(path.join(root, PAGE), 'utf8'), '고른 안', '테스트 증거');
+  assert.match(step, new RegExp(`확인 번호 ${user.match(/\d{4}/)[0]}: 고른 뒤 바뀌지 않았다`));
 });
 
 test('a changed pick shows the changed fields on the page and asks under 남은 판단', () => {
