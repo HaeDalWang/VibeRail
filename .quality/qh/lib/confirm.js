@@ -98,8 +98,9 @@ function optionConfirm(root, card) {
   const p = pickedOption(root, card);
   if (!p.id || !p.option) return [];
   const now = optionNumber(p.option);
-  const bound = approvedNumbers(card, `고른 ${p.id}안`).at(-1) || p.number;
-  if (bound === now) return [];
+  const approved = approvedNumbers(card, `고른 ${p.id}안`);
+  if ([p.number, ...approved].includes(now)) return [];
+  const bound = approved.at(-1) || p.number;
   if (!bound) return [{ agent: `고른 안에 확인 번호가 없다(${p.rel}) → 사용자에게 지금 내용으로 계속 쓸지 묻는다`, user: `고른 ${p.id}안(확인 번호 ${now})을 지금 내용 그대로 계속 쓸까요?`, changes: null }];
   const changes = optionChanges(root, p, bound);
   const shown = changes ? changes.fields.map((f) => `${f.label}: ${f.old} → ${f.now}`).join(' / ') : NOT_FOUND;
@@ -115,8 +116,9 @@ function specConfirm(root, card) {
   const rel = lineAfter(cardLines(card, SECTIONS.interface), '명세').replace(/`/g, '');
   if (!rel || !cardLines(card, SECTIONS.loop).length || !fs.existsSync(path.join(root, rel))) return [];
   const now = confirmNumber(fs.readFileSync(path.join(root, rel), 'utf8'));
-  const bound = approvedNumbers(card, '명세').at(-1);
-  if (bound === now) return [];
+  const approved = approvedNumbers(card, '명세');
+  if (approved.includes(now)) return [];
+  const bound = approved.at(-1);
   if (!bound) return [{ agent: `루프 시작 전 명세 확인(${rel}) → 사용자가 "돌려"라고 하면 그 답으로 이 질문 줄을 적는다`, user: `명세(확인 번호 ${now})대로 작업을 시작할까요?`, changes: null }];
   const changes = specChanges(root, rel, bound);
   const shown = changes ? changes.lines.join(' / ') : NOT_FOUND;
@@ -128,6 +130,10 @@ function specConfirm(root, card) {
 }
 
 // Questions still owed to the person: [{ agent, user, changes }] (the shape of pendingWaivers, plus changes).
-const pendingConfirms = (root, { card }) => [...optionConfirm(root, card), ...specConfirm(root, card)];
+// A question the card already holds as an open `- [ ]` line is an open decision there, not a second question.
+const pendingConfirms = (root, { card }) => {
+  const open = new Set(cardLines(card, '판단 필요'));
+  return [...optionConfirm(root, card), ...specConfirm(root, card)].filter((q) => !open.has(`- [ ] ${q.user}`));
+};
 
 module.exports = { confirmNumber, optionNumber, pickedOption, pendingConfirms };
