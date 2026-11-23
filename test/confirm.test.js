@@ -100,3 +100,54 @@ test('an uncommitted old version gives the plain note', () => {
   assert.strictEqual(q.changes, null);
   assert.match(q.user, /예전 내용을 찾지 못했습니다\. 지금 내용 전체를 다시 보세요/);
 });
+
+// ---------- the spec ----------
+
+const SPEC = '.scratch/f/spec.md';
+const SPEC_TEXT = '# Spec\n\n## Solution\n\nOne module owns the number.\n\n## Out of Scope\n\nAnnotations.\n';
+const specCard = (loop, answers = '') => `${DECLARED}## 의도\n\n확인 번호\n\n## interface 결정\n명세: ${SPEC}\n\n## 루프\n${loop}\n\n## 판단 필요\n${answers}\n`;
+const LOOP = '.scratch/f/issues/01-a.md';
+
+function specRepo() {
+  const root = repo(BASIC, { [SPEC]: SPEC_TEXT });
+  write(root, '.quality/tasks/work.md', specCard(''));
+  return root;
+}
+
+test('the spec is asked once the loop lists tickets', () => {
+  const root = specRepo();
+  assert.deepStrictEqual(confirms(root), [], 'no loop paths yet');
+  write(root, '.quality/tasks/work.md', specCard(LOOP));
+  const [q] = confirms(root);
+  assert.match(q.user, /^명세\(확인 번호 \d{4}\)대로 작업을 시작할까요\?$/);
+  write(root, '.quality/tasks/work.md', specCard(LOOP, `- [x] ${q.user} · 돌려`));
+  assert.deepStrictEqual(confirms(root), [], '"돌려" binds the spec');
+  write(root, SPEC, SPEC_TEXT.replace('One module', '  One   module').replace(/\n\n/g, '\n\n\n'));
+  assert.deepStrictEqual(confirms(root), [], 'whitespace edits ask nothing');
+  write(root, '.quality/tasks/work.md', specCard(LOOP).replace(SPEC, '.scratch/f/gone.md'));
+  assert.deepStrictEqual(confirms(root), [], 'a missing spec asks nothing');
+  write(root, '.quality/tasks/work.md', specCard(LOOP).replace(`명세: ${SPEC}\n`, ''));
+  assert.deepStrictEqual(confirms(root), [], 'no spec link asks nothing');
+});
+
+test('a changed spec asks again with the changed lines', () => {
+  const root = specRepo();
+  write(root, '.quality/tasks/work.md', specCard(LOOP));
+  const [start] = confirms(root);
+  write(root, '.quality/tasks/work.md', specCard(LOOP, `- [x] ${start.user} · 돌려`));
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', 'loop start']);
+  write(root, SPEC, SPEC_TEXT.replace('Annotations.', 'Annotations and tickets.'));
+  const [q] = confirms(root);
+  assert.match(q.user, new RegExp(`^명세가 확인한 뒤 바뀌었습니다\\(확인 번호 ${start.user.match(/\d{4}/)[0]} → \\d{4}\\)`));
+  assert.deepStrictEqual(q.changes, { kind: 'spec', lines: ['-Annotations.', '+Annotations and tickets.'] });
+  assert.match(q.agent, /\+Annotations and tickets\./);
+
+  write(root, SPEC, SPEC_TEXT.replace('Annotations.', '커밋 안 한 판'));
+  const [mid] = confirms(root);
+  write(root, '.quality/tasks/work.md', specCard(LOOP, `- [x] ${start.user} · 돌려\n- [x] ${mid.user} · 네`));
+  write(root, SPEC, SPEC_TEXT.replace('Annotations.', '또 다른 판'));
+  const [lost] = confirms(root);
+  assert.strictEqual(lost.changes, null, 'the approved version was never committed');
+  assert.match(lost.user, /예전 내용을 찾지 못했습니다/);
+});

@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] No 루프 paths, no spec link or a missing spec file asks nothing
-- [ ] With 루프 paths and a spec, the start question is asked once and an answer settles it
-- [ ] Whitespace-only spec edits ask nothing
-- [ ] A spec edit after the answer asks again with the changed lines; an uncommitted old version gives the plain note
+- [x] No 루프 paths, no spec link or a missing spec file asks nothing
+- [x] With 루프 paths and a spec, the start question is asked once and an answer settles it
+- [x] Whitespace-only spec edits ask nothing
+- [x] A spec edit after the answer asks again with the changed lines; an uncommitted old version gives the plain note
