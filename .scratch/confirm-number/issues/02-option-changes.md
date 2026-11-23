@@ -6,6 +6,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] A committed old version gives the changed fields, old → now, and only those
-- [ ] An uncommitted old version gives no field list and the plain "read it again" note
-- [ ] The agent text shows the changes so the agent can pass them on
+- [x] A committed old version gives the changed fields, old → now, and only those
+- [x] An uncommitted old version gives no field list and the plain "read it again" note
+- [x] The agent text shows the changes so the agent can pass them on

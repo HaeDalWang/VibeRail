@@ -78,3 +78,25 @@ test('a confirmation question blocks the stop hook', () => {
   assert.strictEqual(r.decision, 'block');
   assert.match(r.reason, /고른 A안이 고른 뒤 바뀌었습니다/);
 });
+
+test('changed fields come from the committed old version', () => {
+  const { root } = picked();
+  write(root, DESIGN, design({ ...OPTION_A, gain: '찾기 아주 쉽다', mermaid: 'graph TD\n  X-->Z' }));
+  const [q] = confirms(root);
+  assert.deepStrictEqual(q.changes, { kind: 'option', fields: [
+    { label: '그림', old: 'graph TD X-->Y', now: 'graph TD X-->Z' },
+    { label: '장점', old: '찾기 쉽다', now: '찾기 아주 쉽다' },
+  ] });
+  assert.match(q.agent, /장점: 찾기 쉽다 → 찾기 아주 쉽다/);
+});
+
+test('an uncommitted old version gives the plain note', () => {
+  const root = repo(BASIC, { [DESIGN]: design() });
+  write(root, DESIGN, design({ ...OPTION_A, gain: '커밋 안 된 판' }));
+  const number = pageNumber(root, 'A');
+  write(root, '.quality/tasks/work.md', card(`안: A · 확인 번호 ${number}`));
+  write(root, DESIGN, design({ ...OPTION_A, gain: '또 다른 판' }));
+  const [q] = confirms(root);
+  assert.strictEqual(q.changes, null);
+  assert.match(q.user, /예전 내용을 찾지 못했습니다\. 지금 내용 전체를 다시 보세요/);
+});
