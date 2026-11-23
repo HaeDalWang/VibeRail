@@ -128,3 +128,11 @@ test('qh-cycle tells the agent the interface JSON shape that qh view accepts, so
   const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
   for (const key of ['title', 'options', 'id', 'name', 'summary', 'mermaid', 'gain', 'cost']) assert.match(skill, new RegExp(`\\b${key}\\b`), key);
 });
+
+test('qh-cycle tells the agent the optional questions shape on both decision pages', () => {
+  const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  for (const shape of ['"options"', '"candidates"']) {
+    const line = skill.split('\n').find((l) => l.includes(shape));
+    for (const key of ['questions', 'text', 'choices', 'recommended']) assert.match(line, new RegExp(`\\b${key}\\b`), `${shape}: ${key}`);
+  }
+});

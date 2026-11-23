@@ -291,3 +291,18 @@ test('the same id twice in an architecture or interface file is rejected', () =>
   assert.strictEqual(i.status, 1);
   assert.match(i.stdout, /안 id가 겹친다/);
 });
+
+test('the architecture page shows common and per-candidate questions with the same rules as the interface page', () => {
+  const json = { ...CANDIDATES, questions: [Q_KEEP], candidates: [CANDIDATES.candidates[0], { ...CANDIDATES.candidates[1], questions: [{ text: '결제 입구 이름은?', choices: ['PaymentGate', 'Pay'], recommended: 'Pay' }] }] };
+  const { r, html } = viewArchitecture(level('A'), json);
+  assert.strictEqual(r.status, 0, r.stdout);
+  const [top, first, second] = html.split('<article');
+  assert.ok(top.includes(Q_KEEP.text) && !first.includes('결제 입구 이름은?') && second.includes('결제 입구 이름은?'));
+  assert.ok(second.indexOf('결제 입구 이름은?') < second.indexOf('<textarea'));
+  assert.match(r.stdout, /## 판단 필요/);
+  const root = repo(BASIC);
+  write(root, 'c.json', JSON.stringify({ ...json, candidates: [CANDIDATES.candidates[0], { ...CANDIDATES.candidates[1], questions: [Q_KEEP] }] }));
+  assert.match(qh(root, ['view', 'architecture', 'c.json']).stdout, /같은 질문이 두 번 있다/);
+  write(root, 'c.json', JSON.stringify({ ...CANDIDATES, questions: [{ text: 'q', choices: ['예', '아니요'], recommended: '모름' }] }));
+  assert.match(qh(root, ['view', 'architecture', 'c.json']).stdout, /공통 1번째 질문[^\n]*추천/);
+});

@@ -6,6 +6,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] Architecture page renders common and per-candidate questions like the interface page
-- [ ] Copy and rejection rules match the interface page
-- [ ] The qh-cycle skill's JSON shape lines include the optional questions
+- [x] Architecture page renders common and per-candidate questions like the interface page
+- [x] Copy and rejection rules match the interface page
+- [x] The qh-cycle skill's JSON shape lines include the optional questions
