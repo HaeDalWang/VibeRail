@@ -80,7 +80,7 @@ test('human decisions and base changes turn the agent back once, not on the repe
   assert.match(first.reason, /checks\.unit\.cmd/);
   const repeat = stopDecision(qh(root, ['hook', 'stop'], '{"stop_hook_active":true}'));
   assert.strictEqual(repeat.decision, undefined);
-  assert.match(repeat.systemMessage, /사람이 판단할 일.*\n- 정해 주세요: 관리자는 모든 회사를 보나/);
+  assert.match(repeat.systemMessage, /사람이 판단할 일.*\n- 관리자는 모든 회사를 보나\?/);
 });
 
 // What the person sees may not need a developer to read: no paths, commands, hashes or tool names.
@@ -90,7 +90,7 @@ test('with only environment errors, stop says it could not judge instead of "che
   const root = repo({ ...BASIC, baseRef: 'origin/main' });
   write(root, 'src/a.js', '2');
   const d = stopDecision(qh(root, ['hook', 'stop'], '{}'));
-  assert.match(d.reason, /^qh: 환경 오류로 판정하지 못함/);
+  assert.match(d.reason, /^qh: could not judge because of an environment error/);
 });
 
 test('a branch with no common ancestor with the base is told to the person once, not passed silently', () => {
@@ -112,8 +112,22 @@ test('stop hands the agent a plain sentence for the person, and shows the person
   write(root, 'docs/decisions.md', '- 2026-11-16 · unit을 true로 · 예시 · 없음\n');
   qh(root, ['check']);
   const first = stopDecision(qh(root, ['hook', 'stop'], '{}'));
-  assert.match(first.reason, /checks\.unit\.cmd[\s\S]*사용자에게는 이렇게 말한다: /);
+  assert.match(first.reason, /checks\.unit\.cmd[\s\S]*Tell the user: /);
   const repeat = stopDecision(qh(root, ['hook', 'stop'], '{}'));
   assert.match(repeat.systemMessage, /관리자는 모든 회사를 보나/);
   assert.doesNotMatch(repeat.systemMessage, DEVELOPER_WORDS);
+});
+
+test('a decision the agent already asked about in its last message is not asked again', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 범위 확인\n');
+  qh(root, ['check']);
+  const asked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '이 범위로 만들어도 될까요?' });
+  const out = stopDecision(qh(root, ['hook', 'stop'], asked));
+  assert.notStrictEqual(out?.decision, 'block', 'the agent asked: handing it back makes the person read the same question twice');
+  assert.doesNotMatch(out?.systemMessage || '', /범위 확인/);
+  const askedPolitely = JSON.stringify({ stop_hook_active: false, last_assistant_message: '고른 안과 이유를 이 창에 붙여 넣어 주세요.' });
+  assert.notStrictEqual(stopDecision(qh(root, ['hook', 'stop'], askedPolitely))?.decision, 'block', 'a Korean request without "?" is still a question (seen in the sandbox run)');
+  const notAsked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '다 만들었습니다.' });
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], notAsked)).decision, 'block', 'an answer that asks nothing still gets turned back');
 });

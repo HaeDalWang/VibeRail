@@ -1,0 +1,55 @@
+# 완료 리뷰를 읽는 순서로 묶기
+
+## 의도
+◆③ 리뷰 때 사람이 diff 전체가 아니라 "무엇이 바뀜 → 고른 안 → 테스트 증거 → 리뷰 지적 → 남은 판단" 순서로 읽는다. 모든 내용은 이미 있는 기록(작업 카드, 커밋 메시지, 바뀐 파일, 테스트 기록, 리뷰 결과)에서 그대로 가져오고 AI가 새로 요약하지 않는다(백로그 2번, plannotator Guided Review 본뜸).
+
+범위(grilling 답, 2026-11-23):
+- 설명 글: AI 없이 기록만 모음. 요약이 실제와 어긋날 수 없고 AI 비용 0
+- 보여 주기: 로컬 HTML 화면(설계안 화면과 같은 방식), AI가 열어 줌
+- 테스트 증거: 카드 성공 조건마다 연결된 테스트를 마지막 테스트 기록에서 찾아 통과/실패/찾지 못함. 기록이 지금 코드와 다르면 그렇다고 표시
+- 만드는 때: AI 리뷰를 돌리면 바로 함께 만듦(PR 전 리뷰 때도 파일은 생김). 검토 생략(C)이어도 리뷰 지적 없이 화면은 만듦(조정자 기본값)
+- 고른 안: 카드 `## interface 결정`에 설계안 파일 위치 한 줄이 있으면 그 안의 그림·장점·비용을 다시 보임. 파일이 없거나 그 안이 없으면 카드 글만. 내용이 바뀌었는지 판별은 백로그 3번 몫
+- 브랜치: feat/view-questions 위에 새 브랜치
+
+## 용어
+
+## interface 결정
+안: A (한 함수가 모으고 그림 — 새 모듈의 writeReviewPage(root, { base, treeHash, findings | null }), qh review 끝에서 한 줄 호출)
+이유: 좀더 사용자 친화적이다
+설계안: .scratch/guided-review/interface.json
+명세: .scratch/guided-review/spec.md
+작업: .scratch/guided-review/issues/01-page-skeleton.md, 02-picked-option.md, 03-test-evidence.md
+
+## 테스트 위치(seam)
+test/review-page.test.js
+
+## 루프
+.scratch/guided-review/issues/01-page-skeleton.md
+.scratch/guided-review/issues/02-picked-option.md
+.scratch/guided-review/issues/03-test-evidence.md
+
+## 성공 조건 → 검사
+- AI 리뷰가 끝나면 화면이 생기고 열라고 알린다 → test/review-page.test.js "a finished review writes the review page and tells the agent to open it"
+- 다섯 단계가 읽는 순서로 나온다 → test/review-page.test.js "the page shows the five steps in reading order"
+- 무엇이 바뀜은 기록 그대로, 출처와 함께 → test/review-page.test.js "what changed comes from the card intent…"
+- 검토 생략이어도 화면이 생긴다 → test/review-page.test.js "a skipped review still writes the page, saying the review was skipped"
+- 리뷰가 고장 나면 화면을 만들지 않는다 → test/review-page.test.js "a review that breaks writes no page"
+- 고른 안의 그림·장점·비용을 다시 보인다 → test/review-page.test.js "the picked option shows its picture, gain and cost from the design file"
+- 성공 조건마다 통과·실패·찾지 못함 → test/review-page.test.js "each success condition shows 통과, 실패 or 찾지 못함 from the last test log"
+- 오래된 테스트 기록은 경고 → test/review-page.test.js "a test record older than the current code shows a stale warning"
+
+## 판단 필요
+- [x] 완료 리뷰를 '무엇이 바뀜 → 고른 안 → 테스트 증거 → 남은 판단' 순서로 묶을 때, 설명 글은 누가 쓸까요? · AI 없이 기록만 모음
+- [x] 묶은 리뷰를 어디에 보여 줄까요? · 로컬 화면
+- [x] '테스트 증거' 단계에는 무엇을 보일까요? · 성공 조건마다 통과 여부
+- [x] 작업 브랜치는? · 질문 칸 브랜치 위에 새 브랜치
+- [x] 묶은 리뷰 화면은 언제 만들까요? · AI 리뷰를 돌리면 바로
+- [x] '고른 안' 단계에 그 안의 그림까지 다시 보일까요? · 그림까지
+
+## 미확인
+
+## 회고 (2026-11-23)
+- [x] 회고에서 나온 개선 후보 중 어느 것을 적용할까요? · 1. 카드 칸 실수 검사, 2. 실제 기록으로 화면 보기
+- 1 → 테스트 위치 칸에 경로가 아닌 줄(공백 포함)이 있으면 작업 카드 지적. 아직 없는 파일 경로는 지적하지 않음(카드를 쓸 때는 테스트 파일이 아직 없으므로)
+- 2 → CLAUDE.local.md 한 줄(로컬 전용)
+- 3 쌓인 브랜치 비교 기준: 사용자가 고르지 않음

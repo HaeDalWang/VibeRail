@@ -11,22 +11,25 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems, relatedTests, isRealReason, loadLimits, DECISIONS_FILE } = require('../lib/policy');
-const { createHash } = require('node:crypto');
+const { policyProblems, relatedTests, isRealReason, loadLimits, LIMITS, DECISIONS_FILE } = require('../lib/policy');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
+const { formatStatus } = require('../lib/status-format');
+const waivers = require('../lib/waivers');
+const { answerState, decisions } = require('../lib/card');
+const routesBaseline = require('../lib/routes-baseline');
+const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
 const PROBE_FILE = '.quality/probe.mjs';
-const { triage, aiFixUser, aiFixKind, criteriaWords, ACCESS_FILE } = require('../lib/triage');
+const { triage, answerChangeUser, aiFixUser, aiFixKind, criteriaWords, criteriaUser, ACCESS_FILE } = require('../lib/triage');
 const { METRICS_FILE, REPORTS_DIR } = require('../lib/measure');
 const PHASES = ['stop', 'pr'];
 const MAX_LISTED_CHANGES = 10;
-const BASELINE_EXAMPLES = 3;
 const DEFAULT_TIMEOUT_SEC = 300;
 // Stop runs built-in checks inside the host's 120-second hook limit (lib/init.js).
 const BUILTIN_TIMEOUT_SEC = 90;
@@ -74,7 +77,7 @@ function treeHash(root) {
 // Git prints nothing when the two have no common ancestor: in CI that is a shallow clone.
 function mergeBase(root, ref) {
   try {
-    return git(root, ['merge-base', ref, 'HEAD']);
+    return require('../lib/base-commit').workBase(root, git, ref, git(root, ['merge-base', ref, 'HEAD']));
   } catch (err) {
     if (!/: $/.test(err.message)) throw err;
     throw Object.assign(new EnvError(`git merge-base ${ref} HEAD: 공통 조상이 없다 (shallow clone이면 \`git fetch --unshallow\`)`), {
@@ -127,14 +130,13 @@ function writeEvidence(root, name, data) {
 
 // ---------- environment & requirements ----------
 
+const NO_COMMIT = '커밋 없음: 이 저장소에 아직 커밋이 없어 비교할 기준이 없다 → 사용자에게 알리고, 원하면 첫 커밋을 만든다. 첫 커밋 뒤부터 판정한다';
+const hasCommit = (root) => spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], { cwd: root }).status === 0;
+
 function envProblems(root, config) {
   const problems = doctor(root, { light: true }).map((p) => `설정: ${p.msg} → ${p.fix}`);
   if (problems.length) return problems;
-  try {
-    git(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
-  } catch {
-    return ['커밋 없음: 이 저장소에 아직 커밋이 없어 비교할 기준이 없다 → 사용자에게 알리고, 원하면 첫 커밋을 만든다. 첫 커밋 뒤부터 판정한다'];
-  }
+  if (!hasCommit(root)) return [NO_COMMIT];
   try {
     git(root, ['rev-parse', '--verify', '--quiet', `${config.baseRef}^{commit}`]);
   } catch {
@@ -149,7 +151,6 @@ const runsIn = (def, phase) => (def?.on || PHASES).includes(phase);
 
 const TESTS_SLOT = '{tests}';
 const workTests = (root, changed) => relatedTests(root, changed, lines(git(root, ['ls-files'])));
-const shellQuote = (f) => `'${f.replace(/'/g, "'\\''")}'`;
 
 function requirements(config, changed, phase, root) {
   if (changed.length === 0) return { names: [], later: [], risks: [], docsMissing: [] };
@@ -279,13 +280,9 @@ function taskCard(root) {
   return { rel, text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
 }
 
-const decisionSection = (text) => text.split(/^## /m).find((s) => s.startsWith('판단 필요')) || '';
-const taskDecisions = (text) => [...decisionSection(text).matchAll(/^- \[ \] (.+)$/gm)].map((m) => m[1].trim());
-const NOTHING = /^\(?(없음|없다|none|n\/a)\)?\.?$/i;
-
 // Only `- [ ] ` items reach the person; a plain list item there would be silently skipped.
 function cardFormatProblems(card) {
-  const plain = [...decisionSection(card.text).matchAll(/^[-*+]\s+(?!\[[ xX]\])(.+)$/gm)].map((m) => m[1].trim()).filter((x) => !NOTHING.test(x));
+  const { plain } = decisions(card.text);
   if (!plain.length) return [];
   return [`작업 카드: ${card.rel} \`## 판단 필요\`에 체크박스 없는 항목이 있어 사람 확인으로 잡히지 않는다 → 사람이 정할 것이면 \`- [ ] 항목\`으로 바꿔 사용자에게 묻고, 아니면 다른 절로 옮긴다: ${plain.map((x) => `"${x}"`).join(', ')}`];
 }
@@ -307,27 +304,19 @@ function readJsonAt(root, rev, file) {
   }
 }
 
-// The criteria as they are now; a person's confirmation is bound to it.
-function criteriaFingerprint(root) {
-  const read = (f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : '');
-  return createHash('sha256').update(`${read(CONFIG_FILE)}\n${read(ACCESS_FILE)}`).digest('hex').slice(0, 12);
-}
-
-const isCriteriaConfirmed = (root) => {
-  const file = path.join(root, DECISIONS_FILE);
-  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(`기준 확인: ${criteriaFingerprint(root)}`);
-};
-
 // In words a non-developer can answer "is this what you want?" about.
 const criteriaSummary = (root, config) => criteriaWords(config, Object.keys(readJsonAt(root, null, ACCESS_FILE).routes || {}).length);
 
 // What the gate measures against (checks, risks, the access table) changed in this work.
 // A person who confirmed this exact version (qh confirm) is not asked again.
-function configChanges(root, base, config) {
-  if (isCriteriaConfirmed(root)) return [];
-  const confirm = '사용자가 이대로 쓰겠다고 하면 `qh confirm` 실행';
+function configChanges(root, base, config, card) {
+  const isFirstInstall = !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]);
+  // The person's answer is the card line for this question (lib/waivers.js); an unchecked line is an open decision.
+  const state = answerState(card, criteriaUser({ isFirstInstall, summary: criteriaSummary(root, config) }));
+  if (state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root))) return [];
+  const confirm = '사용자가 답하면 작업 카드 `## 판단 필요`에 `- [x] <Tell the user 문장 그대로> · <답>`을 쓰고 `qh confirm` 실행';
   const diffHint = `\`git diff ${base.slice(0, 7)} -- ${CONFIG_FILE} ${ACCESS_FILE}\`로 확인. ${confirm}`;
-  if (!git(root, ['ls-tree', '--name-only', base, CONFIG_FILE])) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
+  if (isFirstInstall) return [`qh 첫 설치: 품질 검사 설정이 새로 생겼다. 사용자에게 쉬운 말로 이대로 쓸지 묻는다 (${criteriaSummary(root, config)}). ${confirm}`];
   // baseRef is where to compare from, not what is checked (`status --base` overrides it).
   const a = flatten({ ...readJsonAt(root, base, CONFIG_FILE), baseRef: undefined, access: readJsonAt(root, base, ACCESS_FILE) });
   const b = flatten({ ...config, baseRef: undefined, access: readJsonAt(root, null, ACCESS_FILE) });
@@ -336,12 +325,20 @@ function configChanges(root, base, config) {
   const asked = stopState.askedRoutes(root);
   const isAnswer = (k) => hadTable && a[k] === undefined && asked.has(k.replace(/^access\.routes\./, '').replace(/\.(level|check)$/, ''));
   const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k] && !isAnswer(k)).sort();
-  if (keys.length > MAX_LISTED_CHANGES) {
+  // `qh answer` writes choice, date and reason per question: one item per question, said by what it became.
+  const answered = [...new Set(keys.filter((k) => k.startsWith('answers.')).map((k) => k.split('.')[1]))];
+  const answerItems = answered.flatMap((id) => {
+    const choice = b[`answers.${id}.choice`]?.replaceAll('"', '');
+    const state = answerState(card, answerChangeUser(id, choice));
+    return state === 'open' || (state === 'yes' && waivers.isCriteriaRecorded(root)) ? [] : [`answers.${id}: ${choice ?? '(삭제)'} (이전 ${a[`answers.${id}.choice`]?.replaceAll('"', '') ?? '(없음)'}). ${confirm}`];
+  });
+  const rest = keys.filter((k) => !k.startsWith('answers.'));
+  if (rest.length > MAX_LISTED_CHANGES) {
     // A first baseline adds hundreds of routes: one line per section, read it in the diff.
-    const sections = Map.groupBy(keys, (k) => k.split('.').slice(0, 2).join('.'));
-    return [...sections].map(([section, ks]) => `${section}: ${ks.length}개 항목 바뀜 → ${diffHint}`);
+    const sections = Map.groupBy(rest, (k) => k.split('.').slice(0, 2).join('.'));
+    return [...answerItems, ...[...sections].map(([section, ks]) => `${section}: ${ks.length}개 항목 바뀜 → ${diffHint}`)];
   }
-  return [...keys.map((k) => `${k}: ${a[k] ?? '(없음)'} → ${b[k] ?? '(삭제)'}`), ...repoTools.baselineChanges(root, base)];
+  return [...answerItems, ...rest.map((k) => `${k}: ${a[k] ?? '(없음)'} → ${b[k] ?? '(삭제)'}`), ...repoTools.baselineChanges(root, base)];
 }
 
 // Whole-repository tools take seconds to minutes; `qh pr` assesses three times on one tree.
@@ -368,7 +365,11 @@ function allowedFailures(root) {
   return [...text.matchAll(/기존 실패 허용:\s*`?([^\s`·]+)`?\s*(?:·\s*([^·\n]*))?/g)].filter((m) => isRealReason((m[2] || '').trim())).map((m) => m[1]);
 }
 
-function reviewStatus(root, now) {
+// The person answered "검토 생략" (C): no AI review, nothing to run.
+const isReviewSkipped = (root, config) => require('../lib/questions').effectiveAnswers(root, config)?.reviewer === 'C';
+
+function reviewStatus(root, now, config) {
+  if (isReviewSkipped(root, config)) return { state: '생략 (사용자가 검토 생략을 고름)' };
   const ev = readEvidence(root, 'review');
   if (!ev) return { state: '미실행' };
   if (ev.envError) return { state: '환경 오류', detail: [ev.envError] };
@@ -380,7 +381,7 @@ function assess(root, phase = 'stop', baseRef) {
   const config = baseRef ? { ...loadConfig(root), baseRef } : loadConfig(root);
   const env = envProblems(root, config);
   const now = treeHash(root);
-  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], allowedFailures: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
+  const out = { treeHash: now, baseRef: config.baseRef, phase, env, checks: [], allowedFailures: [], later: [], risks: [], docsMissing: [], policy: [], structure: [], decisions: [], waivers: [], taskQuestions: [], undeclared: [], configChanges: [], review: { state: '미실행' } };
   if (env.length) return { config, ...out };
   const base = mergeBase(root, config.baseRef);
   const changed = changedFiles(root, base);
@@ -388,7 +389,7 @@ function assess(root, phase = 'stop', baseRef) {
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root);
-  const criteria = changed.length ? configChanges(root, base, config) : [];
+  const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
     config,
@@ -409,44 +410,28 @@ function assess(root, phase = 'stop', baseRef) {
     structureEnv: shape.env,
     structureWarnings: shape.warnings,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
-    decisions: taskDecisions(card.text),
+    decisions: decisions(card.text).open,
+    waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...require('../lib/confirm').pendingConfirms(root, { card: card.text })],
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],
+    accessLabels: readJsonAt(root, null, ACCESS_FILE).labels,
     configChanges: criteria,
     criteria: { isFirstInstall: !git(root, ['ls-tree', '--name-only', base, CONFIG_FILE]), summary: criteriaSummary(root, config) },
-    review: reviewStatus(root, now),
+    review: reviewStatus(root, now, config),
   };
-}
-
-// ---------- output ----------
-
-function formatStatus(a) {
-  const t = triage(a);
-  const out = [`qh 상태 (트리 ${a.treeHash.slice(0, 7)}, 기준 ${a.baseRef})`];
-  if (a.changed) out.push(`바뀐 파일 ${a.changed.length}개${a.risks.length ? ` · 위험: ${a.risks.map((r) => `${r.risk}(${r.files.join(', ')})`).join('; ')}` : ''}`);
-  for (const c of a.checks) out.push(`  ${c.name.padEnd(10)} ${c.state}${c.detail?.length ? `\n    ${c.detail.join('\n    ')}` : ''}`);
-  if (a.later.length) out.push(`  (PR 때 실행: ${a.later.join(', ')})`);
-  out.push(`AI 리뷰: ${formatReview(a.review)}`);
-  if (t.aiFix.length) out.push('AI가 고칠 일', ...t.aiFix.map((x) => `  - ${x}`));
-  if (t.human.length) out.push('사람이 판단할 일', ...t.human.map((x) => `  - ${x.agent}`));
-  if (t.env.length) out.push('환경 오류 (코드를 고치지 말고 사용자에게 보고)', ...t.env.map((x) => `  - ${x.agent}`));
-  if (t.warnings.length) out.push('경고 (막지 않음)', ...t.warnings.map((x) => `  - ${x.agent}`));
-  return out.join('\n');
-}
-
-function formatReview(r) {
-  if (!r.findings) return r.state + (r.detail ? ` — ${r.detail.join(' ')}` : '');
-  const high = r.findings.filter((f) => f.severity === '높음').length;
-  const list = [...r.findings]
-    .sort((x, y) => (x.severity === '높음' ? -1 : 0) - (y.severity === '높음' ? -1 : 0))
-    .map((f) => `\n    [${f.severity}/${f.verdict}] ${f.file}:${f.line} ${f.reason} → ${f.nextAction}`);
-  return `${r.state} (지목 ${r.findings.length}건, 높음 ${high})${list.join('')}`;
 }
 
 // ---------- review ----------
 
 function runReview(root, config, baseArg) {
+  if (isReviewSkipped(root, config)) {
+    console.log('AI 리뷰: 사용자가 검토 생략을 골라 돌리지 않았다');
+    // The skip never needed a base; without one there is simply no page.
+    let skipBase;
+    try { skipBase = mergeBase(root, baseArg || config.baseRef); } catch { return EXIT.ok; }
+    return reviewPage(root, config, skipBase, null);
+  }
   if (!config.review?.cmd) throw new EnvError('config.review.cmd 없음');
   const base = mergeBase(root, baseArg || config.baseRef);
   const hash = treeHash(root);
@@ -460,7 +445,7 @@ function runReview(root, config, baseArg) {
   const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
-  const cmd = config.review.cmd.replaceAll('{workdir}', root).replaceAll('{task}', taskFile).replaceAll('{out}', outDir);
+  const cmd = fillReviewCmd(config.review.cmd, { workdir: root, task: taskFile, out: outDir });
   const evidence = { check: 'review', cmd, treeHash: hash, base, startedAt: new Date().toISOString() };
   const missing = toolExists(root, cmd);
   if (missing) return writeEvidence(root, 'review', { ...evidence, envError: `도구 없음: ${missing}` }) || EXIT.env;
@@ -474,6 +459,13 @@ function runReview(root, config, baseArg) {
     return EXIT.env;
   }
   writeEvidence(root, 'review', { ...done, findings });
+  return reviewPage(root, config, base, findings);
+}
+
+function reviewPage(root, config, base, findings) {
+  const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
+  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
+  console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
 }
 
@@ -514,6 +506,12 @@ function formatSetup(setup) {
   return `${formatDoctor(rest)}${ask}`;
 }
 
+// What stops a PR: the same list for `qh pr` and `qh status --pr` (CI). The review run is `qh pr`'s own.
+function isPrBlocked(a, t, setup) {
+  const isEnvCheck = a.checks.some((c) => c.state === '환경 오류');
+  return Boolean(t.aiFix.length || a.undeclared.length || a.decisions.length || a.waivers.length || a.taskQuestions.length || t.env.length || isEnvCheck || setup.some((p) => p.level === '실패'));
+}
+
 function cmdPr(root) {
   if (envProblems(root, loadConfig(root)).length) return cmdCheck(root, [], { phase: 'pr' });
   cmdCheck(root, [], { phase: 'pr' });
@@ -521,17 +519,21 @@ function cmdPr(root) {
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}`);
-  const isEnvCheck = a.checks.some((c) => c.state === '환경 오류');
-  const isBlocked = t.aiFix.length || a.undeclared.length || a.decisions.length || a.taskQuestions.length || t.env.length || isEnvCheck || reviewExit !== EXIT.ok || setup.some((p) => p.level === '실패');
-  console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : '\nqh pr: 통과 (AI 리뷰 지목과 기준 변경은 PR 리뷰어가 확인)');
+  const declared = waivers.declaredWaivers(taskCard(root).text, root, a.changed);
+  console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}${declared.length ? `\n에이전트가 작업 카드에서 면제한 것 (리뷰어 확인):\n${declared.map((d) => `  - ${d}`).join('\n')}` : ''}`);
+  const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
+  // Only a full qh pr pass (checks and the AI review) is where the next work on the base branch starts.
+  if (!isBlocked && git(root, ['rev-parse', '--abbrev-ref', 'HEAD']) !== 'HEAD') stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
+  const found = a.review.findings || [];
+  const open = `AI 리뷰 지목 ${found.length}건(높음 ${found.filter((f) => f.severity === '높음').length}건)과 기준 변경 ${a.configChanges.length}건이 열려 있다`;
+  console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : `\nqh pr: 통과 (${open}: PR 리뷰어가 확인)`);
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
 
 // Only after the person said yes: binds their confirmation to this exact version of the criteria.
 function cmdConfirm(root) {
-  const fp = criteriaFingerprint(root);
-  if (isCriteriaConfirmed(root)) {
+  const fp = waivers.criteriaFingerprint(root);
+  if (waivers.isCriteriaRecorded(root)) {
     console.log(`이미 확인됨 (기준 확인: ${fp})`);
     return EXIT.ok;
   }
@@ -563,29 +565,32 @@ function block(reason, systemMessage) {
 // What the person sees: only the plain sentences, each once.
 const userLines = (items) => [...new Set(items.map((x) => `- ${x.user}`))].join('\n');
 const warningNote = (t) => (t.warnings.length ? `품질 검사 경고 (막지 않음)\n${userLines(t.warnings)}` : null);
-const askLines = (items) => items.map((x) => `- ${x.agent}\n  사용자에게는 이렇게 말한다: ${x.user}`).join('\n');
+const askLines = (items) => items.map((x) => `- ${x.agent}\n  Tell the user: ${x.user}`).join('\n');
 const plainFixes = (items, config) => items.map((x) => ({ user: aiFixUser(x, config) }));
-const stuckNote = (items, config) => `품질 검사: 에이전트가 아래 문제를 고치지 못하고 멈췄습니다. 에이전트에게 "남은 품질 문제 고쳐줘"라고 하거나, 그대로 둘지 정해 주세요.\n${userLines(plainFixes(items, config))}`;
+const stuckNote = (items, config) => `품질 검사: AI가 아래 문제를 고치지 못하고 멈췄습니다. AI에게 "남은 품질 문제 고쳐줘"라고 하거나, 그대로 둘지 정해 주세요.\n${userLines(plainFixes(items, config))}`;
 
 // Kiro sends no stop_hook_active, does not call Stop again after a block and shows no
 // systemMessage (Kiro CLI 3.3.0, /tmp/qh-e2e/B): the agent rechecks itself and carries the words.
-const oneShotTail = (lines) => `\n\n이 호스트는 고친 뒤 이 검사를 다시 부르지 않는다. 고친 뒤 \`qh status\`를 직접 돌려 남은 항목이 없을 때만 끝낸다. 남으면 고치지 못한 것을 사용자에게 보고한다.\n사용자에게 전할 말 (이 호스트는 알림을 따로 보여 주지 않는다. 남은 것은 응답에 이 말로 넣는다):\n${lines}`;
+const oneShotTail = (lines) => `\n\nThis host does not call this check again after you fix things. After fixing, run \`qh status\` yourself and end only when nothing is left. If something remains, report what you could not fix to the user.\nWhat to tell the user (this host shows the person no separate notice; put what remains in your response in these words):\n${lines}`;
 
 function hookInput() {
   const raw = readStdin() || '{}';
   const data = parseJson(raw);
   const input = data && typeof data === 'object' ? data : {};
-  return { raw, session: typeof input.session_id === 'string' ? input.session_id : '', isOneShot: !('stop_hook_active' in input) };
+  return {
+    raw,
+    session: typeof input.session_id === 'string' ? input.session_id : '',
+    isOneShot: !('stop_hook_active' in input),
+    lastMessage: typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '',
+  };
 }
 
 // The gate hands the agent only what is new, so it never loops on what the agent cannot fix.
 // - An AI-fix item (by kind: "TDD", "검사 unit") blocks again only after the tree changed, and at
-//   most MAX_SAME_BLOCKS times in a row; another item coming or going does not reset it.
+//   most limits.sameBlocks times in a row (default 2, rationale in docs/reference.md); another item coming or going does not reset it.
 // - Questions for the person and environment errors are handed back once per distinct content.
 // What is not handed back goes to the person as a systemMessage, once per distinct content.
 // State is per agent session (lib/stop-state.js).
-// ponytail: fixed cap of 2 same-item blocks, make it config if a project needs more retries.
-const MAX_SAME_BLOCKS = 2;
 
 function hookStop(root) {
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
@@ -599,21 +604,27 @@ function hookStop(root) {
     const last = stopState.readSession(root, host.session);
     if (last.envNote === err.user) return EXIT.ok;
     stopState.writeSession(root, host.session, { ...last, envNote: err.user }, host.isOneShot ? `- ${err.user}` : undefined);
-    return block(`qh: 환경 오류로 판정하지 못함.\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines([{ agent: err.message, user: err.user }])}`, err.user);
+    return block(`qh: could not judge because of an environment error (환경 오류).\n환경 오류 (do not change code; report it to the user):\n${askLines([{ agent: err.message, user: err.user }])}`, err.user);
   }
 }
 
 function judgeStop(root, config, host) {
   if (!envProblems(root, config).length) cmdCheck(root, [], { builtinOnly: true });
   const a = assess(root);
-  const t = triage(a);
-  const humanPart = t.human.length ? `\n사용자에게 물어볼 것 (응답에서 질문하고 끝내라. 사용자는 개발자가 아닐 수 있다: 아래 "사용자에게는" 문장처럼 파일 경로·명령·커밋 해시·도구 이름 없이 묻는다):\n${askLines(t.human)}` : '';
-  const envPart = t.env.length ? `\n환경 오류 (코드를 바꾸지 말고 사용자에게 보고하라):\n${askLines(t.env)}` : '';
+  // The agent writes the card's open decisions itself, so a last answer that asks something has
+  // asked them; turning it back makes the person read the same question twice. Agents ask in
+  // Korean as often with "…주세요." as with "?" (sandbox run 2026-11-17). The PR gate still
+  // blocks on any open decision, so a wrong guess here cannot let one through.
+  // ponytail: "?"/"주세요" is the only signal, compare the decision text if that misfires.
+  const isAsking = /[?？]|주세요/.test(host.lastMessage);
+  const t = triage(isAsking ? { ...a, decisions: [] } : a);
+  const humanPart = t.human.length ? `\nAsk the user (ask in your response and end it. The user may not be a developer: ask like the "Tell the user:" sentences below, with no file paths, commands, commit hashes, or tool names):\n${askLines(t.human)}` : '';
+  const envPart = t.env.length ? `\n환경 오류 (do not change code; report it to the user):\n${askLines(t.env)}` : '';
   const askPart = `${humanPart}${envPart}`;
 
   const last = stopState.readSession(root, host.session);
   const counts = last.counts || {};
-  const isGivenUp = (x) => Boolean(counts[aiFixKind(x)]) && (last.tree === a.treeHash || counts[aiFixKind(x)] >= MAX_SAME_BLOCKS);
+  const isGivenUp = (x) => Boolean(counts[aiFixKind(x)]) && (last.tree === a.treeHash || counts[aiFixKind(x)] >= LIMITS.sameBlocks);
   const fresh = t.aiFix.filter((x) => !isGivenUp(x));
   const givenUp = t.aiFix.filter(isGivenUp);
   const nextCounts = Object.fromEntries(t.aiFix.map(aiFixKind).map((k) => [k, fresh.some((x) => aiFixKind(x) === k) ? (counts[k] || 0) + 1 : counts[k]]));
@@ -621,14 +632,15 @@ function judgeStop(root, config, host) {
   const pending = host.isOneShot ? (forPerson.length ? userLines(forPerson) : null) : undefined;
   if (fresh.length || (askPart !== '' && askPart !== last.askPart)) {
     stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
-    if (a.undeclared.length) stopState.markAsked(root, a.undeclared);
-    require('../lib/measure').logStop(root, t);
-    const head = fresh.length ? `qh: 끝내기 전에 고칠 일\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: 환경 오류로 판정하지 못함.' : 'qh: 검사는 통과.';
+    // What this block shows the person counts as asked: the routes (waivers are answered on the task card).
+    stopState.markAsked(root, a.undeclared);
+    if (fresh.length) require('../lib/measure').logStop(root, { aiFix: fresh, human: t.human });
+    const head = fresh.length ? `qh: fix these before ending\n${fresh.map((x) => `- ${x}`).join('\n')}` : t.env.length ? 'qh: could not judge because of an environment error (환경 오류).' : 'qh: checks passed.';
     return block(`${head}${askPart}${host.isOneShot ? oneShotTail(userLines(forPerson)) : ''}`, warningNote(t));
   }
   const note = [
     givenUp.length && stuckNote(givenUp, a.config),
-    askPart && `사람이 판단할 일 (에이전트에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
+    askPart && `사람이 판단할 일 (AI에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
     warningNote(t),
   ].filter(Boolean).join('\n');
   stopState.writeSession(root, host.session, { tree: last.tree, counts: nextCounts, askPart, notified: note }, pending);
@@ -643,26 +655,19 @@ function cmdRoutesBaseline(root, args) {
     console.log(`${ACCESS_FILE}이 이미 있다. 사람이 정한 내용이 지워지니 덮어쓰지 않는다 (다시 만들려면 파일을 직접 옮긴 뒤 실행).`);
     return EXIT.failed;
   }
-  const levelsArg = args.includes('--levels') ? args[args.indexOf('--levels') + 1] : null;
-  if (!levelsArg) {
-    console.log('사용: qh routes --baseline --levels public,member,admin  (낮은 수준부터, 첫 수준은 비로그인)');
+  const given = routesBaseline.parseOptions(args);
+  if (given.error) {
+    console.log(given.error);
     return EXIT.failed;
   }
+  const { levels, labels } = given;
   const runner = path.join(QH_HOME, 'lib', 'run-builtin.js');
-  const opts = JSON.stringify({ baseline: true, levels: levelsArg.split(',') });
+  const opts = JSON.stringify({ baseline: true, levels });
   const r = spawnSync(process.execPath, [runner, 'route-access', root, opts], { cwd: root, encoding: 'utf8', maxBuffer: MAX_BUFFER, timeout: DEFAULT_TIMEOUT_SEC * 1000 });
   const result = parseJson(r.stdout);
   if (!result?.baseline) throw new EnvError(`기준선을 만들지 못함: ${result?.envError || result?.error || (r.stderr || '').trim().split('\n')[0]}`);
-  fs.writeFileSync(path.join(root, ACCESS_FILE), `${JSON.stringify(result.baseline, null, 2)}\n`);
-  const total = Object.keys(result.baseline.routes).length;
-  console.log(`${ACCESS_FILE}: 라우트 ${total}개를 현재 동작으로 기록. 사람이 확인할 추정 ${result.uncertain.length}개("check" 표시):`);
-  const byReason = Map.groupBy(result.uncertain, (route) => result.baseline.routes[route].check);
-  for (const [reason, routes] of [...byReason].sort((a, b) => b[1].length - a[1].length)) {
-    const more = routes.length > BASELINE_EXAMPLES ? ` 외 ${routes.length - BASELINE_EXAMPLES}개` : '';
-    console.log(`  - ${reason}: ${routes.length}개 (${routes.slice(0, BASELINE_EXAMPLES).join(', ')}${more})`);
-  }
-  console.log('"X에서 4xx/5xx"는 X가 거부되지 않았다는 뜻일 뿐, 그 뒤 역할 검사가 있는지는 모른다. 해당 라우트를 보고 수준을 고치고 check를 지운다.');
-  console.log('현재 동작이라 기존 버그도 들어 있다. 커밋 전에 사람이 한 번 훑는다.');
+  fs.writeFileSync(path.join(root, ACCESS_FILE), `${JSON.stringify({ levels: result.baseline.levels, labels, routes: result.baseline.routes }, null, 2)}\n`);
+  console.log(routesBaseline.reportLines(ACCESS_FILE, result).join('\n'));
   return EXIT.ok;
 }
 
@@ -684,7 +689,7 @@ function cmdBaseline(root) {
 }
 
 function hookSessionStart(root) {
-  const unasked = loadConfig(root)?.answers ? '' : '\n(qh) 프로젝트 질문에 아직 답하지 않았다 → 사용자에게 알리고, 원하면 .quality/qh/lib/ask-guide.md대로 질문 세션을 연다.';
+  const unasked = loadConfig(root)?.answers ? '' : '\n(qh) The project questions are not answered yet → tell the user, and if they want, open a question session as .quality/qh/lib/ask-guide.md says.';
   const pending = stopState.takePending(root);
   const left = pending ? `\n(qh) 지난 세션이 끝날 때 남은 품질 문제가 있었다(그 호스트는 알림을 보여 주지 않는다). 위 상태에 아직 남았으면 사용자에게 이렇게 전한다:\n${pending}` : '';
   const cycle = require('../lib/cycle').cycleLines(root, taskCard(root).text).map((l) => `\n(qh) ${l}`).join('');
@@ -698,13 +703,14 @@ const USAGE = `사용: qh <명령>
   answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
   cycle                카드가 어느 단계인지, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로
-  view interface <json> | view glossary  interface 선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
+  view interface <json> | view architecture <json> | view glossary  선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
   measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지를 .quality/reports/에 쌓음
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
   pr                   PR 직전: 검사 전부 + 리뷰 + 판정
   status [--json] [--pr] [--base ref]  상태표 (--pr: PR 기준, --base: config.baseRef 대신 비교할 ref)
-  routes --baseline --levels a,b,c  현재 동작으로 권한 표 첫 버전 만들기
+  routes --baseline --levels a,b,c [--labels 이름,이름,이름]  현재 동작으로 권한 표 첫 버전 만들기
+  uninstall            qh가 init으로 더한 것(복사본·hook·규칙 블록·skill)을 걷어내고 사용자의 내용은 둠
   confirm              사용자가 지금 품질 기준(설정·권한 표)을 확인했다고 결정 로그에 기록 (바뀌면 다시 물음)
   baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록
   hook session-start | hook stop`;
@@ -714,8 +720,9 @@ function main(argv) {
   if (cmd === 'init') return require('../lib/init').init(QH_HOME, rest[0] || process.cwd());
   const root = findRoot(process.cwd());
   loadLimits(root);
+  if (cmd === 'uninstall') return require('../lib/uninstall').uninstall(QH_HOME, root);
   if (cmd === 'routes' && rest.includes('--baseline')) return cmdRoutesBaseline(root, rest);
-  if (cmd === 'check') return cmdCheck(root, rest);
+  if (cmd === 'check') return cmdCheck(root, rest.filter((x) => x !== '--pr'), { phase: rest.includes('--pr') ? 'pr' : 'stop' });
   if (cmd === 'baseline') return cmdBaseline(root);
   if (cmd === 'confirm') return cmdConfirm(root);
   if (cmd === 'doctor') {
@@ -741,6 +748,7 @@ function main(argv) {
       console.log('사용: qh measure [--backfill <주 수>]');
       return EXIT.failed;
     }
+    if (!hasCommit(root)) throw new EnvError(NO_COMMIT);
     const r = require('../lib/measure').measure(root, { weeks });
     console.log(`측정: ${r.added}줄 추가 → ${METRICS_FILE}\n결과지: ${r.page}\n브라우저로 연다. 지난 결과지도 ${REPORTS_DIR}/에 날짜순으로 남는다.`);
     return EXIT.ok;
@@ -759,7 +767,7 @@ function main(argv) {
     const a = assess(root, rest.includes('--pr') ? 'pr' : 'stop', rest.includes('--base') ? rest[rest.indexOf('--base') + 1] : undefined);
     const { config, ...rest2 } = a;
     console.log(rest.includes('--json') ? JSON.stringify(rest2) : formatStatus(a));
-    return EXIT.ok;
+    return rest.includes('--pr') && isPrBlocked(a, triage(a), doctor(root)) ? EXIT.failed : EXIT.ok;
   }
   if (cmd === 'hook' && rest[0] === 'stop') return hookStop(root);
   if (cmd === 'hook' && rest[0] === 'session-start') return hookSessionStart(root);

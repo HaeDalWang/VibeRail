@@ -1,0 +1,25 @@
+{
+  "title": "판단 필요 칸 읽기 — 어떤 모양으로 모을까",
+  "options": [
+    {
+      "id": "A",
+      "name": "줄 목록 하나만 돌려주기",
+      "summary": "카드 모듈에 함수 하나를 더한다. '판단 필요' 칸의 줄을 너그러운 규칙으로 읽어, 줄마다 체크 상태(열림 / 답함 / 체크 없음)와 글을 담은 목록을 돌려준다. 다섯 곳은 이 목록을 받아 자기에게 필요한 줄만 골라 쓴다.",
+      "mermaid": "flowchart LR\n  C[작업 카드] --> R[카드 모듈: 판단 필요 줄 목록]\n  R -->|목록| W[면제 질문: 답 판정]\n  R -->|목록| N[확인 번호: 승인 번호]\n  R -->|목록| P[PR 막기: 열린 질문]\n  R -->|목록| F[형식 검사: 체크 없는 줄]\n  R -->|목록| V[완료 리뷰: 남은 질문]",
+      "gain": "어떤 줄을 질문으로 볼지(들여쓰기, 대문자 X, 목록 표시, 칸 제목, 주석)가 한곳에 모인다. 모듈이 함수 하나라 배울 것이 적다.",
+      "cost": "'답이 있는가'(질문 뒤 ' · 답') 판정은 여전히 면제 질문과 확인 번호 두 곳이 각자 한다. 거기서 다시 어긋날 수 있다.",
+      "signature": "lib/card.js\n  SECTIONS.decisions = '판단 필요'\n  decisionItems(card) → [{ state: 'open'|'checked'|'plain', text }]\n    // text: 체크 칸 뒤 글 전체(질문 · 답). 들여쓰기·[x]/[X]·-*+ 모두 읽음, 주석 제외\n호출: taskDecisions = open의 text, cardFormatProblems = plain, answerState·approvedNumbers는 checked에서 'text.startsWith(질문 + \" ·\")'를 각자",
+      "seam": "test/card.test.js"
+    },
+    {
+      "id": "B",
+      "name": "질문과 답까지 읽어 주는 모듈",
+      "summary": "카드 모듈에 읽기 하나를 더한다. 줄을 읽는 것에 더해 '이 질문에 답했는가'와 '이 말로 시작하는 질문의 답들'까지 이 모듈이 판정한다. 다섯 곳은 줄 모양을 전혀 모르고 질문 문장만 넘긴다.",
+      "mermaid": "flowchart LR\n  C[작업 카드] --> R[카드 모듈: 판단 필요 읽기]\n  R -->|열린 질문| P[PR 막기 · 완료 리뷰]\n  R -->|체크 없는 줄| F[형식 검사]\n  R -->|이 질문 답했나| W[면제 질문]\n  R -->|이 말로 시작하는 답한 질문들| N[확인 번호]",
+      "gain": "줄 모양 규칙과 '답이 있다'의 규칙이 모두 한곳에 있다. 면제 질문의 답 판정 함수는 이 모듈로 옮겨 가고, 확인 번호는 번호만 뽑는다. 나중에 '답 없는 체크 줄 안내'도 여기에 한 줄이면 된다.",
+      "cost": "함수가 하나가 아니라 셋이라 배울 것이 조금 많다. 면제 질문의 답 판정이 옮겨 가서 그 모듈을 부르는 qh 쪽 두 줄도 바뀐다.",
+      "signature": "lib/card.js\n  SECTIONS.decisions = '판단 필요'\n  decisions(card) → { open: [질문], plain: [글], answered: [질문 · 답 줄 글] }\n  answerState(card, question) → 'yes'|'open'|'none'   // waivers.js에서 옮김, 이름·뜻 그대로\n    // 'yes' = 체크 + 질문 뒤 ' · ' + 빈칸 아닌 답\n  (확인 번호는 answered에서 head로 시작하는 줄의 번호를 뽑음)\n규칙: 들여쓰기·[x]/[X]·-*+ 모두 읽음, 제목이 정확히 '판단 필요'인 칸만, 주석 제외",
+      "seam": "test/card.test.js"
+    }
+  ]
+}

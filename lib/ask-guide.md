@@ -1,64 +1,76 @@
-# qh 질문 안내 (에이전트용)
+# qh question guide (for agents)
 
-`qh`는 `node .quality/qh/bin/qh.js`다. 답은 사용자가 고른다. 에이전트가 대신 고르거나 답을 지어내지 않는다.
+`qh` is `node .quality/qh/bin/qh.js`. The user picks the answer. The agent never picks for them or makes one up.
 
-## 프로젝트 질문 세션
+## Project question session (프로젝트 질문 세션)
 
-언제: `qh doctor`·세션 시작이 "프로젝트 질문에 아직 답하지 않았다"고 할 때 사용자에게 알린다. 사용자가 원하거나("품질 기준을 같이 정하자" 같은 말), 제품 성격이 바뀌었을 때(로그인·개인정보·DB·외부 연동·배포가 새로 생김) 연다.
+When: tell the user when `qh doctor` or session start says "프로젝트 질문에 아직 답하지 않았다". Open the session when the user wants it (e.g. "품질 기준을 같이 정하자") or when the product's nature changed (login, personal data, DB, external integration, or deployment newly appeared).
 
-1. `qh ask`를 실행하고, 출력된 `질문 화면:` 경로를 사용자에게 준다. 브라우저로 열라고 한다. 화면은 이 컴퓨터에만 있다. 어디에도 올리지 않는다.
-2. 사용자가 "프롬프트 복사"로 붙여 넣은 `qh 답` 블록을 고치지 않고 그대로 넘긴다:
+1. Run `qh ask`, then open it for the person (macOS `open`, Linux `xdg-open`) with the path printed after `질문 화면:`. Say in one plain line that the question page is open. The page exists only on this computer. Upload it nowhere.
+2. Pass the `qh 답` block the user pasted via "프롬프트 복사" through unchanged:
    ```sh
    node .quality/qh/bin/qh.js answer <<'QH'
-   (붙여 넣은 블록)
+   (pasted block)
    QH
    ```
-3. `저장하지 않음:`이면 그 줄을 사용자에게 보여 주고 화면에서 다시 고르게 한다. 블록을 직접 고쳐 넘기지 않는다.
-4. 저장되면 `qh doctor`를 돌린다. 답이 요구하는 것(검사·위험 영역·문서)이 없다는 `[실패]`가 나오면 사용자에게 보여 준다. 무엇을 할지 함께 정한다. `.quality/config.json`은 사용자 확인 없이 바꾸지 않는다.
+3. If the output says `저장하지 않음:`, show that line to the user and have them choose again on the page. Never edit the block yourself.
+4. When saved, run `qh doctor`. If it prints a `[실패]` saying something the answers require (a check, risk area, or doc) is missing, translate each doctor failure into one plain sentence (what is missing and what it would protect, with no file names, keys or commands) and ask the user what to do. Do not change `.quality/config.json` without the user's confirmation.
 
-## 작업 질문
+## Task question (작업 질문)
 
-언제: 응답을 끝낼 때 qh가 `작업 질문(<위험 영역>, …)`을 보이면, 이번 작업이 위험 영역을 건드린 것이다.
+When: at the end of a response, qh shows `작업 질문(<위험 영역>, …)`, meaning this task touched a risk area.
 
-- 채팅에서 짧게 묻는다. qh가 준 질문 문장과 A·B 선택지를 그대로 쓰고, 바뀐 파일을 한 줄로 보탠다.
-- 답을 받은 뒤에만 작업 카드에 `작업 질문 <위험 영역>: A 사유` 또는 `B 사유`를 적는다.
-- A(변경 있음)면 그 작업에는 ADR이 꼭 있어야 한다. `ADR 불필요`가 통하지 않는다.
+- Ask briefly. Use qh's question sentence and A/B options as they are, and add the changed files in one line.
+- Only after the answer, write `작업 질문 <위험 영역>: A 사유` or `B 사유` in the task card.
+- If A (there is a change), that task must have an ADR. `ADR 불필요` does not apply.
 
-## 기준 확인
+## Standard confirmation (기준 확인)
 
-언제: qh가 `기준 변경(사람 확인 필요)`을 보일 때. 품질 검사 설정이 새로 생겼거나 바뀐 것이다.
+When: qh shows `기준 변경(사람 확인 필요)`. The quality-check settings were newly created or changed.
 
-- 파일 이름·JSON·커밋 해시를 보여 주지 않는다. qh가 준 요약(켜진 검사, 위험 영역, 권한 표 경로 수)이나 바뀐 내용을 말로 풀어 "이대로 쓸까요?"라고 묻는다.
-- 사용자가 예라고 한 뒤에만 `node .quality/qh/bin/qh.js confirm`을 실행한다. 지금 설정에 묶여 기록되므로, 설정이 다시 바뀌면 qh가 다시 묻는다.
-- 아니오면 무엇을 바꾸고 싶은지 묻는다. 설정 파일은 그 답을 받은 뒤에만 고친다.
+- Do not show file names, JSON, or commit hashes. Explain in words qh's summary (checks turned on, risk areas, number of paths in the permission table) or what changed, and ask "이대로 쓸까요?".
+- Only after the user says yes, run `node .quality/qh/bin/qh.js confirm`. It is recorded bound to the current settings, so qh asks again if the settings change.
+- If no, ask what they want to change. Edit the settings file only after getting that answer.
 
-## 기존 실패 허용
+## Allowing an existing failure (기존 실패 허용)
 
-언제: 검사가 이번 작업과 무관하게 실패하고, 기준 브랜치에서도 같은 이유로 실패할 때.
+When: a check fails regardless of this task, and fails for the same reason on the base branch.
 
-- 고칠 수 있으면 고친다. 고칠 수 없으면 사용자에게 묻는다: "이 검사는 이 작업 전부터 실패합니다. 따로 고칠 일로 두고 이번에는 막지 않을까요?"
-- 사용자에게 물은 뒤에만, 예라고 하면 `docs/decisions.md`에 `- 날짜 · 기존 실패 허용: <검사 이름> · <사용자 답과 이유, 5자 이상> · 고쳐지면` 한 줄을 쓴다. 묻지 않고 쓰지 않는다.
-- 그 검사의 실패는 경고로만 보인다. 고쳐지면 그 줄을 지운다.
+- Fix it if you can. If you cannot, ask the user: "이 검사는 이 작업 전부터 실패합니다. 따로 고칠 일로 두고 이번에는 막지 않을까요?"
+- Only after asking, and only if the user says yes, write one line in `docs/decisions.md`: `- 날짜 · 기존 실패 허용: <검사 이름> · <user's answer and reason, at least limits.reasonChars> · 고쳐지면`. Never write it without asking.
+- That check's failure then shows only as a warning. When it is fixed, delete the line.
 
-## 허용 줄
+## Allow lines (허용 줄)
 
-언제: qh가 `큰 파일`·`중복`·`루트 파일`·`정리 대상 폴더`·`문서 증가`를 보이고, 고치면(나누기·합치기·옮기기) 더 나빠질 때.
+When: qh shows `큰 파일`·`중복`·`루트 파일`·`정리 대상 폴더`·`문서 증가`, and fixing it (splitting, merging, moving) would make things worse.
 
-- 먼저 고친다. 한도를 피하려고 줄을 합치거나 코드를 욱여넣지 않는다.
-- 고칠 수 없으면 사용자에게 왜 나눌 수 없는지 쉬운 말로 묻는다: "이 파일은 ○○ 때문에 나누면 더 복잡해집니다. 이번에는 길이 한도의 예외로 둘까요?"
-- `큰 파일 허용`·`중복 허용`·`루트 파일`·`문서 증가 허용` 줄은 사용자에게 묻고 답을 받은 뒤에만 `docs/decisions.md`에 쓴다. 묻지 않고 쓰지 않는다. 이유에는 사용자 답을 함께 적는다.
+- Fix it first. Do not merge lines or cram code to dodge a limit.
+- If you cannot fix it, ask the user in plain words why it cannot be split: "이 파일은 ○○ 때문에 나누면 더 복잡해집니다. 이번에는 길이 한도의 예외로 둘까요?"
+- Write the `큰 파일 허용`·`중복 허용`·`루트 파일`·`문서 증가 허용` lines to `docs/decisions.md` only after asking the user and getting an answer. Never write them without asking. Include the user's answer in the reason.
 
-## 앱 실행 방법 채우기
+## Filling in how to run the app (앱 실행 방법 채우기)
 
-언제: qh가 `.quality/probe.mjs`의 빈 부분(todo)을 사람에게 물으라고 할 때.
+When: qh tells you to ask the person about an empty part (todo) of `.quality/probe.mjs`.
 
-- qh가 준 "사용자에게는" 문장으로 채워도 되는지 묻는다. 허락을 받은 뒤에만 `.quality/probe.mjs`를 채운다(앱 만들기·로그인·테스트 DB). 아니면 그 검사를 끌지 함께 정하고, 끄는 것도 답을 받은 뒤에만 `.quality/config.json`에서 뺀다.
+- Ask whether you may fill it using the sentence qh gives after "Tell the user:". Only after permission, fill `.quality/probe.mjs` (build the app, login, test DB). If not, decide together whether to turn that check off; remove it from `.quality/config.json` only after getting an answer.
 
-## 에이전트가 직접 질문을 만들 때
+## When the agent writes its own question
 
-qh 질문에 없는 것을 사용자에게 정하게 해야 할 때도 같은 모양으로 묻는다.
+When the user must decide something qh's questions do not cover, ask in the same shape.
 
-- 선택지 이름은 동사가 아니라 명사·상태로 쓴다: "DB 변경 있음 / 없음", "운영 배포 대상 / 제외", "개인정보 취급함 / 취급 안 함", "외부 API 연동 있음 / 단독 실행", "팀 협업 개발 / 단독 작업", "리뷰 적용 / 리뷰 생략".
-- 선택지마다 세 가지를 쓴다: 동작 방식(무엇이 켜지나), 장점, 비용 / 리스크.
-- 권장안 하나와 그 근거(저장소에서 본 것)를 붙인다. 근거가 추측이면 추측이라고 쓴다.
-- 질문은 한 번에 하나의 결정만 묻는다. 사용자가 권장안과 다르게 고르면 사유를 한 줄 받는다. 그 결정을 `docs/decisions.md`에 한 줄 남긴다.
+- Name options as nouns or states, not verbs: "DB 변경 있음 / 없음", "운영 배포 대상 / 제외", "개인정보 취급함 / 취급 안 함", "외부 API 연동 있음 / 단독 실행", "팀 협업 개발 / 단독 작업", "리뷰 적용 / 리뷰 생략".
+- For each option write three things: how it works (what turns on), the benefit, the cost / risk.
+- Attach one recommendation and its basis (what you saw in the repo). If the basis is a guess, say it is a guess.
+- Ask one decision at a time. If the user picks differently from the recommendation, get a one-line reason. Record that decision as one line in `docs/decisions.md`.
+
+## Adding a check (검사 넣기)
+
+When: the project now has a test or lint command that is not in `checks` of `.quality/config.json`.
+
+- Ask the user in words: "테스트를 만들 때마다 자동으로 돌려 확인할까요? 전체는 올리기 직전에만 돌리고, 평소에는 바뀐 부분 테스트만 돌립니다."
+- Add to `checks` only after they say yes (with this project's own commands). `{tests}` is filled with the test files changed in this task; with nothing to run, the check is skipped:
+  ```json
+  "test": { "cmd": "npm test", "on": ["pr"] },
+  "test-work": { "cmd": "npm test -- {tests}", "on": ["stop"] }
+  ```
+- If qh then shows `기준 변경(사람 확인 필요)`, confirm once more as in "Standard confirmation" above.

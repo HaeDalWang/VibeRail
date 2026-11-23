@@ -1,0 +1,63 @@
+'use strict';
+
+// Facts the docs state about the project, checked against the project so they cannot drift quietly.
+
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..');
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const ADR = 'docs/adr/0001-pocock-karpathy-principles-over-qh.md';
+
+test('the ADR says where the Pocock and Karpathy principles come from, and the scope lists only vendored skills', () => {
+  const adr = read(ADR);
+  assert.match(adr, /## 출처/);
+  assert.match(adr, /mattpocock\/skills @5863806/);
+  assert.match(adr, /Software Fundamentals Matter More Than Ever/);
+  assert.match(adr, /How To De-Slop A Codebase/);
+  assert.match(adr, /2차 출처/);
+  assert.match(adr, /explainx\.ai\/blog\/karpathy-understand-llm-outputs-ste100-diagrams-html-video-2026/);
+  const scope = adr.split('\n').find((l) => l.includes('범위:'));
+  const vendored = fs.readdirSync(path.join(ROOT, 'skills/vendor/mattpocock-skills'));
+  assert.ok(!/\bimplement\b/.test(scope), 'implement is not vendored');
+  for (const name of scope.replace(/^.*범위:/, '').split('.')[0].split(',').map((x) => x.trim())) assert.ok(vendored.includes(name), `${name} is in the vendored folder`);
+});
+
+test('the README says the asking-first and design-choice flow works in Claude Code only, while Kiro gets checks and hooks', () => {
+  const line = read('README.md').split('\n').find((l) => /Kiro/.test(l));
+  assert.match(line, /Claude Code/);
+  assert.match(line, /먼저 묻고/);
+  assert.match(line, /설계안/);
+  assert.match(line, /Kiro[^.]*검사[^.]*훅|훅[^.]*검사/);
+});
+
+test('reference.md lists every command qh prints in its usage', () => {
+  const usage = fs.readFileSync(path.join(ROOT, 'bin/qh.js'), 'utf8').match(/const USAGE = `([\s\S]*?)`;/)[1];
+  const commands = [...usage.matchAll(/^ {2}(\w+)/gm)].map((m) => m[1]).filter((c) => c !== 'hook');
+  assert.ok(commands.includes('confirm') && commands.includes('review') && commands.includes('baseline'));
+  const table = read('docs/reference.md').split('## 명령')[1].split('## 측정 결과지')[0];
+  for (const c of commands) assert.ok(table.includes(`\`qh ${c}`), `qh ${c} has a row`);
+});
+
+test('reference.md has a row for every limits key and for the fixed numbers, with the 2-block rationale', () => {
+  const { DEFAULT_LIMITS } = require('../lib/policy');
+  const table = read('docs/reference.md').split('## 기본값과 근거')[1].split('## 명령')[0];
+  for (const k of Object.keys(DEFAULT_LIMITS)) assert.ok(table.includes(`limits.${k}`), `limits.${k}`);
+  for (const sec of ['90초', '300초', '900초']) assert.ok(table.includes(sec), sec);
+  assert.match(table, /같은 항목으로 연속[\s\S]*gureumi/);
+});
+
+test('the docs do not say the report judges: no 판정 지표, no 개선·악화를 매기는 지표', () => {
+  for (const f of ['docs/reference.md', 'docs/architecture.md']) assert.doesNotMatch(read(f), /판정 지표|개선·악화를 매기는/, f);
+});
+
+test('the docs say the TDD and docs rules are evidence of intent, not of correctness', () => {
+  for (const f of ['docs/reference.md', 'docs/architecture.md']) assert.match(read(f), /증거이지 .{0,12}옳은지의 증거는 아니다/, f);
+});
+
+test('qh-cycle does not claim the Karpathy principles are inside the vendored skills', () => {
+  assert.doesNotMatch(read('skills/qh-cycle/SKILL.md'), /Karpathy principles in the vendored skills/);
+  assert.match(read('skills/qh-cycle/SKILL.md'), /docs\/adr\/0001/);
+});

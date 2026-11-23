@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { QUESTIONS, ALWAYS_ON, recommend } = require('./questions');
-const { DECISIONS_FILE } = require('./policy');
+const { DECISIONS_FILE, LIMITS, isRealReason } = require('./policy');
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -129,6 +129,7 @@ function answer(root, text, today = new Date().toISOString().slice(0, 10)) {
       continue;
     }
     if (m[2] !== rec[q.id][0] && !m[3]) errors.push(`${q.short}: 권장안(${rec[q.id][0]})과 다르게 골랐는데 변경 사유가 없다`);
+    if (m[3] && !isRealReason(m[3].trim())) errors.push(`${q.short}: 사유는 ${LIMITS.reasonChars}자 이상으로 실제 이유를 쓴다`);
     picked.push({ q, option, reason: m[3]?.trim() });
   }
   if (!picked.length && !errors.length) errors.push('답이 없다 (질문 화면의 "프롬프트 복사" 내용을 붙여 넣는다)');

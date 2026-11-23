@@ -67,10 +67,13 @@ test('A-level question page, measure report and interface screen contain no deve
   const root = repo({ ...BASIC, answers: { level: { choice: 'A' } } }, { 'package.json': JSON.stringify({ dependencies: { express: '^4' } }) });
   write(root, 'opts.json', JSON.stringify({ title: '주문 묶기', options: [{ id: 'A', name: '하나로', summary: '묶는다', mermaid: 'graph TD\n  A-->B', gain: '단순', cost: '커진다' }, { id: 'B', name: '둘로', summary: '나눈다', mermaid: 'graph TD\n  A-->C', gain: '작음', cost: '늘어남' }] }));
   const view = qh(root, ['view', 'interface', 'opts.json']);
+  write(root, 'cands.json', JSON.stringify({ title: '구조 점검', candidates: [{ id: '1', name: '합치기', problem: '흩어져 있다', solution: '모은다', gain: '단순', cost: '많이 옮긴다', strength: '높음', mermaidBefore: 'graph TD\n  A-->B' }] }));
+  const arch = qh(root, ['view', 'architecture', 'cands.json']);
   const screens = {
     질문: fs.readFileSync(ask(root, { answers: {} }), 'utf8'),
     결과지: page('demo', [{ date: '2026-11-01', sha: 'abc' }], GROUPS),
     '설계안 선택': fs.readFileSync(view.stdout.match(/(\S+\.html)/)[1], 'utf8'),
+    '구조 점검': fs.readFileSync(arch.stdout.match(/(\S+\.html)/)[1], 'utf8'),
   };
   for (const [name, html] of Object.entries(screens)) {
     const text = html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<script id="pure">[\s\S]*?<\/script>/, '');
@@ -82,7 +85,37 @@ test('A-level question page, measure report and interface screen contain no deve
   }
 });
 
+// The report is drawn by inline script: run it against a stub page and read the text it writes.
+function runtimeText(html) {
+  const els = {};
+  const document = { getElementById: (id) => (els[id] ||= {}) };
+  require('node:vm').runInNewContext(html.match(/<script>([\s\S]*)<\/script>/)[1], { document });
+  return Object.values(els).map((e) => `${e.textContent || ''} ${e.innerHTML || ''}`).join('\n').replace(/<[^>]*>/g, ' ');
+}
+
+test('the measure report text drawn at runtime has no commit hash and no developer words', () => {
+  const rows = [
+    { date: '2026-11-01', sha: 'f41eecd', rules: 1, files_over_800: '2', duplicated_pct: '4' },
+    { date: '2026-11-10', sha: '4551074', rules: 1, files_over_800: '1', duplicated_pct: '3', withQh: true },
+  ];
+  const text = runtimeText(page('demo', rows, GROUPS));
+  assert.match(text, /기간: 11\/1 ~ 11\/10/, 'the page really ran');
+  assert.doesNotMatch(text, /\b[0-9a-f]{7,}\b/, 'no commit hash');
+  assert.doesNotMatch(text, SCREEN_WORDS);
+});
+
 test('the sentences qh gives the agent to say hold no developer words either', () => {
   const t = triage(everyKind({ isFirstInstall: false, summary: '켜진 검사: unit' }));
   for (const item of [...t.human, ...t.env, ...t.warnings]) assert.doesNotMatch(item.user.replace('"/api/users"', ''), /\b(TDD|ADR|PR|CI|API|Stop|express)\b|에이전트|커밋/, item.user);
+});
+
+test('the probe question and the generic fix sentence say AI, not 에이전트', () => {
+  const t = triage({ ...everyKind(null), checks: [{ name: 'p', state: '환경 오류', envKind: 'probe-todo', detail: ['todo'] }], taskQuestions: [], undeclared: [], decisions: [], configChanges: [], env: [], structureEnv: [], review: null, policy: ['알 수 없는 종류: x'] });
+  for (const x of [...t.human, ...t.aiFix.map((a) => ({ user: require('../lib/triage').aiFixUser(a, {}) }))]) assert.doesNotMatch(x.user, /에이전트/, x.user);
+});
+
+test('a card decision written as a question is shown as is; a bare note gets "정해 주세요"', () => {
+  const human = (d) => triage({ ...everyKind(null), decisions: [d] }).human.find((x) => x.agent.startsWith('작업 카드')).user;
+  assert.strictEqual(human('이 범위로 만들까요?'), '이 범위로 만들까요?');
+  assert.strictEqual(human('범위 확인'), '정해 주세요: 범위 확인');
 });

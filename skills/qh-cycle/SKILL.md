@@ -9,7 +9,7 @@ The person picks and gives reasons. You ask, draw, build and review. The vendore
 
 ## Precedence
 
-The Pocock and Karpathy principles in the vendored skills win over any qh rule (docs/adr/0001). If a qh message tells you to do something those skills forbid (for example, refactor inside the red→green loop), follow the skill and tell the user which qh rule conflicted.
+The Pocock principles in the vendored skills and the Karpathy lines listed in docs/adr/0001 (its 출처 part) win over any qh rule. If a qh message tells you to do something those skills forbid (for example, refactor inside the red→green loop), follow the skill and tell the user which qh rule conflicted.
 
 ## The card
 
@@ -21,20 +21,20 @@ State lives in the branch's task card `.quality/tasks/<branch>.md`. These sectio
 - `## 테스트 위치(seam)` — the agreed seams, one path per line. TDD is judged at these paths.
 - `## 루프` — the ticket files of the current round, one path per line (`.scratch/<feature>/issues/NN-*.md`), at most 3.
 
-Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`.
+Small fixes (a reproducible bug, a typo, a config value) skip the cycle: write `grilling 불필요: <reason, 5+ chars>` in the card and go straight to `tdd`. The waiver counts only when the card's `## 판단 필요` holds `- [x] <the question qh hands you, verbatim> · <the person's answer>`: ask it in those words, wait for the answer, then write that line.
 
 ## The loop
 
 | Step | Who starts it | What happens | Card |
 |---|---|---|---|
 | 1. Grill | you: Skill `grilling`, then `domain-modeling` | Interview until the plan has no silent assumptions. Update `GLOSSARY.md` and ADRs inline as terms and decisions settle. | `## 의도`, `## 용어` |
-| ◆① Scope | person | Show the scope in plain Korean, ask them to confirm. | scope appended to `## 의도` |
-| 2. Interface | you: Skill `codebase-design` | Design at least two interfaces (DESIGN-IT-TWICE). Write them to a JSON file and run `qh view interface <file>` to make the local HTML. Give the person the path. | |
-| ◆② Pick | person | They pick one and must give a reason. No reason, no next step. | `## interface 결정` with `이유:`; the seams go to `## 테스트 위치(seam)` |
+| ◆① Scope | person | Show the scope in plain Korean, ask them to confirm. If they already said yes to this exact scope during grilling, record that answer; do not ask again. | scope appended to `## 의도` |
+| 2. Interface | you: Skill `codebase-design` | Design at least two interfaces (DESIGN-IT-TWICE). Write them to a JSON file `{ "title", "questions"?, "options": [{ "id", "name", "summary", "mermaid", "gain", "cost", "signature"?, "seam"?, "questions"? }] }` (strings, 2+ options; `questions` is `[{ "text", "choices": [2-4 strings], "recommended"? }]`: top level for every option, inside an option for that option only; the copied answers come as `- [x] <text> · <answer>` lines for `## 판단 필요`) and run `qh view interface <file>` to make the local HTML. Then open it for the person (macOS `open`, Linux `xdg-open`). | |
+| ◆② Pick | person | They pick one and must give a reason. No reason, no next step. The copied `안:` line ends with `· 확인 번호 NNNN`; keep it, since qh asks again when the picked option changes. | `## interface 결정` with `이유:`; the seams go to `## 테스트 위치(seam)` |
 | 3. Spec, tickets | person says so in words ("명세 만들어 줘", then "작업 나눠 줘"); you open `.claude/skills/to-spec/SKILL.md`, then `.claude/skills/to-tickets/SKILL.md` | Upstream writes `.scratch/<feature>/spec.md` and `issues/NN-*.md`. Link them in the card. | link |
-| ◆ Loop start | person | No reason line. Classify each ticket AFK or HITL: HITL if it needs UI/UX judgment, touches money, security or a data-loss path, or cannot be decided by the agreed seam tests. Set `**Status:** ready-for-human` on HITL tickets (ticket files are project data, not vendored files). Pick up to 3 `ready-for-agent` tickets on the frontier (blockers done). Show in plain Korean what will run, what is theirs, and the stop conditions; wait for "돌려". | paths under `## 루프` |
+| ◆ Loop start | person | No reason line. Classify each ticket AFK or HITL: HITL if it needs UI/UX judgment, touches money, security or a data-loss path, or cannot be decided by the agreed seam tests. Set `**Status:** ready-for-human` on HITL tickets (ticket files are project data, not vendored files). Pick up to 3 `ready-for-agent` tickets on the frontier (blockers done). Show in plain Korean what will run, what is theirs, and the stop conditions; wait for "돌려". qh then asks the spec confirmation ("명세(확인 번호 …)대로 작업을 시작할까요?"): write "돌려" as its answer. | paths under `## 루프` |
 | 4. Build (loop) | you: Skill `tdd` | In this session, one ticket at a time, tests only at the card's seams. Tick the ticket's acceptance boxes when its seam tests pass. After each ticket tell the person one plain line ("루프 2/3: …"). Stop on any of: all done; the same ticket fails 3 times; a new 판단 필요 appears; the next ticket is the person's; a ratchet block. Say which. Do not call `implement`; it is not installed. | boxes ticked |
-| ◆③ Review | you run `qh review`; person reads | Show the person the interface and the tests, not the whole diff. Then re-decide the tickets still open: a new `## 루프` round (back to ◆ Loop start) or end. | |
+| ◆③ Review | you run `qh review`; person reads | `qh review` also writes the review page (what changed → picked option → test evidence → findings → what is left, all copied from records); open it for the person with the page it prints (macOS `open`, Linux `xdg-open`). Show the person the interface and the tests through it, not the whole diff. Then re-decide the tickets still open: a new `## 루프` round (back to ◆ Loop start) or end. | |
 | 5. Retro | person says so in words ("회고하자"); you open `.claude/skills/retro/SKILL.md` | Turn repeatable mistakes into lint, hooks or tests. | |
 
 Never pass a ◆ step (loop start included) on the person's behalf. When a step is the person's to start, end your turn with one line in plain Korean: what to say to you (for example "명세 만들어 줘"), and why now. Never ask them to type a command.
@@ -49,7 +49,7 @@ Where any vendored skill says to call `code-review`, run `qh review` instead. qh
 
 ## Architecture check
 
-`qh cycle` says when it is due (three cards finished or seven days since the last check). Then tell the person in one plain line that an architecture check is due and what to say ("구조 점검하자"). When they say it, Read `.claude/skills/improve-codebase-architecture/SKILL.md` and follow it. They pick one candidate and give a reason (◆④). Record it in `docs/decisions.md` as `아키텍처 점검: <date> · <candidate> · <reason>`. Only the picked candidate is refactored, as its own card. Existing duplicates qh reported as warnings are good input for this step.
+`qh cycle` says when it is due (three cards finished or seven days since the last check). Then tell the person in one plain line that an architecture check is due and what to say ("구조 점검하자"). When they say it, Read `.claude/skills/improve-codebase-architecture/SKILL.md` and follow it, except its HTML report step (the HTML-REPORT file loads CDN scripts and is English): instead write the candidates to a JSON file `{ "title", "candidates": [{ "id", "name", "problem", "solution", "gain", "cost", "strength", "mermaidBefore"?, "mermaidAfter"?, "detail"?, "questions"? }], "questions"? }` (`questions` with `text`, `choices`, `recommended` as on the interface page; plain Korean; `detail` holds files and function names for level B) and run `qh view architecture <json>`; then open it for the person (macOS `open`, Linux `xdg-open`) with the page it prints. They pick one candidate and give a reason (◆④). Record it in `docs/decisions.md` as `아키텍처 점검: <date> · <candidate> · <reason>`. Only the picked candidate is refactored, as its own card. Existing duplicates qh reported as warnings are good input for this step.
 
 ## Talking to the person
 

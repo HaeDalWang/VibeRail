@@ -15,6 +15,25 @@ const VENDOR = path.join(ROOT, 'skills/vendor/mattpocock-skills');
 const SKILLS = ['grill-with-docs', 'domain-modeling', 'codebase-design', 'improve-codebase-architecture', 'tdd', 'to-spec', 'to-tickets', 'retro', 'grilling', 'writing-for-agents'];
 const NOT_INSTALLED = ['implement', 'code-review', 'setup-matt-pocock-skills'];
 
+test('the installed agent rules and the report take the minimum reason length and duplicate size from limits', () => {
+  const root = project();
+  write(root, '.quality/config.json', JSON.stringify({ baseRef: 'main', checks: {}, limits: { reasonChars: 8 } }));
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', 'config']);
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /<why no test is needed, 8\+ chars>/);
+  assert.doesNotMatch(agents, /\{\{|5\+ chars/);
+  const { LIMITS } = require('../lib/policy');
+  const saved = LIMITS.duplicateLines;
+  LIMITS.duplicateLines = 9;
+  try {
+    assert.match(require('../lib/measure-page').page('p', [], []), /의미 있는 9줄/);
+  } finally {
+    LIMITS.duplicateLines = saved;
+  }
+});
+
 function project() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-skills-'));
   sh(root, 'git', ['init', '-q', '-b', 'main']);
@@ -103,4 +122,24 @@ test('a new config draft needs no duplicates setting (existing copies never bloc
   sh(old, 'git', ['commit', '-qm', 'cfg']);
   qh(old, ['init', old]);
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(old, '.quality/config.json'), 'utf8')).structure, undefined);
+});
+
+test('qh-cycle tells the agent the interface JSON shape that qh view accepts, so it need not read qh code', () => {
+  const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  for (const key of ['title', 'options', 'id', 'name', 'summary', 'mermaid', 'gain', 'cost']) assert.match(skill, new RegExp(`\\b${key}\\b`), key);
+});
+
+test('qh-cycle tells the agent the optional questions shape on both decision pages', () => {
+  const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  for (const shape of ['"options"', '"candidates"']) {
+    const line = skill.split('\n').find((l) => l.includes(shape));
+    for (const key of ['questions', 'text', 'choices', 'recommended']) assert.match(line, new RegExp(`\\b${key}\\b`), `${shape}: ${key}`);
+  }
+});
+
+test('qh-cycle ◆③ tells the agent to open the review page qh review writes', () => {
+  const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  const row = skill.split('\n').find((l) => l.startsWith('| ◆③'));
+  assert.match(row, /review page/);
+  assert.match(row, /open/);
 });

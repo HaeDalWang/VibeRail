@@ -35,7 +35,7 @@ test('the criteria summary names checks and risk areas in plain words', () => {
   assert.match(words, /로그인·권한/);
   assert.match(words, /결제/);
   assert.match(words, /264/);
-  assert.match(criteriaWords({ checks: {} }, 0), /켜진 검사: 없음/);
+  assert.match(criteriaWords({ checks: {} }, 0), /^아직 켜 둔 자동 검사가 없음/, 'a bare "없음" after a label means nothing to a non-developer');
 });
 
 test('a first-install question to the person carries no check or risk names', () => {
@@ -76,14 +76,21 @@ test('every kind of item the agent gives up on has a plain sentence for the pers
   assert.match(sentences[13], /바뀐 코드의 테스트/, 'a failing check is named by what it does');
 });
 
-test('a route question names the address and the levels of this project, one sentence per route', () => {
-  const t = triage({ ...base(), undeclared: ['GET /admin/users', 'GET /admin/stats'], accessLevels: ['public', 'admin'] });
-  const [users, stats] = t.human.map((x) => x.user);
-  assert.match(users, /\/admin\/users/);
-  assert.match(stats, /\/admin\/stats/);
-  assert.match(users, /public, admin/);
-  assert.doesNotMatch(users, /로그인한 회원만/);
-  assert.doesNotMatch(users.replace('/admin/users', ''), DEVELOPER_WORDS, users);
+test('a route question says what the route does and names the levels in Korean, with no address or level id', () => {
+  const access = { accessLevels: ['public', 'member', 'admin'], accessLabels: { public: '누구나', member: '회원', admin: '관리자' } };
+  const t = triage({ ...base(), undeclared: ['GET /api/users/:id', 'DELETE /api/orders/:id'], ...access });
+  const [info, del] = t.human.map((x) => x.user);
+  assert.match(info, /사용자 정보 보기/);
+  assert.match(del, /주문 지우기/);
+  assert.match(info, /누구나, 회원, 관리자/);
+  for (const s of [info, del]) assert.doesNotMatch(s, /\/|public|member|admin|api/, s);
+});
+
+test('a route whose purpose cannot be derived is named as a new feature with the address in parentheses', () => {
+  const t = triage({ ...base(), undeclared: ['GET /zzqx'], accessLevels: ['public', 'admin'] });
+  const [s] = t.human.map((x) => x.user);
+  assert.match(s, /^새로 생긴 기능\(주소 "\/zzqx"\)/);
+  assert.match(s, /public, admin/, 'without labels the level ids are shown, as before');
 });
 
 test('a route qh asked the person about and then placed in the existing access table is not asked about again', () => {
@@ -112,14 +119,31 @@ test('environment and allowed-failure sentences name the check by what it does',
   assert.match(t.env[0].user, /전체 테스트/);
 });
 
+test('pages are opened for the person and doctor failures are said in plain words, never handed over as paths or commands', () => {
+  const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
+  const cycle = fs.readFileSync(path.join(LIB, '..', 'skills/qh-cycle/SKILL.md'), 'utf8');
+  const view = fs.readFileSync(path.join(LIB, 'view.js'), 'utf8');
+  for (const [name, text] of [['ask-guide', guide], ['qh-cycle', cycle]]) assert.match(text, /open it for the person \(macOS `open`, Linux `xdg-open`\)/, name);
+  assert.match(view, /open it for the person \(macOS `open`, Linux `xdg-open`\)/);
+  assert.doesNotMatch(guide, /give the user the path|show it to the user\./i);
+  assert.match(guide, /translate each doctor failure into one plain sentence/i);
+  assert.doesNotMatch(cycle, /Give the person the path/);
+});
+
 test('the agent rules say how to write decisions, when allow lines may be written, and how to talk to the person', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
   assert.match(snippet, /`## 판단 필요`[^\n]*`- \[ \] /);
-  assert.match(snippet, /허용[^\n]*사용자에게 묻고[^\n]*답을 받은 뒤에만/);
-  assert.match(snippet, /사용자에게 하는 말[^\n]*경로·명령/);
+  assert.match(snippet, /`## 판단 필요`[^\n]*a question the user can read and answer as is/, 'the gate shows the item to the person as is');
+  assert.match(snippet, /allow lines[^\n]*only after asking the user and getting an answer/);
+  assert.match(snippet, /In what you say to the user[^\n]*file paths, commands/);
   const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
-  assert.match(guide, /## 허용 줄/);
-  assert.match(guide, /큰 파일 허용[\s\S]*중복 허용[\s\S]*답을 받은 뒤에만/);
+  assert.match(guide, /## Allow lines/);
+  assert.match(guide, /큰 파일 허용[\s\S]*중복 허용[\s\S]*only after asking the user and getting an answer/);
+});
+
+test('the agent rules ask choices with the arrow-key picker in Claude Code and numbered text elsewhere', () => {
+  const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
+  assert.match(snippet, /choices[^\n]*AskUserQuestion[^\n]*number/);
 });
 
 test('the report page tells the person what to say to the agent, not a command', () => {
@@ -130,12 +154,34 @@ test('the report page tells the person what to say to the agent, not a command',
 
 test('the agent rules show the declaration reason as a placeholder, not a pasteable word', () => {
   const snippet = fs.readFileSync(path.join(LIB, 'agents-snippet.md'), 'utf8');
-  assert.doesNotMatch(snippet, /불필요: 이유`|영향 없음: 이유`/);
-  assert.match(snippet, /`테스트 불필요: <왜 필요 없는지, 5자 이상>`/);
+  assert.doesNotMatch(snippet, /불필요: (reason|이유)`|영향 없음: (reason|이유)`/);
+  assert.match(snippet, /`테스트 불필요: <why no test is needed, \{\{REASON_CHARS\}\}\+ chars>`/);
 });
 
 test('the qh-cycle skill never asks the person to type a slash command; the agent opens the installed skill file', () => {
   const skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'qh-cycle', 'SKILL.md'), 'utf8');
   assert.doesNotMatch(skill, /(^|[\s`(])\/(to-spec|to-tickets|retro|improve-codebase-architecture|grill-with-docs)\b|command to type/);
   for (const name of ['to-spec', 'to-tickets', 'retro', 'improve-codebase-architecture']) assert.match(skill, new RegExp(`\\.claude/skills/${name}/SKILL\\.md`), name);
+});
+
+test('the installed agent guide shows how to add a test check after the person says yes', () => {
+  const guide = fs.readFileSync(path.join(LIB, 'ask-guide.md'), 'utf8');
+  const section = guide.slice(guide.indexOf('## Adding a check'));
+  for (const re of [/^## Adding a check \(검사 넣기\)/, /Ask the user/, /only after they say yes/i, /"cmd"/, /\{tests\}/, /"on": \["pr"\]/]) assert.match(section, re);
+});
+
+test('the external-integration option says the network block covers the built-in checks only', () => {
+  const { QUESTIONS } = require('../lib/questions');
+  const a = QUESTIONS.find((q) => q.id === 'external').options.find((o) => o.id === 'A');
+  assert.match(a.on, /내장 검사만/);
+  assert.match(a.cost, /프로젝트의 테스트 명령은 막지 않는다/);
+  assert.doesNotMatch(a.gain, /^테스트가 실제 서비스를 부르지 못한다/);
+});
+
+test('two routes that would read the same keep apart by address, and login-like words are actions, not things made', () => {
+  const t = triage({ ...base(), undeclared: ['GET /api/users', 'GET /api/admin/users', 'POST /api/login'] });
+  const [a, b, login] = t.human.map((x) => x.user);
+  assert.notStrictEqual(a, b, 'one question per route: the person may give them different levels');
+  assert.match(login, /"로그인 하기" 기능/);
+  assert.doesNotMatch(login, /새로 만들기/);
 });

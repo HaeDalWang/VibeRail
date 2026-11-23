@@ -23,6 +23,7 @@ test('when the agent gives up, the person hears plain words once, not every turn
   const stuck = stopDecision(qh(root, ['hook', 'stop'], CLAUDE));
   assert.notStrictEqual(stuck?.decision, 'block');
   assert.match(stuck.systemMessage, /고치지 못하고 멈췄습니다/);
+  assert.doesNotMatch(stuck.systemMessage, /에이전트/, 'the person reads "AI"');
   assert.match(stuck.systemMessage, /테스트/);
   assert.doesNotMatch(stuck.systemMessage, DEVELOPER_WORDS, stuck.systemMessage);
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], CLAUDE)), null, 'the same note is not repeated');
@@ -73,12 +74,12 @@ test('without stop_hook_active (Kiro) the block tells the agent to recheck itsel
   const d = stopDecision(qh(root, ['hook', 'stop'], kiro()));
   assert.strictEqual(d.decision, 'block');
   assert.match(d.reason, /qh status/);
-  const tell = d.reason.split('사용자에게 전할 말')[1];
+  const tell = d.reason.split('What to tell the user')[1];
   assert.ok(tell, d.reason);
   assert.doesNotMatch(tell.split('\n').slice(1).join('\n'), DEVELOPER_WORDS, tell);
   const claude = repo(NO_CHECKS);
   write(claude, 'src/a.js', '2');
-  assert.doesNotMatch(stopDecision(qh(claude, ['hook', 'stop'], CLAUDE)).reason, /사용자에게 전할 말/, 'Claude Code calls Stop again by itself');
+  assert.doesNotMatch(stopDecision(qh(claude, ['hook', 'stop'], CLAUDE)).reason, /What to tell the user/, 'Claude Code calls Stop again by itself');
 });
 
 test('what a Kiro turn left unresolved is told again at the next session start, once', () => {
@@ -106,7 +107,7 @@ test('a repository with no commit yet tells the person the first save starts the
   write(root, 'src/a.js', '1');
   const d = stopDecision(qh(root, ['hook', 'stop'], CLAUDE));
   assert.match(d.reason, /커밋이 없/);
-  const user = d.reason.match(/사용자에게는 이렇게 말한다: (.+)/)[1];
+  const user = d.reason.match(/Tell the user: (.+)/)[1];
   assert.match(user, /첫 저장/);
   assert.doesNotMatch(user, /내려받을지/);
 });
@@ -191,7 +192,7 @@ test('an unfilled probe is a question for the person, not an environment to swit
   qh(root, ['check', 'routes']);
   assert.strictEqual(statusJson(root).checks[0].envKind, 'probe-todo');
   const d = stopDecision(qh(root, ['hook', 'stop'], CLAUDE));
-  assert.match(d.reason, /사용자에게 물어볼 것[\s\S]*probe\.mjs[\s\S]*채워도 될까요/);
+  assert.match(d.reason, /Ask the user[\s\S]*probe\.mjs[\s\S]*채워도 될까요/);
   assert.doesNotMatch(d.reason, /환경을 켜면/);
 });
 
