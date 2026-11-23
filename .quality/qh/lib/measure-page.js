@@ -41,7 +41,7 @@ th.before{color:var(--muted);font-style:italic}
 svg.spark{display:block;overflow:visible}.ln{fill:none;stroke:var(--muted);stroke-width:2;stroke-linejoin:round}
 .pt{fill:var(--muted);stroke:var(--surface);stroke-width:2}.end{fill:var(--accent);stroke:var(--surface);stroke-width:2}
 th.qhstart,td.qhstart{border-left:2px solid var(--accent)}
-@media (max-width:640px){#why thead{display:none}#why tr,#why td{display:block}#why tr{padding:10px 0;border-bottom:1px solid var(--line)}#why tr:last-child{border-bottom:none}#why td{border:0;padding:4px 14px}#why td::before{content:attr(data-l);display:block;font-size:12px;font-weight:600;color:var(--muted)}#why td.name{font-size:16px}#why td.name::before{content:none}}
+@media (max-width:640px){#why thead{display:none}#why tr,#why td{display:block}#why tr{padding:10px 0;border-bottom:1px solid var(--line)}#why tr:last-child{border-bottom:none}#why td{border:0;padding:4px 14px}#why td::before{content:attr(data-l);display:block;font-size:12px;font-weight:600;color:var(--muted)}#why td.name{font-size:16px}#why td.name::before{content:none}.hist{min-width:0}.hist td:nth-child(2),.hist th:nth-child(2){display:none}.hist td:first-child,.hist th:first-child{min-width:140px;position:sticky;left:0;background:var(--surface);z-index:1}.hist .group td{background:var(--grid)}}
 .foot{color:var(--muted);font-size:12px;display:grid;gap:4px}code{font-family:var(--num);font-size:13px}
 </style></head><body><main>
 <header style="display:grid;gap:6px"><h1>품질 리포트: ${esc(project)}</h1><p class="meta" id="meta"></p></header>
@@ -92,14 +92,14 @@ const names=xs=>xs.map(x=>x.l+' '+fmt(x.c.first.v)+' → '+fmt(x.c.last.v)).join
 const v=document.getElementById('verdict');
 if(days.length<2){v.innerHTML='<strong>첫 측정입니다. 다음 측정부터 비교합니다.</strong><p>품질 검사를 넣기 전 흐름도 보려면 AI에게 "지난 8주도 재 줘"라고 하세요. 지난 8주를 거슬러 재서 함께 보여 줍니다.</p>'}
 else{const since=qhAt>0?'VibeRail 설치 후 ('+md(days[base].date)+' 설치 직전 → '+md(last.date)+')':(qhAt<0?'VibeRail 설치 전 기록만 있음 ('+md(days[0].date)+' → '+md(last.date)+')':md(days[0].date)+' 대비');
-let h='<strong>'+since+' — 숫자가 달라진 항목</strong>';
-const m=moved(base,days.length-1);h+='<p>'+(m.length?names(m):'달라진 항목 없음')+'</p>';
-if(qhAt>0&&base>0){const b=moved(0,base);h+='<p class="meta">VibeRail 넣기 전 흐름 ('+md(days[0].date)+' → '+md(days[base].date)+'): '+(b.length?names(b):'달라진 항목 없음')+'</p>'}
+let h='<strong>'+since+' — 숫자가 달라진 주요 지표</strong>';
+const m=moved(base,days.length-1);h+='<p>'+(m.length?names(m):'주요 지표 '+items.filter(x=>x[3]==='lower').length+'개는 그대로입니다. 참고 지표의 변화는 아래 측정 이력 표에 있습니다.')+'</p>';
+if(qhAt>0&&base>0){const b=moved(0,base);h+='<p class="meta">VibeRail 넣기 전 흐름 ('+md(days[0].date)+' → '+md(days[base].date)+'): '+(b.length?names(b):'주요 지표 그대로')+'</p>'}
 if(qhAt<0)h+='<p class="meta">VibeRail이 저장된 뒤 측정하면 설치 후 변화를 따로 보여 줍니다.</p>';
 v.innerHTML=h}
 const label=k=>(items.find(([x])=>x===k)||[k,k])[1];
 document.getElementById('tiles').innerHTML=D.tiles.map(([k,unit])=>{const c=change(k);if(!c.first)return'';
-return'<div class="tile"><span class="label">'+label(k)+'</span><span class="num">'+(days.length>1?'<span class="from">'+fmt(c.first.v)+' →</span> ':'')+fmt(c.last.v)+'<small> '+unit+'</small></span><span class="note">'+(qhAt>0?'설치 직전 ':'')+md(c.first.date)+' → '+md(c.last.date)+(c.delta?' · '+c.delta:'')+c.pill+'</span></div>'}).join('');
+return'<div class="tile"><span class="label">'+label(k)+'</span><span class="num">'+(c.first!==c.last?'<span class="from">'+fmt(c.first.v)+' →</span> ':'')+fmt(c.last.v)+'<small> '+unit+'</small></span><span class="note">'+(c.first===c.last?md(c.last.date):(qhAt>0?'설치 직전 ':'')+md(c.first.date)+' → '+md(c.last.date))+(c.delta?' · '+c.delta:'')+c.pill+'</span></div>'}).join('');
 document.getElementById('judged').textContent=items.filter(x=>x[3]==='lower').length;
 const tick=t=>esc(t).replace(/\x60([^\x60]+)\x60/g,'<code>$1</code>');
 document.getElementById('why').innerHTML='<thead><tr><th>지표</th><th>뜻</th><th>나빠지면</th><th>좋아지면</th><th>기준과 받아들이는 법</th></tr></thead><tbody>'+

@@ -273,9 +273,12 @@ function describeResult(ev) {
   return out;
 }
 
-function taskCard(root) {
+// On a branch the card is named after it; detached (CI PR checkouts), it is the card this work changed.
+function taskCard(root, base) {
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  const rel = path.join('.quality', 'tasks', `${branch}.md`);
+  const rel = branch === 'HEAD'
+    ? changedFiles(root, base || mergeBase(root, loadConfig(root).baseRef)).find((f) => f.startsWith('.quality/tasks/') && f.endsWith('.md')) || path.join('.quality', 'tasks', 'HEAD.md')
+    : path.join('.quality', 'tasks', `${branch}.md`);
   const file = path.join(root, rel);
   return { rel, text: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
 }
@@ -388,7 +391,7 @@ function assess(root, phase = 'stop', baseRef) {
   const req = requirements(config, changed, phase, root);
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
-  const card = taskCard(root);
+  const card = taskCard(root, base);
   const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
@@ -438,11 +441,13 @@ function runReview(root, config, baseArg) {
   const outDir = path.join(root, EVIDENCE_DIR, 'review');
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const messages = git(root, ['log', '--format=%s%n%b', `${base}..HEAD`]);
+  // The reviewer judges against what the person agreed (card, spec), not the author's own account (commit messages).
   const diffFile = path.join(outDir, 'change.diff');
-  fs.writeFileSync(diffFile, `${messages}\n\n${git(root, ['diff', base, hash])}\n`);
+  fs.writeFileSync(diffFile, `${git(root, ['diff', base, hash])}\n`);
+  const card = taskCard(root, base);
+  const spec = (card.text.match(/^명세:\s*`?([^`\n]+?)`?\s*$/m) || [])[1] || '없음';
   const taskFile = path.join(outDir, 'task.md');
-  const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base);
+  const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base).replaceAll('{{CARD}}', card.text ? card.rel : '없음').replaceAll('{{SPEC}}', spec);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
   const cmd = fillReviewCmd(config.review.cmd, { workdir: root, task: taskFile, out: outDir });
@@ -464,7 +469,7 @@ function runReview(root, config, baseArg) {
 
 function reviewPage(root, config, base, findings) {
   const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
-  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
+  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root, base).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
   console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
 }
@@ -519,7 +524,7 @@ function cmdPr(root) {
   const a = assess(root, 'pr');
   const t = triage(a);
   const setup = doctor(root);
-  const declared = waivers.declaredWaivers(taskCard(root).text, root, a.changed);
+  const declared = waivers.declaredWaivers(taskCard(root, a.base).text, root, a.changed);
   console.log(`\n${formatStatus(a)}\n${formatSetup(setup)}\n${duplicateTotal(root)}${declared.length ? `\n에이전트가 작업 카드에서 면제한 것 (리뷰어 확인):\n${declared.map((d) => `  - ${d}`).join('\n')}` : ''}`);
   const isBlocked = isPrBlocked(a, t, setup) || reviewExit !== EXIT.ok;
   // Only a full qh pr pass (checks and the AI review) is where the next work on the base branch starts.
@@ -691,9 +696,9 @@ function cmdBaseline(root) {
 function hookSessionStart(root) {
   const unasked = loadConfig(root)?.answers ? '' : '\n(qh) The project questions are not answered yet → tell the user, and if they want, open a question session as .quality/qh/lib/ask-guide.md says.';
   const pending = stopState.takePending(root);
-  const left = pending ? `\n(qh) 지난 세션이 끝날 때 남은 품질 문제가 있었다(그 호스트는 알림을 보여 주지 않는다). 위 상태에 아직 남았으면 사용자에게 이렇게 전한다:\n${pending}` : '';
+  const left = pending ? `\n(qh) The last session ended with quality problems left (that host does not show notices). If the status above still has them, tell the user:\n${pending}` : '';
   const cycle = require('../lib/cycle').cycleLines(root, taskCard(root).text).map((l) => `\n(qh) ${l}`).join('');
-  console.log(`${formatStatus(assess(root))}${unasked}${cycle}${left}\n\n(qh) 응답을 끝내기 전에 필요한 검사를 \`qh check\`로 실행해 증거를 남긴다. 검사 상태는 \`qh status\`.`);
+  console.log(`${formatStatus(assess(root))}${unasked}${cycle}${left}\n\n(qh) Before ending a response, run the needed checks with \`qh check\` to leave evidence. \`qh status\` shows their state.`);
   return EXIT.ok;
 }
 

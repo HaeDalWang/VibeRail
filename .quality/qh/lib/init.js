@@ -12,6 +12,7 @@ const { doctor, duplicateProblems, formatDoctor, MAP_TOOL, MAP_DB } = require('.
 const { DECISIONS_FILE, loadLimits } = require('./policy');
 const { METRICS_FILE, REPORTS_DIR } = require('./measure');
 const { installSkills, shippedFiles, isInstalledSkill } = require('./skills-install');
+const { packageFiles, packageDeps } = require('./questions');
 
 const INSTALL_DIR = '.quality/qh';
 // Resolved from the hook's cwd: a session that moved into a worktree of a branch
@@ -24,8 +25,8 @@ const MARK_END = '<!-- qh:end -->';
 const QH_HOOK = /qh\.js"? hook (stop|session-start)\b/;
 const NPM_DEFAULT_TEST = 'echo "Error: no test specified" && exit 1';
 const HOOKS = [
-  { event: 'SessionStart', arg: 'session-start', timeout: 30, name: 'qh session start', description: 'qh 상태와 작업 카드를 문맥에 넣는다.' },
-  { event: 'Stop', arg: 'stop', timeout: 120, name: 'qh stop gate', description: '턴 종료 때 내장 검사를 돌리고 증거를 판정한다. 막을 때는 exit 0 + {"decision":"block","reason"}.' },
+  { event: 'SessionStart', arg: 'session-start', timeout: 30, name: 'qh session start', description: 'Puts the qh status and the task card into context.' },
+  { event: 'Stop', arg: 'stop', timeout: 120, name: 'qh stop gate', description: 'Runs the built-in checks at the end of a turn and judges the evidence. Blocks with exit 0 + {"decision":"block","reason"}.' },
 ];
 
 function git(root, args) {
@@ -56,8 +57,7 @@ function detectTest(root) {
   const cmds = [];
   if (hasNpmTest(readJson(root, 'package.json'))) cmds.push('npm test');
   else {
-    const subs = fs.globSync(['*/package.json', 'packages/*/package.json', 'apps/*/package.json'], { cwd: root }).filter((f) => !/^(node_modules|\.)/.test(f)).sort();
-    for (const f of subs) if (hasNpmTest(readJson(root, f))) cmds.push(`npm --prefix ${path.dirname(f)} test`);
+    for (const f of packageFiles(root).filter((x) => x !== 'package.json')) if (hasNpmTest(readJson(root, f))) cmds.push(`npm --prefix ${path.dirname(f)} test`);
   }
   if (PYTEST_CONFIG.some(([f, re]) => re.test(read(root, f) || '')) || fs.existsSync(path.join(root, 'conftest.py'))) cmds.push('pytest -q');
   if (fs.existsSync(path.join(root, 'go.mod'))) cmds.push('go test ./...');
@@ -65,14 +65,13 @@ function detectTest(root) {
 }
 
 function detect(root) {
-  const pkg = JSON.parse(read(root, 'package.json') || '{}');
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const { runtime, all: deps } = packageDeps(root);
   const hasSrc = fs.existsSync(path.join(root, 'src'));
   const sqliteMigrations = fs.globSync('migrations/*.sql', { cwd: root }).length > 0;
   return {
     test: detectTest(root),
     // A server framework only in devDependencies is a test tool, not the app.
-    express: Boolean(pkg.dependencies?.express),
+    express: Boolean(runtime.express),
     db: deps.pg ? 'postgres' : sqliteMigrations ? 'sqlite' : null,
     src: hasSrc ? ['src/**/*.js', 'src/**/*.mjs', 'src/**/*.cjs', 'src/**/*.ts'] : ['**/*.js', '**/*.mjs'],
     baseRef: baseRef(root),
@@ -221,12 +220,17 @@ function attachRules(qhHome, root, plan, notes) {
 // and the measurement outputs (a copy of Mermaid per report is 2.7 MB).
 const IGNORED = ['.quality/evidence/', '.mcp.json', '.kiro/settings/mcp.json', `${REPORTS_DIR}/`, METRICS_FILE];
 
-function attachGitignore(root, plan) {
-  const text = read(root, '.gitignore') || '';
+// Kept out of the code map: qh's own copy and vendored skills are not the person's code to reuse.
+const MAP_IGNORED = [`${INSTALL_DIR}/`, '.claude/skills/', '.kiro/skills/'];
+
+// Appends the lines the file lacks, keeping what the person wrote.
+function appendMissing(root, file, lines, plan) {
+  const text = read(root, file) || '';
   const have = new Set(text.split('\n').map((l) => l.trim()));
-  const missing = IGNORED.filter((l) => !have.has(l));
-  if (missing.length) write(root, '.gitignore', `${text.replace(/\n*$/, text ? '\n' : '')}${missing.join('\n')}\n`, plan);
+  const missing = lines.filter((l) => !have.has(l));
+  if (missing.length) write(root, file, `${text.replace(/\n*$/, text ? '\n' : '')}${missing.join('\n')}\n`, plan);
 }
+const attachGitignore = (root, plan) => appendMissing(root, '.gitignore', IGNORED, plan);
 
 // ---------- entry ----------
 
@@ -276,6 +280,7 @@ function init(qhHome, target) {
   attachKiro(root, plan);
   attachRules(qhHome, root, plan, notes);
   attachGitignore(root, plan);
+  appendMissing(root, '.code-review-graphignore', MAP_IGNORED, plan);
   // qh's own copy may be refreshed freely; a person's file with uncommitted edits may not.
   const dirty = [...plan].filter(([rel, w]) => !w.isNew && !rel.startsWith(`${INSTALL_DIR}/`) && !isInstalledSkill(qhHome, rel) && git(root, ['status', '--porcelain', '--', rel]));
   if (dirty.length) {
@@ -319,4 +324,4 @@ function report(root, d, log, notes, mapDone, isFreshInstall) {
   }
 }
 
-module.exports = { init, draftConfig, INSTALL_DIR, MARK_START, MARK_END, QH_HOOK, IGNORED };
+module.exports = { HOOKS, init, draftConfig, INSTALL_DIR, MARK_START, MARK_END, QH_HOOK, IGNORED };

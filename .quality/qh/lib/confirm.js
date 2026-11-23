@@ -9,7 +9,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { section, decisions, SECTIONS } = require('./card');
+const { section, decisions, isYes, answerTo, SECTIONS } = require('./card');
 
 const flat = (v) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v)).replace(/\s+/g, ' ').trim();
 
@@ -90,13 +90,17 @@ const NOT_FOUND = '예전 내용을 찾지 못했습니다. 지금 내용 전체
 // The numbers the person approved in answered `- [x] <sentence> · <answer>` lines starting with `head`, oldest first.
 // Each sentence ends with the number it binds: "(확인 번호 <old> → <new>)" or "(확인 번호 <new>)".
 const approvedNumbers = (card, head) => decisions(card).answered
-  .filter((t) => t.startsWith(head) && / · \S/.test(t))
+  .filter((t) => t.startsWith(head) && / · \S/.test(t) && isYes(t.slice(t.indexOf(' · ') + 3)))
   .map((l) => (l.match(/확인 번호 (?:\d{4} → )?(\d{4})\)/) || [])[1])
   .filter(Boolean);
 
 function optionConfirm(root, card) {
   const p = pickedOption(root, card);
-  if (!p.id || !p.option) return [];
+  if (!p.id) return [];
+  if (!p.option) {
+    const where = !p.rel ? '설계안 연결이 없다' : !p.design ? `설계안(${p.rel})을 읽지 못했다` : `설계안(${p.rel})에 ${p.id}안이 없다`;
+    return [{ agent: `고른 안을 확인할 수 없다: ${where} → 설계안을 고치거나 안을 다시 고르게 한다. 그대로 갈지는 사용자에게 묻는다`, user: `고른 ${p.id}안을 설계안에서 찾지 못했습니다. 고른 뒤 무엇이 바뀌었는지 확인할 수 없는데, 그대로 진행할까요?`, changes: null }];
+  }
   const now = optionNumber(p.option);
   const approved = approvedNumbers(card, `고른 ${p.id}안`);
   if ([p.number, ...approved].includes(now)) return [];
@@ -114,7 +118,8 @@ function optionConfirm(root, card) {
 // The spec is approved at loop start (the person's "돌려"), so it is asked only once 루프 lists a ticket.
 function specConfirm(root, card) {
   const rel = lineAfter(cardLines(card, SECTIONS.interface), '명세').replace(/`/g, '');
-  if (!rel || !cardLines(card, SECTIONS.loop).length || !fs.existsSync(path.join(root, rel))) return [];
+  if (!rel || !cardLines(card, SECTIONS.loop).length) return [];
+  if (!fs.existsSync(path.join(root, rel))) return [{ agent: `명세(${rel})가 없다 → 명세 연결을 고친다. 그대로 갈지는 사용자에게 묻는다`, user: '명세를 찾지 못했습니다. 확인한 명세와 같은지 알 수 없는데, 그대로 진행할까요?', changes: null }];
   const now = confirmNumber(fs.readFileSync(path.join(root, rel), 'utf8'));
   const approved = approvedNumbers(card, '명세');
   if (approved.includes(now)) return [];
@@ -131,9 +136,16 @@ function specConfirm(root, card) {
 
 // Questions still owed to the person: [{ agent, user, changes }] (the shape of pendingWaivers, plus changes).
 // A question the card already holds as an open `- [ ]` line is an open decision there, not a second question.
+// A question answered with something other than yes stays, and tells the agent to act on that answer.
 const pendingConfirms = (root, { card }) => {
   const { open } = decisions(card);
-  return [...optionConfirm(root, card), ...specConfirm(root, card)].filter((q) => !open.includes(q.user));
+  return [...optionConfirm(root, card), ...specConfirm(root, card)].filter((q) => !open.includes(q.user)).filter((q) => !isYes(answerTo(card, q.user) ?? '')).map(declined(card, '사용자 답대로 안이나 명세를 고친다(내용이 바뀌면 다시 묻는다)'));
+};
+
+// A no (or any non-yes) on the card: the agent is told what the person said instead of asking again.
+const declined = (card, then) => (q) => {
+  const answer = answerTo(card, q.user);
+  return answer === null ? q : { ...q, agent: `사용자가 "${answer}"라고 답했다(승인 아님) → ${then}` };
 };
 
 module.exports = { confirmNumber, optionNumber, pickedOption, pendingConfirms };
