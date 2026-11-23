@@ -164,17 +164,42 @@ test('a malformed question writes no page and says what to fix', () => {
     assert.strictEqual(r.status, 1, JSON.stringify(q));
     assert.match(r.stdout, re);
   };
-  bad({ choices: ['예', '아니요'] }, /1번째 공통 질문[^\n]*text/);
-  bad({ text: '두 줄\n질문', choices: ['예', '아니요'] }, /1번째 공통 질문[^\n]*한 줄/);
-  bad({ text: 'q', choices: ['예'] }, /1번째 공통 질문[^\n]*2~4개/);
-  bad({ text: 'q', choices: ['1', '2', '3', '4', '5'] }, /1번째 공통 질문[^\n]*2~4개/);
-  bad({ text: 'q', choices: ['예', 7] }, /1번째 공통 질문[^\n]*2~4개/);
-  bad({ text: 'q', choices: ['예', '아니요'], recommended: '모름' }, /1번째 공통 질문[^\n]*추천/);
+  bad({ choices: ['예', '아니요'] }, /공통 1번째 질문[^\n]*text/);
+  bad({ text: '두 줄\n질문', choices: ['예', '아니요'] }, /공통 1번째 질문[^\n]*한 줄/);
+  bad({ text: 'q', choices: ['예'] }, /공통 1번째 질문[^\n]*2~4개/);
+  bad({ text: 'q', choices: ['1', '2', '3', '4', '5'] }, /공통 1번째 질문[^\n]*2~4개/);
+  bad({ text: 'q', choices: ['예', 7] }, /공통 1번째 질문[^\n]*2~4개/);
+  bad({ text: 'q', choices: ['예', '아니요'], recommended: '모름' }, /공통 1번째 질문[^\n]*추천/);
   write(root, 'q.json', JSON.stringify({ ...OPTIONS, questions: [Q_KEEP, Q_KEEP] }));
   assert.match(qh(root, ['view', 'interface', 'q.json']).stdout, /같은 질문이 두 번/);
   write(root, 'q.json', JSON.stringify({ ...OPTIONS, questions: 'q' }));
   assert.match(qh(root, ['view', 'interface', 'q.json']).stdout, /questions는 목록/);
   assert.strictEqual(fs.existsSync(path.join(root, '.quality/reports')), false);
+});
+
+test('an option\'s questions show inside that option\'s card only, after its description and before the reason box', () => {
+  const json = { ...WITH_COMMON, options: [OPTIONS.options[0], { ...OPTIONS.options[1], questions: [{ text: '품목 수 상한은?', choices: ['100', '없음'], recommended: '100' }] }] };
+  const { html } = view(level('A'), json);
+  const [a, b] = html.split('<article').slice(1);
+  assert.ok(!a.includes('품목 수 상한은?'), 'not in option A');
+  assert.ok(b.includes('품목 수 상한은?'));
+  assert.ok(b.indexOf('품목 수 상한은?') > b.indexOf('작게 나뉜다') && b.indexOf('품목 수 상한은?') < b.indexOf('<textarea'), 'after the description, before the reason');
+  assert.strictEqual(html.slice(0, html.indexOf('<article')).includes('품목 수 상한은?'), false, 'not among the common questions');
+  const scriptAt = html.indexOf('answers(document.querySelector(\'section.common\')).concat(answers(a))');
+  assert.ok(scriptAt > 0, 'the copy asks the common questions, then only the picked card\'s questions');
+});
+
+test('the same question in the common list and an option is rejected; the same question in two options is fine', () => {
+  const root = repo(BASIC);
+  const own = (q) => ({ ...OPTIONS.options[1], questions: [q] });
+  write(root, 'q.json', JSON.stringify({ ...OPTIONS, questions: [Q_KEEP], options: [OPTIONS.options[0], own(Q_KEEP)] }));
+  const dup = qh(root, ['view', 'interface', 'q.json']);
+  assert.strictEqual(dup.status, 1);
+  assert.match(dup.stdout, /같은 질문이 두 번 있다: 옛 주문 형식/);
+  write(root, 'q.json', JSON.stringify({ ...OPTIONS, options: [{ ...OPTIONS.options[0], questions: [Q_NAME] }, own(Q_NAME)] }));
+  assert.strictEqual(qh(root, ['view', 'interface', 'q.json']).status, 0);
+  write(root, 'q.json', JSON.stringify({ ...OPTIONS, options: [OPTIONS.options[0], own({ text: 'q', choices: ['예'] })] }));
+  assert.match(qh(root, ['view', 'interface', 'q.json']).stdout, /2번째 안 1번째 질문[^\n]*2~4개/);
 });
 
 test('the agent is told to write the copied answer lines under 판단 필요 unchanged', () => {

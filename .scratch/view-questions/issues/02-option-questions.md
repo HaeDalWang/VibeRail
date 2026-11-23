@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] Option questions render inside their own card only
-- [ ] Copy requires the common questions and the picked option's questions, and ignores other options' questions
-- [ ] Answer lines come in order: common, then the picked option's
-- [ ] A duplicate within one scope is rejected; the same text in two options is accepted
+- [x] Option questions render inside their own card only
+- [x] Copy requires the common questions and the picked option's questions, and ignores other options' questions
+- [x] Answer lines come in order: common, then the picked option's
+- [x] A duplicate within one scope is rejected; the same text in two options is accepted
