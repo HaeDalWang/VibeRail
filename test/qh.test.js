@@ -419,6 +419,14 @@ test('ask writes the question page outside the repository, recommends from the c
   assert.doesNotMatch(html, /<둘이서>/);
 });
 
+test('ask does not claim tests must pass when the project has no test command', () => {
+  const page = (cfg) => fs.readFileSync(qh(repo(cfg), ['ask']).stdout.match(/질문 화면: (\S+)/)[1], 'utf8');
+  assert.match(page(BASIC), /<b>테스트 통과<\/b> 작업을 합치기 전에 전체 테스트가 통과해야 한다/);
+  const none = page({ ...BASIC, checks: {}, common: [] });
+  assert.doesNotMatch(none, /<b>테스트 통과<\/b> 작업을 합치기 전에/);
+  assert.match(none, /<b>테스트 통과<\/b> 테스트 실행 명령이 없어 지금은 아무것도 돌리지 않는다/);
+});
+
 test('level: ask offers A (개발을 잘 모름, recommended) and B (개발자); the answer lands in config.answers.level', () => {
   const root = repo(BASIC);
   const html = fs.readFileSync(qh(root, ['ask']).stdout.match(/질문 화면: (\S+)/)[1], 'utf8');
