@@ -188,3 +188,13 @@ test('a test record older than the current code shows a stale warning', () => {
 test('no test record at all shows a no-record warning', () => {
   assert.match(evidenced({ run: false }), /테스트 기록이 없다/);
 });
+
+test('a stale test record warns even when no condition matched it', () => {
+  const root = repo({ ...BASIC, checks: { unit: { cmd: 'node -e "console.log(1)"' } }, review: resultCmd([]) });
+  write(root, '.quality/tasks/work.md', CRITERIA);
+  qh(root, ['check', 'unit']);
+  write(root, 'src/a.js', '3');
+  qh(root, ['review']);
+  const html = fs.readFileSync(path.join(root, PAGE), 'utf8');
+  assert.match(html.slice(html.indexOf('<h2>테스트 증거')), /지금 코드보다 오래된 기록/);
+});
