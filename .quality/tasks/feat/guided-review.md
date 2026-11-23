@@ -18,6 +18,7 @@
 이유: 좀더 사용자 친화적이다
 설계안: .scratch/guided-review/interface.json
 명세: .scratch/guided-review/spec.md
+작업: .scratch/guided-review/issues/01-page-skeleton.md, 02-picked-option.md, 03-test-evidence.md
 
 ## 테스트 위치(seam)
 test/review-page.test.js
