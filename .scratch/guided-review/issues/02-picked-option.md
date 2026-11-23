@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] 안 and 이유 shown from the card with their source
-- [ ] Picture, gain and cost shown when the design file has the option
-- [ ] Missing file or missing option falls back to card text with a note
-- [ ] Signature and seam shown only on level B
+- [x] 안 and 이유 shown from the card with their source
+- [x] Picture, gain and cost shown when the design file has the option
+- [x] Missing file or missing option falls back to card text with a note
+- [x] Signature and seam shown only on level B

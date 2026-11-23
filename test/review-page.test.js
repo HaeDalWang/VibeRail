@@ -95,3 +95,57 @@ test('a review that breaks writes no page', () => {
   qh(root, ['review']);
   assert.ok(!fs.existsSync(path.join(root, PAGE)));
 });
+
+const DESIGN = {
+  title: 't',
+  options: [
+    { id: 'A', name: '한 함수', summary: 's', mermaid: 'flowchart LR\n  X --> Y', gain: '단순 <함>', cost: '읽기 어려움', signature: 'f(x)', seam: 'test/x.js' },
+    { id: 'B', name: '둘로', summary: 's', mermaid: 'flowchart LR\n  P --> Q', gain: 'g', cost: 'c' },
+  ],
+};
+const pickCard = (id, design = '.scratch/f/interface.json') => `${CARD}
+## interface 결정
+안: ${id} (한 함수가 모음)
+이유: 단순해서 좋다
+설계안: ${design}
+`;
+
+function picked(card, { level } = {}) {
+  const root = repo({ ...BASIC, review: resultCmd([]), ...(level ? { answers: { level: { choice: level, date: '2026-11-23' } } } : {}) });
+  write(root, '.scratch/f/interface.json', JSON.stringify(DESIGN));
+  write(root, '.quality/tasks/work.md', card);
+  qh(root, ['review']);
+  const html = fs.readFileSync(path.join(root, PAGE), 'utf8');
+  return { root, step: html.slice(html.indexOf('<h2>고른 안'), html.indexOf('<h2>테스트 증거')) };
+}
+
+test('the picked option shows the card pick and reason with its source', () => {
+  const { step } = picked(pickCard('A'));
+  assert.match(step, /안: A/);
+  assert.match(step, /단순해서 좋다/);
+  assert.match(step, /출처: 작업 카드 ## interface 결정/);
+});
+
+test('the picked option shows its picture, gain and cost from the design file', () => {
+  const { root, step } = picked(pickCard('A'));
+  assert.match(step, /X --&gt; Y/);
+  assert.doesNotMatch(step, /P --&gt; Q/);
+  assert.match(step, /단순 &lt;함&gt;/);
+  assert.match(step, /읽기 어려움/);
+  assert.match(step, /출처: \.scratch\/f\/interface\.json/);
+  assert.ok(fs.existsSync(path.join(root, '.quality/reports/mermaid.min.js')));
+});
+
+test('a missing design file or option leaves the card text with a note', () => {
+  assert.match(picked(pickCard('A', '.scratch/none.json')).step, /설계안 파일이 없다/);
+  const { step } = picked(pickCard('C'));
+  assert.match(step, /설계안에 C안이 없다/);
+  assert.match(step, /단순해서 좋다/);
+});
+
+test('signature and seam of the picked option show only on level B', () => {
+  assert.doesNotMatch(picked(pickCard('A')).step, /f\(x\)/);
+  const { step } = picked(pickCard('A'), { level: 'B' });
+  assert.match(step, /f\(x\)/);
+  assert.match(step, /test\/x\.js/);
+});
