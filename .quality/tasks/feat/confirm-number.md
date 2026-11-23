@@ -19,6 +19,7 @@
 안: A (확인 번호 전용 모듈 하나 — lib/confirm.js의 pendingConfirms(root, { card }), qh 검사와 완료 리뷰가 한 번씩 부름)
 이유: 따로 두는 편이 찾기 쉽다
 설계안: .scratch/confirm-number/interface.json
+명세: .scratch/confirm-number/spec.md
 
 ## 테스트 위치(seam)
 test/confirm.test.js
