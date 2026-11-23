@@ -20,6 +20,8 @@ interface·아키텍처 점검 화면에서 사람이 안을 고를 때, 그 결
 ## 테스트 위치(seam)
 test/view.test.js
 
+명세: .scratch/view-questions/spec.md
+
 ## 루프
 
 ## 성공 조건 → 검사
