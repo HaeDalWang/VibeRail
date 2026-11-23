@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] A successful review writes the page and prints its location with an "open it" line
-- [ ] The skip path writes the page with 검토 생략 in the findings step
-- [ ] Steps appear in the fixed order with their sources; card, commit and finding text is escaped
-- [ ] Findings / 지적 없음 / open questions and 미확인 render from the records
-- [ ] A missing card gives 기록 없음, not an error; an environment error writes no page
-- [ ] Skill ◆③ row and reference doc updated; existing tests still pass
+- [x] A successful review writes the page and prints its location with an "open it" line
+- [x] The skip path writes the page with 검토 생략 in the findings step
+- [x] Steps appear in the fixed order with their sources; card, commit and finding text is escaped
+- [x] Findings / 지적 없음 / open questions and 미확인 render from the records
+- [x] A missing card gives 기록 없음, not an error; an environment error writes no page
+- [x] Skill ◆③ row and reference doc updated; existing tests still pass

@@ -430,7 +430,10 @@ function assess(root, phase = 'stop', baseRef) {
 function runReview(root, config, baseArg) {
   if (isReviewSkipped(root, config)) {
     console.log('AI 리뷰: 사용자가 검토 생략을 골라 돌리지 않았다');
-    return EXIT.ok;
+    // The skip never needed a base; without one there is simply no page.
+    let skipBase;
+    try { skipBase = mergeBase(root, baseArg || config.baseRef); } catch { return EXIT.ok; }
+    return reviewPage(root, skipBase, null);
   }
   if (!config.review?.cmd) throw new EnvError('config.review.cmd 없음');
   const base = mergeBase(root, baseArg || config.baseRef);
@@ -459,6 +462,12 @@ function runReview(root, config, baseArg) {
     return EXIT.env;
   }
   writeEvidence(root, 'review', { ...done, findings });
+  return reviewPage(root, base, findings);
+}
+
+function reviewPage(root, base, findings) {
+  const file = require('../lib/review-page').writeReviewPage(root, { base, card: taskCard(root).text, changed: changedFiles(root, base), findings });
+  console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
 }
 

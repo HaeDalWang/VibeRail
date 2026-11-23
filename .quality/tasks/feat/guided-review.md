@@ -24,6 +24,9 @@
 test/review-page.test.js
 
 ## 루프
+.scratch/guided-review/issues/01-page-skeleton.md
+.scratch/guided-review/issues/02-picked-option.md
+.scratch/guided-review/issues/03-test-evidence.md
 
 ## 성공 조건 → 검사
 

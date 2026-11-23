@@ -136,3 +136,10 @@ test('qh-cycle tells the agent the optional questions shape on both decision pag
     for (const key of ['questions', 'text', 'choices', 'recommended']) assert.match(line, new RegExp(`\\b${key}\\b`), `${shape}: ${key}`);
   }
 });
+
+test('qh-cycle ◆③ tells the agent to open the review page qh review writes', () => {
+  const skill = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  const row = skill.split('\n').find((l) => l.startsWith('| ◆③'));
+  assert.match(row, /review page/);
+  assert.match(row, /open/);
+});
