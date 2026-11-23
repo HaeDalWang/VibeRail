@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] Matching confirmation is shown as such in the picked-option step
-- [ ] A changed pick shows the changed fields on the page
-- [ ] Open confirmation questions (option and spec) show under 남은 판단
-- [ ] qh-cycle and reference doc lines added
+- [x] Matching confirmation is shown as such in the picked-option step
+- [x] A changed pick shows the changed fields on the page
+- [x] Open confirmation questions (option and spec) show under 남은 판단
+- [x] qh-cycle and reference doc lines added

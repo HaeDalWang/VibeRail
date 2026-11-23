@@ -93,7 +93,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh init [경로]` | 설치·연결 |
 | `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
 | `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
-| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 선택 `questions`(`[{text, choices 2~4개, recommended?}]`)는 맨 위에 두면 공통 질문, 안 안에 두면 그 안의 질문이다. 질문마다 하나 고르기·추천 표시·기타 칸이 붙고, 공통 질문과 고른 안의 질문에 답해야 복사되며, 답은 `- [x] 질문 · 답` 줄로 함께 복사된다(카드 `## 판단 필요`에 그대로 적는다). 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
+| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 선택 `questions`(`[{text, choices 2~4개, recommended?}]`)는 맨 위에 두면 공통 질문, 안 안에 두면 그 안의 질문이다. 질문마다 하나 고르기·추천 표시·기타 칸이 붙고, 공통 질문과 고른 안의 질문에 답해야 복사되며, 답은 `- [x] 질문 · 답` 줄로 함께 복사된다(카드 `## 판단 필요`에 그대로 적는다). `안:` 줄 끝에는 고른 안의 확인 번호(`· 확인 번호 NNNN`, 공백 무시)가 붙고, 고른 뒤 그 안이 바뀌면 qh가 바뀐 칸(예전 → 지금, git 기록에서)을 보이며 다시 묻는다. 카드 `## 루프`에 작업이 생기면 `명세:` 파일에도 같은 확인 질문을 한다. 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
 | `qh view architecture <json>` | 아키텍처 점검 후보(JSON: `title`, `candidates[{id, name, problem, solution, gain, cost, strength, mermaidBefore?, mermaidAfter?, detail?, questions?}]`, 선택 `questions`)를 한국어 로컬 HTML로 만든다. 후보마다 이유 칸·복사 버튼·질문 칸은 interface 화면과 같고, `detail`은 사용자 수준 B에만 보인다. 외부 주소를 부르지 않는다(Mermaid도 로컬 사본). improve-codebase-architecture skill의 HTML 보고서 단계(CDN·영어) 대신 쓴다 |
 | `qh view glossary` | `GLOSSARY.md`를 로컬 HTML로 만든다 |
 | `qh cycle` | 지금 카드의 단계, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로 |
@@ -101,7 +101,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh check [이름…] [--pr]` | 필요한 검사 실행. `--pr`은 올리기 직전에만 도는 검사까지 돌린다 |
 | `qh status [--json] [--pr] [--base ref]` | 상태표. `--base`는 CI가 머지 대상을 알 때 `config.baseRef` 대신 쓴다. `--pr`은 PR이 막힐 문제가 남아 있으면 0이 아닌 값으로 끝난다(AI 리뷰는 돌리지 않음). CI는 `qh check --pr` 다음 이것을 돈다 |
 | `qh pr` | PR 직전 판정 (검사 전부 + 점검 + AI 리뷰) |
-| `qh review [--base ref]` | 변경을 AI로 리뷰한다(보고만 하고 판정하지 않는다). 끝나면 `.quality/reports/review.html`에 완료 리뷰 화면을 만든다: 무엇이 바뀜 → 고른 안 → 테스트 증거 → 리뷰 지적 → 남은 판단 순서로, 카드·커밋·테스트 기록·리뷰 결과를 그대로 모은다(AI가 새로 쓰지 않음). 검토 생략이어도 지적 없이 만든다 |
+| `qh review [--base ref]` | 변경을 AI로 리뷰한다(보고만 하고 판정하지 않는다). 끝나면 `.quality/reports/review.html`에 완료 리뷰 화면을 만든다: 무엇이 바뀜 → 고른 안 → 테스트 증거 → 리뷰 지적 → 남은 판단 순서로, 카드·커밋·테스트 기록·리뷰 결과를 그대로 모은다(AI가 새로 쓰지 않음). 검토 생략이어도 지적 없이 만든다. 고른 안 단계에 확인 번호 상태와 바뀐 칸, 남은 판단에 답하지 않은 확인 질문도 보인다 |
 | `qh confirm` | 사용자가 지금 품질 기준(설정·권한 표)을 확인했다고 결정 로그에 기록한다. 작업 카드에 사용자 답 줄이 있어야 인정되고, 기준이 바뀌면 다시 묻는다 |
 | `qh baseline` | 구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 기준선 파일에 기록한다. 기준선을 늘리는 것은 기준 변경이라 사람에게 간다 |
 | `qh uninstall` | `init`이 더한 것(복사본·hook·규칙 블록·skill)을 걷어내고 사용자의 내용은 둔다 |

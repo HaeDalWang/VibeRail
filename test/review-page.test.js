@@ -198,3 +198,40 @@ test('a stale test record warns even when no condition matched it', () => {
   const html = fs.readFileSync(path.join(root, PAGE), 'utf8');
   assert.match(html.slice(html.indexOf('<h2>테스트 증거')), /지금 코드보다 오래된 기록/);
 });
+
+// ---------- confirmation numbers (backlog 3) ----------
+
+const stepOf = (html, title, next) => html.slice(html.indexOf(`<h2>${title}`), next ? html.indexOf(`<h2>${next}`) : undefined);
+
+// The design committed, the pick copied with the page's number; `edit` then changes the design file.
+function confirmed(edit, extra = '') {
+  const root = repo({ ...BASIC, review: resultCmd([]) });
+  write(root, '.scratch/f/interface.json', JSON.stringify(DESIGN, null, 2));
+  const r = qh(root, ['view', 'interface', '.scratch/f/interface.json']);
+  const number = fs.readFileSync(r.stdout.match(/(\S+\.html)/)[1], 'utf8').match(/data-id="A" data-number="(\d{4})"/)[1];
+  write(root, '.quality/tasks/work.md', pickCard(`A · 확인 번호 ${number}`) + extra);
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', 'pick']);
+  if (edit) write(root, '.scratch/f/interface.json', JSON.stringify(edit, null, 2));
+  qh(root, ['review']);
+  const html = fs.readFileSync(path.join(root, PAGE), 'utf8');
+  return { number, picked: stepOf(html, '고른 안', '테스트 증거'), left: stepOf(html, '남은 판단') };
+}
+
+test('a matching confirmation is shown as such in the picked-option step', () => {
+  const { number, picked: step } = confirmed(null);
+  assert.match(step, new RegExp(`확인 번호 ${number}: 고른 뒤 바뀌지 않았다`));
+});
+
+test('a changed pick shows the changed fields on the page and asks under 남은 판단', () => {
+  const { number, picked: step, left } = confirmed({ ...DESIGN, options: [{ ...DESIGN.options[0], gain: '더 단순' }, DESIGN.options[1]] });
+  assert.match(step, new RegExp(`고른 A안이 고른 뒤 바뀌었습니다\\(확인 번호 ${number} → \\d{4}\\)`));
+  assert.match(step, /장점: 단순 &lt;함&gt; → 더 단순/);
+  assert.match(left, /고른 A안이 고른 뒤 바뀌었습니다/);
+});
+
+test('an open spec confirmation shows under 남은 판단', () => {
+  const extra = '명세: .scratch/f/interface.json\n\n## 루프\n.scratch/f/issues/01-a.md\n';
+  const { left } = confirmed(null, extra);
+  assert.match(left, /명세\(확인 번호 \d{4}\)대로 작업을 시작할까요\?/);
+});

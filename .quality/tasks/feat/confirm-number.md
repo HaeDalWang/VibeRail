@@ -28,9 +28,7 @@ test/view.test.js
 test/review-page.test.js
 
 ## 루프
-.scratch/confirm-number/issues/01-option-number.md
-.scratch/confirm-number/issues/02-option-changes.md
-.scratch/confirm-number/issues/03-spec-number.md
+.scratch/confirm-number/issues/04-review-page-docs.md
 
 ## 성공 조건 → 검사
 - 복사 글에 고른 안의 확인 번호가 들어간다 → test/view.test.js "the copied pick line carries the option's confirmation number"
