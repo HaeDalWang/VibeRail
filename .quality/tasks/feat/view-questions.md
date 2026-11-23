@@ -14,8 +14,11 @@ interface·아키텍처 점검 화면에서 사람이 안을 고를 때, 그 결
 ## 용어
 
 ## interface 결정
+안: A (안 안에 넣기 — 공통 질문은 맨 위 questions, 특정 안의 질문은 그 안의 questions)
+이유: 단순한 구조가 추후 문제를 찾기가 쉽다
 
 ## 테스트 위치(seam)
+test/view.test.js
 
 ## 루프
 
