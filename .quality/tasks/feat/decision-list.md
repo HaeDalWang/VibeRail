@@ -22,6 +22,7 @@
 이유: 어긋남을 줄이는것이 크다
 설계안: .scratch/decision-list/interface.json
 명세: .scratch/decision-list/spec.md
+작업: .scratch/decision-list/issues/01-decisions-reader.md, 02-callers-use-reader.md
 
 ## 테스트 위치(seam)
 test/card.test.js
@@ -47,5 +48,6 @@ test/card.test.js
 - [x] 이 범위로 진행해도 될까요? · 진행
 - [x] 테스트는 카드 모듈 테스트 한 곳에서만 새로 쓰고, 다섯 곳은 기존 테스트로 확인할까요? · 카드 모듈 한 곳
 - [x] 질문 밑에 들여써서 단 설명 줄(체크 칸 없음)은 어떻게 볼까요? · 설명으로 두고 넘어감
+- [x] 작업을 두 개(1. 카드 모듈에 읽기 넣기 → 2. 나머지 네 곳 옮기기)로 나눠도 될까요? · 두 개로
 
 ## 미확인
