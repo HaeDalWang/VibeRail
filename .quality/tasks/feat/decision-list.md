@@ -38,7 +38,8 @@ test/card.test.js
 - 제목이 정확히 `판단 필요`인 칸만, 주석 속 질문은 뺀다 → test/card.test.js "only the exact heading is read, comments dropped"
 - 체크 없는 맨 앞 줄만 형식 문제, 들여쓴 설명·없음은 아니다 → test/card.test.js "plain items are top-level non-checkbox lines"
 - 답 판정 yes/open/none, 답 없는 체크 줄은 none → test/card.test.js "answerState needs a non-empty answer"
-- 다섯 곳은 이 모듈만 부르고 기존 테스트가 그대로 통과한다 → npm test
+- 들여쓴·별표 열린 질문이 PR을 막고, 형식 검사도 같은 규칙으로 읽는다 → test/card.test.js "an indented or star open question reaches the PR gate…"
+- 다섯 곳은 이 모듈만 부르고 기존 테스트가 그대로 통과한다 → npm test (전체 359 통과)
 
 ## 판단 필요
 - [x] 한곳으로 모을 때 어긋나는 세 군데(들여쓴 질문, 대문자 X, 칸 제목 판정)를 어떻게 할까요? 하나로 모으면 어느 한쪽 규칙으로 맞춰야 해서, 보이는 동작이 조금 바뀝니다. · 너그러운 쪽으로 통일
