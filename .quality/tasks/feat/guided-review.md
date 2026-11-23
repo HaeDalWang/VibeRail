@@ -14,8 +14,12 @@
 ## 용어
 
 ## interface 결정
+안: A (한 함수가 모으고 그림 — 새 모듈의 writeReviewPage(root, { base, treeHash, findings | null }), qh review 끝에서 한 줄 호출)
+이유: 좀더 사용자 친화적이다
+설계안: .scratch/guided-review/interface.json
 
 ## 테스트 위치(seam)
+test/review-page.test.js
 
 ## 루프
 
