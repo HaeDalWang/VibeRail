@@ -83,3 +83,11 @@ test('interface reason share counts only cards still present in the working tree
   write(root, '.quality/tasks/current.md', '## interface 결정\n이유: 다섯글자임\n');
   assert.strictEqual(require('../lib/measure').measure(root).now.interface_reason_short_pct, 0);
 });
+
+test('unavailable coverage is explicit in the latest tile and historical cells', () => {
+  const groups = [['테스트', [['untested_pct', '테스트가 안 붙은 코드 파일', '%', 'lower']]]];
+  const r = rendered([{ date: '2026-11-01', rules: 5, untested_pct: 20 }, { date: '2026-11-10', rules: 5, untested_pct: null }], groups);
+  assert.match(r.tiles.innerHTML, /잴 수 없음/);
+  assert.doesNotMatch(r.tiles.innerHTML, /20/);
+  assert.match(r.hist.innerHTML, /잴 수 없음/);
+});

@@ -722,10 +722,10 @@ test('measure leaves out files accepted without tests and splits the page at the
   commitAt(root, 'chore: add qh', 0);
   const r = qh(root, ['measure', '--backfill', '1']);
   const rows = metricsRows(root);
-  assert.strictEqual(rows.at(-1).untested_pct, '0', 'src/a.js has its test, src/glue.js is accepted (50 without the line)');
+  assert.strictEqual(rows.at(-1).untested_pct, '', 'a same-name test without a runnable test command is not execution evidence');
   const data = JSON.parse(fs.readFileSync(r.stdout.match(/결과지: (.+)/)[1], 'utf8').match(/const D=(\{.*?\});\n/)[1]);
   assert.deepStrictEqual(data.rows.map((x) => x.withQh), [false, false, true], 'a past week, the commit right before qh (backfilled as the baseline), then now');
-  assert.ok(rows.every((x) => x.rules === '4'), 'each row says which counting rules made it');
+  assert.ok(rows.every((x) => x.rules === '5'), 'each row says which counting rules made it');
 });
 
 test('a Stop that turns the agent back is counted by reason in the next measurement', () => {

@@ -62,18 +62,8 @@ function findRoot(cwd) {
 // Tree of the working state, untracked files included, via a throwaway index so the
 // user's index is never touched. Evidence files are excluded or every write would
 // invalidate every other result.
-function treeHash(root) {
-  const index = path.join(os.tmpdir(), `qh-index-${process.pid}-${Date.now()}`);
-  const env = { ...process.env, GIT_INDEX_FILE: index };
-  try {
-    git(root, ['add', '-A'], env);
-    // Measurements are a record about the code, not part of it: writing one keeps evidence current.
-    git(root, ['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', EVIDENCE_DIR, METRICS_FILE, REPORTS_DIR], env);
-    return git(root, ['write-tree'], env);
-  } finally {
-    fs.rmSync(index, { force: true });
-  }
-}
+const coverage = require('../lib/coverage');
+const treeHash = (root) => coverage.treeHash(root, git);
 
 // Git prints nothing when the two have no common ancestor: in CI that is a shallow clone.
 function mergeBase(root, ref) {
@@ -186,8 +176,8 @@ function toolExists(root, cmd) {
   return r.status === 0 ? null : tool;
 }
 
-function spawnCheck(root, def, timeoutSec) {
-  const opts = { cwd: root, encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: MAX_BUFFER };
+function spawnCheck(root, def, timeoutSec, env = process.env) {
+  const opts = { cwd: root, env, encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: MAX_BUFFER };
   if (def.builtin) {
     const runner = path.join(QH_HOME, 'lib', 'run-builtin.js');
     return spawnSync(process.execPath, [runner, def.builtin, root, JSON.stringify(def)], opts);
@@ -208,7 +198,7 @@ function runCheck(root, name, check) {
   const missing = def.builtin ? null : toolExists(root, def.cmd);
   if (missing) return writeEvidence(root, name, { ...base, envError: `도구 없음: ${missing}`, envKind: 'tool' });
 
-  const r = spawnCheck(root, def, timeoutSec);
+  const r = coverage.run(root, def, hash, () => treeHash(root), (env) => spawnCheck(root, def, timeoutSec, env), name);
   const logPath = path.join(EVIDENCE_DIR, `${name}.log`);
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
   const log = `${r.stdout || ''}${r.stderr || ''}`;

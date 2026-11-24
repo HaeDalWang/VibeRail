@@ -327,7 +327,7 @@ test('measure reads allow lines by the same rule as the checks: no real reason, 
   assert.strictEqual(qh(root, ['measure']).status, 0);
   const [head, row] = fs.readFileSync(path.join(root, '.quality/metrics.csv'), 'utf8').trim().split('\n').map((l) => l.split(','));
   assert.strictEqual(row[head.indexOf('flat_root_files')], '2', 'a reason under five characters does not accept b.js');
-  assert.strictEqual(row[head.indexOf('untested_pct')], '100', 'a line without a reason does not accept a.js');
+  assert.strictEqual(row[head.indexOf('untested_pct')], '', 'without a runnable test command coverage is unavailable, even with an invalid allow line');
 });
 
 test('measure counts flat-root files only where configured, minus declared ones', () => {
