@@ -339,3 +339,14 @@ test('measure counts flat-root files only where configured, minus declared ones'
   qh(plain, ['measure']);
   assert.doesNotMatch(fs.readFileSync(path.join(plain, '.quality/metrics.csv'), 'utf8'), /flat_root_files/);
 });
+
+test('root index.html is allowed while other new root files still need a reason', () => {
+  const root = repo();
+  write(root, 'index.html', '<!doctype html><title>앱</title>\n');
+  write(root, 'other.html', '<!doctype html><title>다른 페이지</title>\n');
+  write(root, 'notes.txt', '메모\n');
+  const out = structureOf(root);
+  assert.doesNotMatch(out, /루트 파일: [^\n]*index\.html/);
+  assert.match(out, /루트 파일: [^\n]*other\.html/);
+  assert.match(out, /루트 파일: [^\n]*notes\.txt/);
+});

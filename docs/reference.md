@@ -11,7 +11,7 @@ git clone https://github.com/HaeDalWang/VibeRail.git ~/VibeRail
 cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git commit -m "chore: qh 설치"
 ```
 
-`init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 있으면 함께 연결한다. 그다음 `node .quality/qh/bin/qh.js ask`로 질문 화면, `measure`로 리포트를 만든다. PR의 AI 리뷰는 `.quality/config.json`의 `review.cmd`로 돈다. `init`은 `kiro-run`이 있으면 그것을, 없고 `claude`가 있으면 Claude Code headless(`claude -p`, 읽기 도구 Read·Grep·Glob만, 답은 구조화 출력으로 받아 `result.json`에 씀)를 채운다.
+`init`은 테스트 실행 명령을 못 찾고 `package.json`이 있으면 Node 내장 테스트(`node --test`)를 제안한다. 제안만 하며 테스트 설정은 자동으로 바꾸지 않는다. `init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 있으면 함께 연결한다. 그다음 `node .quality/qh/bin/qh.js ask`로 질문 화면, `measure`로 리포트를 만든다. PR의 AI 리뷰는 `.quality/config.json`의 `review.cmd`로 돈다. `init`은 `kiro-run`이 있으면 그것을, 없고 `claude`가 있으면 Claude Code headless(`claude -p`, 읽기 도구 Read·Grep·Glob만, 답은 구조화 출력으로 받아 `result.json`에 씀)를 채운다.
 
 ## 하는 일
 
@@ -42,7 +42,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - 중복: 만진 파일의 중복 줄이 base보다 늘면 막는다(설정 없이 항상). 원래 있던 중복은 막지 않고 "아키텍처 점검 후보" 경고로만 보여 준다(ADR 0001, `qh status`, Stop에서는 사용자에게만 보이는 경고 줄). 기존 위치를 알려 준다. 옛 설정의 `structure.duplicates: "grown"`은 그대로 둬도 되고 아무것도 바꾸지 않는다. 예외는 `docs/decisions.md`에 `중복 허용: 파일 · 이유`를 쓸 때만 인정한다.
   - 중복 합계: `qh init`과 `qh pr`이 저장소 전체 중복 줄 수와 많은 파일 3개를 보여 준다. 참고용이고 막지 않는다.
   - 큰 파일: 800줄을 넘은 코드 파일은 더 늘릴 수 없다.
-  - 루트 파일: 저장소 맨 위에 새 파일을 만들려면 결정 로그에 이유를 남긴다.
+  - 루트 파일: 저장소 맨 위에 새 파일을 만들려면 결정 로그에 이유를 남긴다. 정적 웹앱의 진입점인 `index.html`은 기본 허용한다.
   - 죽은 링크: 바뀐 문서에 없는 파일을 가리키는 링크가 있으면 막는다.
 - **설정으로 켜는 구조 래칫** (`.quality/config.json`의 `structure`, 키가 없으면 꺼짐)
   - `flatRoots: ["src/widgets"]`: 그 폴더 바로 아래 새 파일을 막는다. 하위 폴더에 둔다. 예외는 결정 로그 `루트 파일: 경로 · 이유`. 결과지에 "정리 대상 폴더 맨 위 파일" 지표가 붙는다.
@@ -57,7 +57,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
   - 개인정보 취급함: 바뀐 로그 줄에 이메일·전화번호·비밀번호 같은 이름이 들어가면 막는다. 오탐이면 그 줄에 `qh:allow-pii`.
   - 외부 API 연동 있음: 위험 영역 `external`이 바뀌면 같은 작업의 테스트에 실패 상황(시간 초과·5xx·거절)이 있어야 한다. 필요 없으면 작업 카드에 `연동 실패 테스트 불필요: 이유`.
 - **작업 순환 (qh-cycle)** (ADR 0001) `qh init`이 Pocock skill 10개(`skills/vendor/mattpocock-skills/`, 고정 커밋 원문, 수정 금지·갱신은 `scripts/vendor-pocock.sh`)와 `qh-cycle` skill을 `.claude/skills/`에 그대로 설치한다(다시 init하면 덮어씀). `docs/agents/`의 세 문서와 `.scratch/`는 없을 때만 만든다. 작업 카드의 세 절이 순환을 움직인다.
-  - `## 의도`: 비어 있고 `grilling 불필요: 이유`도 없이 코드가 바뀌면 막는다. 이 제목이 있는 카드에만 적용(옛 카드는 그대로).
+  - `## 의도`: 비어 있고 `grilling 불필요: 이유`도 없이 코드가 바뀌면 막는다. 이 제목이 있는 카드에만 적용(옛 카드는 그대로). 카드 단계는 `## 판단 필요`에 `- [x] 이 범위로 진행할까요? · <긍정 답>`이 있어야 다음으로 넘어간다. 답이 없거나 부정 답이면 의도 단계에 머문다. `grilling 불필요` 경로는 그대로다.
   - `## interface 결정`: 내용이 있는데 `이유:` 줄이 없거나 5자 미만이면 막는다. `docs/decisions.md`에 더한 `아키텍처 점검: 날짜 · 후보 · 이유` 줄도 같다.
   - `## 테스트 위치(seam)`: 한 줄에 경로 하나. 있으면 TDD는 그 경로 아래·같은 이름의 테스트가 바뀌었는지로 판정하고, 없으면 기존 패키지 단위 판정.
   - 용어집: `GLOSSARY.md`가 있을 때 바뀐 코드에 새로 생긴 타입·클래스 이름이 거기 없으면 경고만 한다. `GLOSSARY.md`·`GLOSSARY-MAP.md`는 루트 파일 이유가 필요 없다.

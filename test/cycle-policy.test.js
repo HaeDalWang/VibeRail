@@ -11,7 +11,7 @@ const { repo, write, sh, qh, statusJson, DECLARED, BASIC } = require('./helpers'
 
 const policyOf = (root) => statusJson(root).policy.join('\n');
 const card = (root, body) => write(root, '.quality/tasks/work.md', body);
-const GRILLED = '## 의도\n로그인 화면을 만든다. 범위는 이메일 입력까지.\n';
+const GRILLED = '## 의도\n로그인 화면을 만든다. 범위는 이메일 입력까지.\n\n## 판단 필요\n- [x] 이 범위로 진행할까요? · 네\n';
 
 test('D20: code changed with an empty 의도 section and no grilling declaration is blocked', () => {
   const root = repo(BASIC);
@@ -297,4 +297,22 @@ test('loop: SessionStart shows the loop progress line', () => {
   ticket(root, T2, [' ']);
   loopCard(root, [T1, T2]);
   assert.match(qh(root, ['hook', 'session-start']).stdout, /\(qh\) 카드 단계: 루프 진행 1\/2/);
+});
+
+test('scope stays at intent until the exact question has a positive answer in decisions', () => {
+  const root = repo(BASIC);
+  const intent = '## 의도\n할 일 목록에 마감일 추가\n';
+  for (const answer of ['', '- [ ] 이 범위로 진행할까요?', '- [x] 이 범위로 진행할까요? · ', '- [x] 이 범위로 진행할까요? · 아니요', '- [x] 이 범위로 진행할까요? · 진행하지 마세요', '- [x] 다른 범위로 진행할까요? · 네']) {
+    card(root, `${intent}## 판단 필요\n${answer}\n`);
+    assert.match(stage(root), /단계: 의도/, answer);
+    assert.match(stage(root), /이 범위로 진행할까요\?/);
+  }
+  card(root, `${intent}- [x] 이 범위로 진행할까요? · 네\n`);
+  assert.match(stage(root), /단계: 의도/, 'answers outside decisions do not count');
+  for (const answer of ['네', '예', '진행해 주세요', '돌려']) {
+    card(root, `${intent}## 판단 필요\n- [x] 이 범위로 진행할까요? · ${answer}\n`);
+    assert.match(stage(root), /단계: interface 결정/, answer);
+  }
+  card(root, `${intent}## 판단 필요\n- [x] 이 범위로 진행할까요? · 네\n- [x] 이 범위로 진행할까요? · 아니요\n`);
+  assert.match(stage(root), /단계: 의도/, 'the latest answer applies');
 });
