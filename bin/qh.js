@@ -22,6 +22,9 @@ const { answerState, decisions } = require('../lib/card');
 const routesBaseline = require('../lib/routes-baseline');
 const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
+const redCheck = require('../lib/red-check');
+const runEnvError = (root, def, ev, log) => require('../lib/run-env-error').runEnvError(root, def, ev, log, { git, treeHash });
+
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
@@ -33,8 +36,6 @@ const MAX_LISTED_CHANGES = 10;
 const DEFAULT_TIMEOUT_SEC = 300;
 // Stop runs built-in checks inside the host's 120-second hook limit (lib/init.js).
 const BUILTIN_TIMEOUT_SEC = 90;
-// sh: 126 = found but not executable, 127 = not found (e.g. `npm test` without jest installed).
-const SHELL_NO_TOOL = [126, 127];
 const DEFAULT_REVIEW_TIMEOUT_SEC = 900;
 const MAX_BUFFER = 64 * 1024 * 1024;
 const EXIT = { ok: 0, failed: 1, env: 3 };
@@ -218,25 +219,6 @@ function runCheck(root, name, check) {
   writeEvidence(root, name, { ...evidence, ...runEnvError(root, def, evidence, log) });
 }
 
-// Why a finished run says nothing about the code, if it does not: { envError, envKind } or {}.
-function runEnvError(root, def, ev, log) {
-  // Evidence binds the tree it ran on; a check that rewrites tracked files can never be current.
-  const touched = lines(git(root, ['diff', '--name-only', ev.treeHash, treeHash(root)]));
-  if (touched.length) return { envError: `검사가 파일을 바꿨다: ${touched.join(', ')} → .gitignore에 넣거나 출력 경로를 옮긴다`, envKind: 'changed' };
-  if (ev.result?.envError) return { envError: ev.result.envError, envKind: isProbeTodo(root, ev.result.envError) ? 'probe-todo' : 'builtin' };
-  if (def.builtin || ev.exit === 0) return {};
-  if (SHELL_NO_TOOL.includes(ev.exit)) return { envError: `도구 없음 또는 실행 불가 (exit ${ev.exit}, 로그: ${ev.logPath})`, envKind: 'tool' };
-  const down = require('../lib/run-builtin').serviceDown(log);
-  if (down) return { envError: `필요한 서비스(DB·docker 등)에 연결하지 못함: ${down} (로그: ${ev.logPath}) → 코드를 고치지 말고 사용자에게 보고`, envKind: 'service' };
-  return {};
-}
-
-// The probe draft from qh init still throws todo(): a person decides who fills it in.
-const isProbeTodo = (root, envError) => {
-  const file = path.join(root, PROBE_FILE);
-  return envError.includes(PROBE_FILE) && fs.existsSync(file) && /throw todo\(/.test(fs.readFileSync(file, 'utf8'));
-};
-
 function parseJson(text) {
   try {
     return JSON.parse(text);
@@ -392,6 +374,7 @@ function assess(root, phase = 'stop', baseRef) {
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root, base);
+  const red = phase === 'pr' ? redCheck.readRedCheck(root, now) : null;
   const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
@@ -400,11 +383,13 @@ function assess(root, phase = 'stop', baseRef) {
     base,
     changed,
     checks,
+    redCheck: red,
     allowedFailures: allowedFailures(root),
     later: req.later,
     risks: req.risks,
     docsMissing: req.docsMissing,
     policy: [
+      ...(red?.state === '막음' ? [`TDD RED: ${redCheck.BLOCK} → 기준 코드에서 실패하는 테스트를 추가한다`] : []),
       ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, base, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
       ...cardFormatProblems(card),
       ...(phase === 'pr' ? require('../lib/history-secrets').historySecretProblems(root, base) : []),
@@ -520,6 +505,8 @@ function isPrBlocked(a, t, setup) {
 function cmdPr(root) {
   if (envProblems(root, loadConfig(root)).length) return cmdCheck(root, [], { phase: 'pr' });
   cmdCheck(root, [], { phase: 'pr' });
+  const before = assess(root, 'pr');
+  redCheck.runRedCheck(root, { ...before, card: taskCard(root, before.base).text, tests: workTests(root, before.changed) }, { git, hashTree: treeHash, spawnCheck, runEnvError });
   const reviewExit = runReview(root, loadConfig(root));
   const a = assess(root, 'pr');
   const t = triage(a);
