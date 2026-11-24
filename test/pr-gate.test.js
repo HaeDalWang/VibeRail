@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { repo, write, sh, qh, DECLARED, BASIC } = require('./helpers');
+const { repo, write, sh, qh, DECLARED, BASIC, QH, TEST_ENV } = require('./helpers');
 
 const REVIEW_OK = { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" };
 
@@ -122,4 +122,67 @@ test('a detached checkout still finds the task card from the changed files', () 
   sh(root, 'git', ['checkout', '-q', '--detach']);
   const s = JSON.parse(qh(root, ['status', '--json']).stdout);
   assert.deepStrictEqual(s.decisions, ['열린 질문']);
+});
+
+for (const team of ['A', 'B']) {
+  test(`pr pass guidance uses the existing team answer ${team}`, () => {
+    const root = installed({ ...BASIC, review: REVIEW_OK, answers: { team: { choice: team } } });
+    if (team === 'A') write(root, '.github/workflows/quality.yml', 'steps:\n  - run: node .quality/qh/bin/qh.js check --pr\n  - run: node .quality/qh/bin/qh.js status --pr --base main\n');
+    const r = qh(root, ['pr']);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    if (team === 'B') {
+      assert.match(r.stdout, /PR 없이 기준 브랜치에 바로 합쳐도 된다/);
+      assert.match(r.stdout, /완료 리뷰에서 사람이 확인/);
+      assert.doesNotMatch(r.stdout, /PR 리뷰어가 확인/);
+    } else assert.match(r.stdout, /PR 리뷰어가 확인/);
+  });
+}
+
+test('pr appends one metrics row on each pass and none when blocked', () => {
+  const root = installed();
+  const file = path.join(root, '.quality/metrics.csv');
+  const lines = () => fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').length - 1 : 0;
+  const before = lines();
+  assert.strictEqual(qh(root, ['pr']).status, 0);
+  assert.strictEqual(lines(), before + 1);
+  assert.strictEqual(qh(root, ['pr']).status, 0);
+  assert.strictEqual(lines(), before + 2);
+  write(root, 'CLAUDE.md', '# rules\n');
+  assert.strictEqual(qh(root, ['pr']).status, 1);
+  assert.strictEqual(lines(), before + 2);
+});
+
+test('pr copies metrics and the generated report only when an export folder is set', () => {
+  const root = installed();
+  const dest = path.join(root, 'export with spaces');
+  const run = (env) => require('node:child_process').spawnSync(process.execPath, [QH, 'pr'], {
+    cwd: root, encoding: 'utf8', env: { ...TEST_ENV, VIBERAIL_METRICS_DIR: '', ...env },
+  });
+  assert.strictEqual(run({}).status, 0);
+  assert.ok(!fs.existsSync(dest));
+  const r = run({ VIBERAIL_METRICS_DIR: dest });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.strictEqual(fs.readFileSync(path.join(dest, 'metrics.csv'), 'utf8'), fs.readFileSync(path.join(root, '.quality/metrics.csv'), 'utf8'));
+  const reports = fs.readdirSync(dest).filter((f) => f.endsWith('.html'));
+  assert.strictEqual(reports.length, 1);
+  assert.strictEqual(fs.readFileSync(path.join(dest, reports[0]), 'utf8'), fs.readFileSync(path.join(root, '.quality/reports', reports[0]), 'utf8'));
+  assert.doesNotMatch(fs.readFileSync(path.join(dest, 'metrics.csv'), 'utf8'), /export with spaces/);
+  assert.doesNotMatch(fs.readFileSync(path.join(dest, reports[0]), 'utf8'), /export with spaces/);
+});
+
+test('pr keeps its passing exit code when measurement or copying fails', () => {
+  for (const failure of ['measure', 'copy']) {
+    const root = installed();
+    const dest = path.join(root, '.quality/export');
+    if (failure === 'measure') {
+      fs.rmSync(path.join(root, '.quality/metrics.csv'), { force: true });
+      fs.mkdirSync(path.join(root, '.quality/metrics.csv'));
+    } else write(root, '.quality/export', 'a file blocks the export directory');
+    const r = require('node:child_process').spawnSync(process.execPath, [QH, 'pr'], {
+      cwd: root, encoding: 'utf8', env: { ...TEST_ENV, VIBERAIL_METRICS_DIR: dest },
+    });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stderr, /경고/);
+    assert.match(r.stderr, failure === 'measure' ? /지표.*기록/ : /복사/);
+  }
 });
