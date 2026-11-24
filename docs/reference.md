@@ -94,9 +94,17 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | `qh init [경로]` | 설치·연결 |
 | `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
 | `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
-| `qh view interface <json>` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 선택 `questions`(`[{text, choices 2~4개, recommended?}]`)는 맨 위에 두면 공통 질문, 안 안에 두면 그 안의 질문이다. 질문마다 하나 고르기·추천 표시·기타 칸이 붙고, 공통 질문과 고른 안의 질문에 답해야 복사되며, 답은 `- [x] 질문 · 답` 줄로 함께 복사된다(카드 `## 판단 필요`에 그대로 적는다). `안:` 줄 끝에는 고른 안의 확인 번호(`· 확인 번호 NNNN`, 공백 무시)가 붙고, 고른 뒤 그 안이 바뀌면 qh가 바뀐 칸(예전 → 지금, git 기록에서)을 보이며 다시 묻는다. 카드 `## 루프`에 작업이 생기면 `명세:` 파일에도 같은 확인 질문을 한다. 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
-| `qh view architecture <json>` | 아키텍처 점검 후보(JSON: `title`, `candidates[{id, name, problem, solution, gain, cost, strength, mermaidBefore?, mermaidAfter?, detail?, questions?}]`, 선택 `questions`)를 한국어 로컬 HTML로 만든다. 후보마다 이유 칸·복사 버튼·질문 칸은 interface 화면과 같고, `detail`은 사용자 수준 B에만 보인다. 외부 주소를 부르지 않는다(Mermaid도 로컬 사본). improve-codebase-architecture skill의 HTML 보고서 단계(CDN·영어) 대신 쓴다 |
+| `qh view interface <json> [--wait [--timeout 초]]` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 선택 `questions`(`[{text, choices 2~4개, recommended?}]`)는 맨 위에 두면 공통 질문, 안 안에 두면 그 안의 질문이다. 질문마다 하나 고르기·추천 표시·기타 칸이 붙고, 공통 질문과 고른 안의 질문에 답해야 복사되며, 답은 `- [x] 질문 · 답` 줄로 함께 복사된다(카드 `## 판단 필요`에 그대로 적는다). `안:` 줄 끝에는 고른 안의 확인 번호(`· 확인 번호 NNNN`, 공백 무시)가 붙고, 고른 뒤 그 안이 바뀌면 qh가 바뀐 칸(예전 → 지금, git 기록에서)을 보이며 다시 묻는다. 카드 `## 루프`에 작업이 생기면 `명세:` 파일에도 같은 확인 질문을 한다. 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
+| `qh view architecture <json> [--wait [--timeout 초]]` | 아키텍처 점검 후보(JSON: `title`, `candidates[{id, name, problem, solution, gain, cost, strength, mermaidBefore?, mermaidAfter?, detail?, questions?}]`, 선택 `questions`)를 한국어 로컬 HTML로 만든다. 후보마다 이유 칸·복사 버튼·질문 칸은 interface 화면과 같고, `detail`은 사용자 수준 B에만 보인다. 외부 주소를 부르지 않는다(Mermaid도 로컬 사본). improve-codebase-architecture skill의 HTML 보고서 단계(CDN·영어) 대신 쓴다 |
+| `qh view spec <spec.md> [--wait [--timeout 초]]` | 명세 Markdown의 제목·문단·목록 항목마다 선택적 주석 칸을 붙인다. 고르는 질문 없이 주석만 복사하거나 보낸다. 기존 Markdown 표시와 HTML 이스케이프를 재사용한다 |
 | `qh view glossary` | `GLOSSARY.md`를 로컬 HTML로 만든다 |
+
+interface·architecture의 각 안에도 선택적 주석 칸이 있다. 입력한 주석은 선택하지 않은 안을 포함해 `주석:` 아래 `- <위치> · <주석>`으로 답에 붙고, 빈 칸은 제외한다. 위치는 안의 제목, 명세의 제목 또는 문단·항목 앞 20자다. 에이전트는 주석마다 명세·티켓·카드에 반영하고 반영 내용을 한 줄씩 알린다.
+
+`--wait`는 Node 내장 HTTP 서버를 `127.0.0.1`의 빈 포트에 열고, 한 번 쓰는 무작위 토큰 주소에서 화면과 Mermaid 파일을 직접 제공한다. 브라우저를 자동으로 열며, 열지 못해도 주소를 출력한다. 화면의 **보내기**는 복사와 같은 글을 토큰과 함께 전달한다. 답을 받으면 글을 stdout에 그대로 출력하고 서버를 닫으며 종료 코드 0을 돌려준다. 대기 중 들어온 중복 답은 409, 틀린 토큰은 403으로 거절한다. 종료 후에는 새 연결을 받지 않는다.
+
+기본 대기는 540초다. `--timeout`은 0보다 큰 초 단위 숫자로 바꾼다(Node 타이머 한도 이내). 시간이 지나면 복사 버튼으로 답을 붙여 넣어 달라는 안내와 **종료 코드 124**를 남기고 닫는다. 잘못된 옵션은 코드 1이다. Claude Code는 Bash timeout을 `600000`으로 둔다. 다른 호스트는 `--wait` 없이 기존 복사 흐름을 쓴다. 복사 버튼은 언제나 남고, 전송 실패·서버 종료·오류 응답에도 입력을 지우지 않는다. 이미 보낸 화면에서는 다시 보내도 “이미 보냈습니다”라고 알린다.
+
 | `qh cycle` | 지금 카드의 단계, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로 |
 | `qh doctor` | 설치·설정 전체 점검 |
 | `qh check [이름…] [--pr]` | 필요한 검사 실행. `--pr`은 올리기 직전에만 도는 검사까지 돌린다 |
