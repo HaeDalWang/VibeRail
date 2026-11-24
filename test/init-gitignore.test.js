@@ -23,6 +23,17 @@ test('init gitignores the machine-specific map settings, reports and measurement
   assert.strictEqual(fs.readFileSync(path.join(root, '.gitignore'), 'utf8').split('\n').filter((l) => l === '.mcp.json').length, 1, again.stdout);
 });
 
+test('init keeps its own copy and the vendored skills out of the code map, once', () => {
+  const root = repo(BASIC);
+  fs.writeFileSync(path.join(root, '.code-review-graphignore'), 'dist/\n');
+  sh(root, 'git', ['add', '.code-review-graphignore']);
+  sh(root, 'git', ['commit', '-qm', 'map ignore']);
+  qh(root, ['init', root]);
+  qh(root, ['init', root]);
+  const lines = fs.readFileSync(path.join(root, '.code-review-graphignore'), 'utf8').split('\n');
+  for (const line of ['dist/', '.quality/qh/', '.claude/skills/', '.kiro/skills/']) assert.strictEqual(lines.filter((l) => l === line).length, 1, line);
+});
+
 test('INSTALL.md does not tell the agent to commit the map settings that hold an absolute path', () => {
   const install = fs.readFileSync(path.join(ROOT, 'INSTALL.md'), 'utf8');
   assert.doesNotMatch(install, /코드 지도가 만든 `\.mcp\.json`/);

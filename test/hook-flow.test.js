@@ -87,9 +87,17 @@ test('what a Kiro turn left unresolved is told again at the next session start, 
   write(root, 'src/a.js', '2');
   qh(root, ['hook', 'stop'], kiro());
   const first = qh(root, ['hook', 'session-start']).stdout;
-  assert.match(first, /지난 세션이 끝날 때 남은 품질 문제/);
+  assert.match(first, /\(qh\) The last session ended with quality problems left/);
   assert.match(first, /테스트/);
-  assert.doesNotMatch(qh(root, ['hook', 'session-start']).stdout, /지난 세션이 끝날 때/);
+  assert.doesNotMatch(qh(root, ['hook', 'session-start']).stdout, /The last session ended/);
+});
+
+test('session start talks to the agent in English (decision 2026-11-18), and so do the installed hook descriptions', () => {
+  const out = qh(repo(NO_CHECKS), ['hook', 'session-start']).stdout;
+  assert.match(out, /\(qh\) Before ending a response, run the needed checks with `qh check`/);
+  assert.doesNotMatch(out, /응답을 끝내기 전에/);
+  const { HOOKS } = require('../lib/init');
+  for (const h of HOOKS) assert.doesNotMatch(h.description, /[가-힣]/, h.name);
 });
 
 test('each session gets the fix list once, even when another session in the folder already got it', () => {
@@ -127,6 +135,23 @@ test('a command check that fails because a database or docker is unreachable is 
 
 test('a failing assertion stays a code failure even when the log mentions a refused connection', () => {
   const root = repo(failingCheck('AssertionError: expected retry after connect ECONNREFUSED'));
+  write(root, 'src/a.js', '2');
+  assert.strictEqual(qh(root, ['check', 'db']).status, 1);
+  assert.strictEqual(statusJson(root).checks.find((x) => x.name === 'db').state, '실패');
+});
+
+test('a failed Jest expectation stays a code failure even when a test logged a refused connection', () => {
+  const jest = [
+    'FAIL src/sum.test.js',
+    '  console.error',
+    '    Error: connect ECONNREFUSED 127.0.0.1:6379',
+    '  ● sum › adds',
+    '    expect(received).toBe(expected) // Object.is equality',
+    '    Expected: 3',
+    '    Received: 4',
+    'Tests:       1 failed, 1 total',
+  ].join('\n');
+  const root = repo({ baseRef: 'main', checks: { db: { cmd: 'cat jest.log; exit 1' } }, common: ['db'] }, { 'jest.log': jest });
   write(root, 'src/a.js', '2');
   assert.strictEqual(qh(root, ['check', 'db']).status, 1);
   assert.strictEqual(statusJson(root).checks.find((x) => x.name === 'db').state, '실패');

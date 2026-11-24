@@ -7,14 +7,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { SECTIONS, section } = require('./card');
+const { SECTIONS, section, answerTo, isYes } = require('./card');
 const { declared, declaredReason, isRealReason, DECISIONS_FILE, LIMITS } = require('./policy');
 
 const DAY_MS = 86400000;
 const CARD_GLOB = '.quality/tasks/*.md';
 const CHECK_LINE = /아키텍처 점검:\s*(\d{4}-\d{2}-\d{2})/g;
 const NEXT = {
-  의도: '범위 확정 (물어서 정한 범위를 사용자가 확인)',
+  의도: '범위 확정 (정한 범위를 보여 주고 사용자에게 그대로 묻는다: 이 범위로 진행할까요?)',
   'interface 결정': '구조 고르기 (그림을 보고 하나 고르고 이유 한 줄)',
   '테스트 위치': '테스트 위치(seam) 정하기',
   루프: '루프 시작 (이번에 돌릴 티켓 최대 3개와 사람 몫 티켓을 보고 "돌려")',
@@ -45,7 +45,7 @@ function loopOf(root, card) {
 function stageOf(card, root) {
   if (declared(card, 'grilling 불필요')) return '완료';
   const intent = (section(card, SECTIONS.intent) || '').split('\n').filter((l) => declaredReason(l, 'grilling 불필요') === null).join('').trim();
-  if (!intent) return '의도';
+  if (!intent || !isYes(answerTo(card, '이 범위로 진행할까요?') || '')) return '의도';
   const chosen = section(card, SECTIONS.interface);
   if (!chosen || !isRealReason(declaredReason(chosen, '이유') || '')) return 'interface 결정';
   if (!section(card, SECTIONS.seam)) return '테스트 위치';

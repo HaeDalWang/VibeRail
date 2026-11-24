@@ -38,8 +38,11 @@ function card(q, n, rec, saved) {
     </section>`;
 }
 
-function page(project, rec, saved) {
-  const always = ALWAYS_ON.map(([name, what]) => `<li><b>${esc(name)}</b> ${esc(what)}</li>`).join('');
+// Without a test command nothing runs the suite, so the page must not say it has to pass.
+const NO_TEST_CMD = '테스트 실행 명령이 없어 지금은 아무것도 돌리지 않는다. 실행 명령을 정하면 작업을 합치기 전에 전체 테스트가 통과해야 한다.';
+
+function page(project, rec, saved, hasTestCmd) {
+  const always = ALWAYS_ON.map(([name, what]) => `<li><b>${esc(name)}</b> ${esc(name === '테스트 통과' && !hasTestCmd ? NO_TEST_CMD : what)}</li>`).join('');
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>품질 질문</title>
@@ -107,7 +110,7 @@ document.getElementById('copy').onclick=async()=>{
 function ask(root, config) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qh-ask-'));
   const file = path.join(dir, 'questions.html');
-  fs.writeFileSync(file, page(path.basename(root), recommend(root), config.answers || {}));
+  fs.writeFileSync(file, page(path.basename(root), recommend(root), config.answers || {}, Object.values(config.checks || {}).some((c) => c.cmd)));
   return file;
 }
 

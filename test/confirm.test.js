@@ -61,14 +61,38 @@ test('a pick without a number asks once', () => {
   assert.deepStrictEqual(confirms(root), []);
 });
 
-test('no design link, file or option asks nothing', () => {
+test('a pick whose design cannot be read asks instead of passing', () => {
   const { root } = picked();
-  write(root, '.quality/tasks/work.md', card('안: C (없는 안) · 확인 번호 0000'));
-  assert.deepStrictEqual(confirms(root), [], 'the picked id is not in the file');
-  write(root, '.quality/tasks/work.md', card('안: A · 확인 번호 0000').replace(`설계안: ${DESIGN}\n`, ''));
-  assert.deepStrictEqual(confirms(root), [], 'no design link');
-  write(root, '.quality/tasks/work.md', card('안: A · 확인 번호 0000').replace(DESIGN, '.scratch/f/gone.json'));
-  assert.deepStrictEqual(confirms(root), [], 'the file is gone');
+  const asked = (pick, why) => {
+    write(root, '.quality/tasks/work.md', pick);
+    const qs = statusJson(root).waivers.filter((w) => /고른 [A-Z]안/.test(w.user));
+    assert.strictEqual(qs.length, 1, why);
+    assert.match(qs[0].user, /설계안에서 찾지 못했습니다/, why);
+    return qs[0];
+  };
+  asked(card('안: C (없는 안) · 확인 번호 0000'), 'the picked id is not in the file');
+  asked(card('안: A · 확인 번호 0000').replace(`설계안: ${DESIGN}\n`, ''), 'no design link');
+  const q = asked(card('안: A · 확인 번호 0000').replace(DESIGN, '.scratch/f/gone.json'), 'the file is gone');
+  write(root, DESIGN, '{ broken');
+  asked(card('안: A · 확인 번호 0000'), 'the file is not JSON');
+  write(root, '.quality/tasks/work.md', card('안: A · 확인 번호 0000', `- [x] ${q.user} · 네`).replace(DESIGN, '.scratch/f/gone.json'));
+  assert.deepStrictEqual(statusJson(root).waivers.filter((w) => /고른 [A-Z]안/.test(w.user)), [], 'a yes settles it');
+});
+
+test('only a yes approves: a no stops and tells the agent to fix it', () => {
+  const { root, number } = picked();
+  write(root, DESIGN, design({ ...OPTION_A, gain: '찾기 아주 쉽다' }));
+  const [q] = confirms(root);
+  for (const no of ['아니요', '아니요, 예전 안으로 돌려 주세요', '잠깐만요', '진행하지 마세요']) {
+    write(root, '.quality/tasks/work.md', card(`안: A (한 모듈) · 확인 번호 ${number}`, `- [x] ${q.user} · ${no}`));
+    const [still] = confirms(root);
+    assert.ok(still, `"${no}" is not an approval`);
+    assert.match(still.agent, new RegExp(`사용자가 "${no}"라고 답했다`));
+  }
+  for (const yes of ['예', '네, 계속하세요', '진행해', '돌려']) {
+    write(root, '.quality/tasks/work.md', card(`안: A (한 모듈) · 확인 번호 ${number}`, `- [x] ${q.user} · ${yes}`));
+    assert.deepStrictEqual(confirms(root), [], `"${yes}" approves`);
+  }
 });
 
 test('a confirmation question blocks the stop hook', () => {
@@ -125,7 +149,7 @@ test('the spec is asked once the loop lists tickets', () => {
   write(root, SPEC, SPEC_TEXT.replace('One module', '  One   module').replace(/\n\n/g, '\n\n\n'));
   assert.deepStrictEqual(confirms(root), [], 'whitespace edits ask nothing');
   write(root, '.quality/tasks/work.md', specCard(LOOP).replace(SPEC, '.scratch/f/gone.md'));
-  assert.deepStrictEqual(confirms(root), [], 'a missing spec asks nothing');
+  assert.ok(statusJson(root).waivers.some((w) => /^명세를 찾지 못했습니다/.test(w.user)), 'a missing spec asks');
   write(root, '.quality/tasks/work.md', specCard(LOOP).replace(`명세: ${SPEC}\n`, ''));
   assert.deepStrictEqual(confirms(root), [], 'no spec link asks nothing');
 });

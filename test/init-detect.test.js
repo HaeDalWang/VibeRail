@@ -91,3 +91,23 @@ test('the Claude Code review command turns the structured answer into result.jso
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(root, '.quality/evidence/review/result.json'), 'utf8')), [finding]);
 });
+
+test('init and the question screen see a login server and DB in a package one folder down', () => {
+  const pkg = JSON.stringify({ dependencies: { express: '^5', pg: '^8', passport: '^0.7' } });
+  const { out, config } = initConfig({ 'backend/package.json': pkg, 'backend/src/app.js': '1\n', 'frontend/package.json': '{}' });
+  assert.match(out, /express=예, DB=postgres/);
+  assert.ok(config.checks.access, 'route check drafted');
+  const rec = require('../lib/questions').recommend(project({ 'backend/package.json': pkg }));
+  assert.strictEqual(rec.login[0], 'A');
+  assert.strictEqual(rec.db[0], 'A');
+});
+
+test('init suggests node --test for a Node project without configuring a test check', () => {
+  for (const pkg of [{}, { scripts: { test: 'echo "Error: no test specified" && exit 1' } }]) {
+    const { out, config } = initConfig({ 'package.json': JSON.stringify(pkg) });
+    assert.match(out, /Node 내장 테스트/);
+    assert.match(out, /node --test/);
+    assert.strictEqual(config.checks.test, undefined);
+  }
+  assert.doesNotMatch(initConfig({ 'README.md': '# app\n' }).out, /node --test/);
+});

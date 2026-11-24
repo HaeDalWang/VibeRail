@@ -9,7 +9,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { isOwnCode, isAllowedBy, TEST_FILE, MAX_SCAN_BYTES, DECISIONS_FILE, relatedTests } = require('./policy');
+const { section, SECTIONS } = require('./card');
+const { isOwnCode, isAllowedBy, TEST_FILE, MAX_SCAN_BYTES, DECISIONS_FILE, declaredReason } = require('./policy');
 const { duplicateStats, deadRefProblems, MAX_FILE_LINES, lineTotal } = require('./structure');
 
 const METRICS_FILE = '.quality/metrics.csv';
@@ -17,7 +18,8 @@ const METRICS_FILE = '.quality/metrics.csv';
 const REPORTS_DIR = '.quality/reports';
 // Bumped whenever what a number counts changes; rows are compared only within one version
 // (a rule change must not show up as an improvement). 2 = ADR 0001, 3 = vendored code left out, 4 = allow lines need a real reason.
-const RULES = 4;
+const RULES = 5; // 5 = function execution coverage, not same-name test files.
+const NODE_RUNNABLE = /\.[cm]?[jt]sx?$/;
 const STOP_LOG = '.quality/evidence/stop-log.jsonl';
 const DAY_SEC = 86400;
 const FEAT_WINDOW_DAYS = 60;
@@ -39,9 +41,10 @@ const GROUPS = [
       '같은 로직이 여러 곳에 있다',
       '버그를 한 곳만 고치고 나머지에 남긴다(AI가 자주 한다)',
       '한 곳만 고치면 끝난다',
-      '코드가 커지면 줄 수는 저절로 늘어나므로 비율로 본다. 0이 목표는 아니다. 둘이어야 하면 결정 로그에 이유를 적고 허용하면, 그 파일은 여기서 빠진다. 한계: 이름만 바꿔 다시 쓴 코드는 못 잡아 실제보다 적게 센다',
+      '코드가 커지면 줄 수는 저절로 늘어나므로 비율로 본다. 0이 목표는 아니다. 둘이어야 하면 결정 로그에 이유를 적고 허용하면, 그 파일은 여기서 빠진다. 한계: 6줄 이상 같은 덩어리만 셈, 한 줄짜리 중복은 못 봄. 이름만 바꿔 다시 쓴 코드도 못 잡을 수 있다',
     ]],
     ['duplicated_lines', '중복 코드 줄', '비율의 분자', 'ref'],
+    ['similar_functions', '비슷한 함수', '참고 개수 · 도구가 있을 때만', 'ref'],
     ['flat_root_files', '정리 대상 폴더 맨 위 파일', '개수 · 정리하기로 정한 폴더 바로 아래, 폴더별 합', 'lower', [
       '하위 폴더로 나누기로 정한 폴더의 맨 위에 그냥 놓인 파일',
       '파일이 한 줄로 쌓여 어떤 기능이 어디 있는지 이름만으로 찾게 되고, AI가 새 파일도 같은 자리에 계속 놓는다',
@@ -50,11 +53,11 @@ const GROUPS = [
     ]],
   ]],
   ['테스트', [
-    ['untested_pct', '테스트가 안 붙은 코드 파일', '비율(%) · 안전장치 없는 파일', 'lower', [
-      'AI가 코드를 고쳤을 때 "진짜 잘 되는지" 자동으로 확인해 줄 테스트가 없는 파일',
+    ['untested_pct', '테스트가 안 붙은 코드 파일', '비율(%) · 테스트 중 함수가 실행되지 않은 파일', 'lower', [
+      '테스트를 돌릴 때 함수 몸통이 하나도 실행되지 않은 코드 파일',
       'AI가 수정을 거듭하다 다른 곳을 조용히 망가뜨려도, 직접 실행해 보기 전까지 모른다',
-      '망가지면 그 자리에서 바로 알 수 있다',
-      '0개일 필요는 없다(설정·타입 파일처럼 테스트가 필요 없는 파일도 있다). 그런 파일은 결정 로그에 이유를 한 줄 적고 허용하면 여기서 빠진다. 파일 수가 늘어나므로 비율로 본다. 한계: 같은 이름의 테스트 파일이 있는지만 보고, 그 테스트가 꼼꼼한지는 모른다',
+      '테스트가 실제로 실행해 보는 코드 범위가 넓어진다',
+      '0개일 필요는 없다(설정·타입 파일처럼 테스트가 필요 없는 파일도 있다). 그런 파일은 결정 로그에 이유를 한 줄 적고 허용하면 여기서 빠진다. 파일 수가 늘어나므로 비율로 본다. Node가 실행하는 파일(.js·.ts 등)만 세고, 파일의 함수 하나라도 실행되면 붙은 것으로 센다. 최상위 실행만으로는 세지 않는다. 한계: 실행됐다는 뜻이며 꼼꼼히 검증했다는 뜻은 아니다. 테스트 명령 없음·Node 외 실행·빈 실행 기록·과거 소급 행은 잴 수 없음',
     ]],
   ]],
   ['문서와 결정', [
@@ -66,11 +69,12 @@ const GROUPS = [
     ]],
     ['decision_lines', '결정 로그', '줄 수 · 많을수록 좋은 건 아니어서 판정하지 않음', 'ref'],
     ['adr_files', '설계 기록', '개수 · 판정하지 않음', 'ref'],
+    ['interface_reason_short_pct', '이유가 없거나 5자 미만인 카드', '구조 선택이 있는 카드 중 비율(%) · 설계 기록 0001 참고', 'ref'],
   ]],
   ['개발 흐름 (참고)', [
     ['feat_median_files_60d', '기능 1건당 수정 파일 수', `최근 ${FEAT_WINDOW_DAYS}일 중앙값 · 저장 습관에 흔들려 판정하지 않음`, 'ref'],
   ]],
-  [`품질 검사 작동 (최근 ${BLOCK_WINDOW_DAYS}일)`, [
+  [`품질 검사 작동 (최근 ${BLOCK_WINDOW_DAYS}일 · 같은 종류로 막힌 횟수)`, [
     ['stop_blocks_30d', 'AI를 돌려보낸 횟수', 'AI가 답을 끝낼 때 막은 횟수', 'ref'],
     ['block_tdd', '└ 테스트 없이 코드 변경', '', 'ref'],
     ['block_docs', '└ 문서 미갱신', '', 'ref'],
@@ -89,13 +93,13 @@ const GROUPS = [
 ];
 const KEYS = GROUPS.flatMap(([, items]) => items.map(([k]) => k));
 // Only in projects that set the config behind them: other projects' files and pages stay as they were.
-const CONFIGURED = ['flat_root_files'];
+const CONFIGURED = ['flat_root_files', 'similar_functions'];
 const COLUMNS = ['date', 'sha', 'backfill', 'rules', ...KEYS.filter((k) => !CONFIGURED.includes(k))];
 // By the start of the item text; the intent, interface and architecture items are design records, and growth/rule items stay in 'other'.
 const BLOCK_KINDS = [['TDD', 'tdd'], ['문서 영향', 'docs'], ['문서 미갱신', 'docs'], ['ADR', 'adr'], ['결정 로그', 'adr'], ['의도', 'adr'], ['interface 결정', 'adr'], ['아키텍처 점검', 'adr'], ['중복', 'dup'], ['검사 ', 'check']];
 
-const git = (root, args) => {
-  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const git = (root, args, env = process.env) => {
+  const r = spawnSync('git', args, { cwd: root, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   return r.status === 0 ? r.stdout : null;
 };
 const listOf = (text) => (text || '').split('\n').filter(Boolean);
@@ -124,21 +128,22 @@ function featMedian(root, at) {
 
 const decisionsOf = (root) => (fs.existsSync(path.join(root, DECISIONS_FILE)) ? fs.readFileSync(path.join(root, DECISIONS_FILE), 'utf8') : '');
 
-function codeNumbers(root, tracked) {
+function codeNumbers(root, tracked, executed) {
   const decisions = decisionsOf(root);
   const code = tracked.filter(isOwnCode);
   const tests = code.filter((f) => TEST_FILE.test(f));
   // Migrations (.sql) are not where same-name tests live; they would only skew the ratio.
   const prod = code.filter((f) => !TEST_FILE.test(f) && !/\.sql$/.test(f));
   const sizes = prod.map((f) => lineCount(root, f));
-  const needTests = prod.filter((f) => !isAllowedBy(decisions, '테스트 없음 허용', f));
-  const untested = needTests.filter((f) => !relatedTests(root, [f], tracked).length).length;
+  // Only files Node can execute leave a V8 record; shell or other scripts would always read as untested.
+  const needTests = prod.filter((f) => NODE_RUNNABLE.test(f) && !isAllowedBy(decisions, '테스트 없음 허용', f));
+  const untested = needTests.filter((f) => !executed?.has(f)).length;
   return {
     code_files: prod.length,
     code_lines: sizes.reduce((a, b) => a + b, 0),
     test_lines: tests.reduce((n, f) => n + lineCount(root, f), 0),
     files_over_800: sizes.filter((n) => n > MAX_FILE_LINES).length,
-    untested_pct: needTests.length ? Math.round((untested / needTests.length) * 1000) / 10 : null,
+    untested_pct: executed !== null && needTests.length ? Math.round((untested / needTests.length) * 1000) / 10 : null,
   };
 }
 
@@ -161,6 +166,17 @@ function docNumbers(root, tracked, structure) {
   };
 }
 
+// Cards without an interface decision have no reason to fill in and are not the denominator.
+function interfaceNumbers(root, tracked) {
+  const fresh = listOf(git(root, ['ls-files', '--others', '--exclude-standard', '--', '.quality/tasks/']));
+  const cards = [...new Set([...tracked, ...fresh])].filter((f) => f.startsWith('.quality/tasks/') && f.endsWith('.md') && fs.existsSync(path.join(root, f)));
+  const choices = cards.map((f) => section(fs.readFileSync(path.join(root, f), 'utf8'), SECTIONS.interface)).filter((s) => s !== null);
+  return {
+    interface_cards: choices.length,
+    interface_short_reasons: choices.filter((s) => (declaredReason(s, '이유') || '').trim().length < 5).length,
+  };
+}
+
 // Stop blocks written by the hook (local, not committed) in the window before `at`.
 function blockNumbers(root, at) {
   const file = path.join(root, STOP_LOG);
@@ -176,6 +192,20 @@ function blockNumbers(root, at) {
   return out;
 }
 
+// Optional installed tool only: missing or unsupported tools leave the item out.
+function similarNumbers(root, current) {
+  if (!current) return {};
+  const tools = require('./repo-tools');
+  if (!fs.existsSync(tools.toolPath(root, 'similar'))) return {};
+  try {
+    const ids = tools.measureAll(root, { similar: true }).similar;
+    return { similar_functions: Object.values(ids).reduce((sum, n) => sum + n, 0) };
+  } catch (err) {
+    console.warn(`참고 지표를 잴 수 없음: ${err.message}`);
+    return {};
+  }
+}
+
 // One measurement of the checked-out tree. `withBlocks` is false for past commits: the
 // hook log only says what happened from now on.
 // `structure` is today's config, also for past commits, so a row's numbers do not jump the
@@ -186,8 +216,10 @@ function collect(root, { withBlocks = true, structure = {} } = {}) {
   const row = {
     sha: git(root, ['rev-parse', '--short', 'HEAD']).trim(),
     rules: RULES,
-    ...codeNumbers(root, tracked),
+    ...codeNumbers(root, tracked, withBlocks ? require('./coverage').execution(root, git) : null),
     ...docNumbers(root, tracked, structure),
+    ...interfaceNumbers(root, tracked),
+    ...similarNumbers(root, withBlocks),
     ...(structure.flatRoots ? { flat_root_files: flatRootFiles(root, tracked, structure.flatRoots) } : {}),
     // .sql is left out like in code_lines, so the share has the same base.
     duplicated_lines: duplicateStats(root).perFile.filter(([f]) => !/\.sql$/.test(f)).reduce((n, [, c]) => n + c, 0),
@@ -198,9 +230,14 @@ function collect(root, { withBlocks = true, structure = {} } = {}) {
 }
 
 // The share is derived, so rows written before it existed get it too.
-const withShares = (r) => (r.duplicated_pct == null && r.duplicated_lines != null && Number(r.code_lines)
-  ? { ...r, duplicated_pct: Math.round((Number(r.duplicated_lines) / Number(r.code_lines)) * 10000) / 100 }
-  : r);
+const withShares = (r) => ({
+  ...r,
+  ...(r.duplicated_pct == null && r.duplicated_lines != null && Number(r.code_lines)
+    ? { duplicated_pct: Math.round((Number(r.duplicated_lines) / Number(r.code_lines)) * 10000) / 100 } : {}),
+  ...(r.interface_cards != null ? {
+    interface_reason_short_pct: Number(r.interface_cards) ? Math.round((Number(r.interface_short_reasons) / Number(r.interface_cards)) * 1000) / 10 : null,
+  } : {}),
+});
 
 // ---------- the history file ----------
 
@@ -261,7 +298,7 @@ function measure(root, { weeks = 0, today = new Date().toISOString().slice(0, 10
   let structure = {};
   try { structure = JSON.parse(fs.readFileSync(path.join(root, '.quality/config.json'), 'utf8')).structure || {}; } catch { /* no config: defaults */ }
   const past = weeks ? backfill(root, weeks, structure).filter((r) => !known.has(id(r))) : [];
-  const now = { date: today, ...collect(root, { structure }) };
+  const now = withShares({ date: today, ...collect(root, { structure }) });
   const rows = [...old, ...past, now].map(withShares).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   writeRows(root, rows);
   const dir = path.join(root, REPORTS_DIR);
@@ -272,6 +309,31 @@ function measure(root, { weeks = 0, today = new Date().toISOString().slice(0, 10
   const shown = GROUPS.map(([g, items]) => [g, items.filter(([k]) => !CONFIGURED.includes(k) || marked.some((r) => r[k] != null))]);
   fs.writeFileSync(page, require('./measure-page').page(path.basename(root), marked, shown));
   return { now, added: past.length + 1, page };
+}
+
+// A failed measurement or optional export must never change the final gate result.
+function finishPr(root, config, open) {
+  const solo = require('./questions').effectiveAnswers(root, config)?.team === 'B';
+  const next = solo ? 'PR 없이 기준 브랜치에 바로 합쳐도 된다. 열린 지목과 기준 변경은 완료 리뷰에서 사람이 확인' : 'PR 리뷰어가 확인';
+  console.log(`\nqh pr: 통과 (${open}: ${next})`);
+  let result;
+  try {
+    result = module.exports.measure(root);
+  } catch {
+    console.warn('경고: 지표를 기록하지 못했다. 최종 검사 통과는 유지된다.');
+    return;
+  }
+  if (!process.env.VIBERAIL_METRICS_DIR) return;
+  try {
+    const dest = process.env.VIBERAIL_METRICS_DIR;
+    fs.mkdirSync(dest, { recursive: true });
+    for (const file of [path.join(root, METRICS_FILE), result.page]) {
+      const target = path.resolve(dest, path.basename(file));
+      if (path.resolve(file) !== target) fs.copyFileSync(file, target);
+    }
+  } catch {
+    console.warn('경고: 지표와 결과지를 지정한 폴더로 복사하지 못했다. 최종 검사 통과는 유지된다.');
+  }
 }
 
 // ---------- Stop hook log ----------
@@ -289,4 +351,4 @@ function logStop(root, t) {
   fs.appendFileSync(file, `${JSON.stringify({ at: Math.floor(Date.now() / 1000), kinds: blockKinds(t) })}\n`);
 }
 
-module.exports = { measure, logStop, METRICS_FILE, REPORTS_DIR, GROUPS };
+module.exports = { measure, finishPr, logStop, METRICS_FILE, REPORTS_DIR, GROUPS };

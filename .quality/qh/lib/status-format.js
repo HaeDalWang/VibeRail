@@ -9,6 +9,7 @@ function formatStatus(a) {
   const out = [`qh 상태 (트리 ${a.treeHash.slice(0, 7)}, 기준 ${a.baseRef})`];
   if (a.changed) out.push(`바뀐 파일 ${a.changed.length}개${a.risks.length ? ` · 위험: ${a.risks.map((r) => `${r.risk}(${r.files.join(', ')})`).join('; ')}` : ''}`);
   for (const c of a.checks) out.push(`  ${c.name.padEnd(10)} ${c.state}${c.detail?.length ? `\n    ${c.detail.join('\n    ')}` : ''}`);
+  if (a.redCheck) out.push(`  실패 재현  ${a.redCheck.state}${a.redCheck.envError ? ' · 환경 오류' : ''} — ${a.redCheck.detail}`);
   if (a.later.length) out.push(`  (PR 때 실행: ${a.later.join(', ')})`);
   out.push(`AI 리뷰: ${formatReview(a.review)}`);
   if (t.aiFix.length) out.push('AI가 고칠 일', ...t.aiFix.map((x) => `  - ${x}`));

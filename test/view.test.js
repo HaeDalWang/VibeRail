@@ -37,7 +37,7 @@ test('the interface page lands under .quality/reports/ and escapes what the agen
   assert.match(html, /주문 묶기/);
   assert.match(html, /주문과 품목을 한 객체로 묶는다 &lt;b&gt;/);
   assert.doesNotMatch(html, /<b>/);
-  assert.strictEqual(html.match(/<textarea/g).length, 2, 'one reason box per option');
+  assert.strictEqual(html.match(/<textarea>/g).length, 2, 'one reason box per option');
 });
 
 test('level A shows name, summary, diagram, gain, cost; level B adds signature and seam', () => {
@@ -259,7 +259,7 @@ test('the architecture page lands under .quality/reports/ in Korean, escaped, on
   for (const t of ['구조 점검 후보', '주문 묶음 합치기', '고칠 곳이 하나', '한 번에 많이 옮긴다', '근거의 세기', '지금', '바꾼 뒤']) assert.ok(html.includes(t), t);
   assert.match(html, /흩어져 있다 &lt;i&gt;/);
   assert.doesNotMatch(html, /<i>/);
-  assert.strictEqual(html.match(/<textarea/g).length, 2);
+  assert.strictEqual(html.match(/<textarea>/g).length, 2);
   assert.match(r.stdout, /아키텍처 점검:/, 'the agent is told how to record the pick');
 });
 

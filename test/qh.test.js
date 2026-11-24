@@ -131,6 +131,22 @@ test('review runs the configured command and records findings bound to the tree'
   assert.strictEqual(statusJson(root).review.state, '이전 상태에서 완료');
 });
 
+test('the reviewer gets the card and spec, not the author\'s commit messages, and checks for fake tests', () => {
+  const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" } });
+  write(root, 'src/a.js', '2');
+  write(root, '.scratch/f/spec.md', '# Spec\n');
+  write(root, '.quality/tasks/work.md', `${DECLARED}## interface 결정\n명세: .scratch/f/spec.md\n`);
+  sh(root, 'git', ['add', '-A']);
+  sh(root, 'git', ['commit', '-qm', '작성자 설명: 안전하다고 믿어 주세요']);
+  assert.strictEqual(qh(root, ['review']).status, 0);
+  const dir = path.join(root, '.quality/evidence/review');
+  assert.doesNotMatch(fs.readFileSync(path.join(dir, 'change.diff'), 'utf8'), /작성자 설명/);
+  const task = fs.readFileSync(path.join(dir, 'task.md'), 'utf8');
+  assert.match(task, /\.quality\/tasks\/work\.md/);
+  assert.match(task, /\.scratch\/f\/spec\.md/);
+  assert.match(task, /cannot fail/);
+});
+
 test('review without a result file is an environment problem', () => {
   const root = repo({ ...BASIC, review: { cmd: 'true' } });
   write(root, 'src/a.js', '2');
@@ -401,6 +417,14 @@ test('ask writes the question page outside the repository, recommends from the c
   assert.match(html, /name="team" value="A"[^>]* checked/);
   assert.match(html, /&lt;둘이서&gt;/);
   assert.doesNotMatch(html, /<둘이서>/);
+});
+
+test('ask does not claim tests must pass when the project has no test command', () => {
+  const page = (cfg) => fs.readFileSync(qh(repo(cfg), ['ask']).stdout.match(/질문 화면: (\S+)/)[1], 'utf8');
+  assert.match(page(BASIC), /<b>테스트 통과<\/b> 작업을 합치기 전에 전체 테스트가 통과해야 한다/);
+  const none = page({ ...BASIC, checks: {}, common: [] });
+  assert.doesNotMatch(none, /<b>테스트 통과<\/b> 작업을 합치기 전에/);
+  assert.match(none, /<b>테스트 통과<\/b> 테스트 실행 명령이 없어 지금은 아무것도 돌리지 않는다/);
 });
 
 test('level: ask offers A (개발을 잘 모름, recommended) and B (개발자); the answer lands in config.answers.level', () => {
@@ -698,10 +722,10 @@ test('measure leaves out files accepted without tests and splits the page at the
   commitAt(root, 'chore: add qh', 0);
   const r = qh(root, ['measure', '--backfill', '1']);
   const rows = metricsRows(root);
-  assert.strictEqual(rows.at(-1).untested_pct, '0', 'src/a.js has its test, src/glue.js is accepted (50 without the line)');
+  assert.strictEqual(rows.at(-1).untested_pct, '', 'a same-name test without a runnable test command is not execution evidence');
   const data = JSON.parse(fs.readFileSync(r.stdout.match(/결과지: (.+)/)[1], 'utf8').match(/const D=(\{.*?\});\n/)[1]);
   assert.deepStrictEqual(data.rows.map((x) => x.withQh), [false, false, true], 'a past week, the commit right before qh (backfilled as the baseline), then now');
-  assert.ok(rows.every((x) => x.rules === '4'), 'each row says which counting rules made it');
+  assert.ok(rows.every((x) => x.rules === '5'), 'each row says which counting rules made it');
 });
 
 test('a Stop that turns the agent back is counted by reason in the next measurement', () => {

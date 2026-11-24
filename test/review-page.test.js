@@ -246,3 +246,14 @@ test('an open spec confirmation shows under 남은 판단', () => {
   const { left } = confirmed(null, extra);
   assert.match(left, /명세\(확인 번호 \d{4}\)대로 작업을 시작할까요\?/);
 });
+
+test('review groups all declared waiver reasons in one escaped section', () => {
+  const reasons = ['테스트 불필요: 상수 <한 개> 변경', '문서 영향 없음: 사용자 동작은 그대로', 'ADR 불필요: 기존 설계를 그대로 사용'];
+  const { html } = reviewed({ card: `${CARD}\n${reasons.join('\n')}\n` });
+  const section = html.match(/<article><h2>에이전트가 작업 카드에서 면제한 것<\/h2>([\s\S]*?)<\/article>/)?.[1];
+  assert.ok(section, 'waivers have one section');
+  assert.match(section, /테스트 불필요: 상수 &lt;한 개&gt; 변경/);
+  for (const reason of reasons.slice(1)) assert.ok(section.includes(reason));
+  assert.match(section, /출처: 작업 카드/);
+  assert.doesNotMatch(section, /<한 개>/);
+});

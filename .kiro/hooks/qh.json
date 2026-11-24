@@ -3,7 +3,7 @@
   "hooks": [
     {
       "name": "qh session start",
-      "description": "qh 상태와 작업 카드를 문맥에 넣는다.",
+      "description": "Puts the qh status and the task card into context.",
       "trigger": "SessionStart",
       "timeout": 30,
       "action": {
@@ -13,7 +13,7 @@
     },
     {
       "name": "qh stop gate",
-      "description": "턴 종료 때 내장 검사를 돌리고 증거를 판정한다. 막을 때는 exit 0 + {\"decision\":\"block\",\"reason\"}.",
+      "description": "Runs the built-in checks at the end of a turn and judges the evidence. Blocks with exit 0 + {\"decision\":\"block\",\"reason\"}.",
       "trigger": "Stop",
       "timeout": 120,
       "action": {

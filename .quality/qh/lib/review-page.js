@@ -11,6 +11,7 @@ const { esc } = require('./ask');
 const { section, decisions, SECTIONS } = require('./card');
 const { shell, write, optionRows, DRAW, MERMAID_FILE } = require('./view');
 const { optionNumber, pickedOption, pendingConfirms } = require('./confirm');
+const { declaredWaivers } = require('./waivers');
 
 const NONE = '<p class="mute">기록 없음</p>';
 const src = (s) => `<p class="mute">출처: ${esc(s)}</p>`;
@@ -87,7 +88,9 @@ function testState(records, name) {
 
 function evidenceStep(root, { card, checks, treeHash }) {
   const lines = cardLines(card, '성공 조건 → 검사').filter((l) => /^[-*+]\s/.test(l)).map((l) => l.replace(/^[-*+]\s+/, ''));
-  if (!lines.length) return step('테스트 증거', `${NONE}${src('작업 카드 ## 성공 조건 → 검사')}`);
+  const red = require('./red-check').readRedCheck(root, treeHash);
+  const redPart = `<h3>실패 재현</h3><p><b>${esc(red.state)}</b> ${esc(red.detail)}</p>${red.envError ? `<p class="msg warn">환경 오류: ${esc(red.envError)}</p>` : ''}${src('.quality/evidence/red-check.json')}`;
+  if (!lines.length) return step('테스트 증거', `${redPart}${NONE}${src('작업 카드 ## 성공 조건 → 검사')}`);
   const records = testRecords(root, checks, treeHash);
   const found = [];
   const rows = lines.map((l) => {
@@ -99,7 +102,7 @@ function evidenceStep(root, { card, checks, treeHash }) {
   const warn = !records.length ? '<p class="msg warn">테스트 기록이 없다. 검사를 돌리면 채워진다.</p>'
     : (found.length ? found : records).some((r) => r.isStale) ? '<p class="msg warn">지금 코드보다 오래된 기록이다. 검사를 다시 돌려야 지금 결과다.</p>' : '';
   const logs = [...new Set(records.map((r) => r.logPath))].join(', ');
-  return step('테스트 증거', `${warn}<ul>${rows.join('')}</ul>${src('작업 카드 ## 성공 조건 → 검사')}${logs ? src(logs) : ''}`);
+  return step('테스트 증거', `${redPart}${warn}<ul>${rows.join('')}</ul>${src('작업 카드 ## 성공 조건 → 검사')}${logs ? src(logs) : ''}`);
 }
 
 function findingsStep(findings) {
@@ -119,7 +122,7 @@ function leftStep(card, confirms) {
 function writeReviewPage(root, { base, treeHash, level, card, changed, checks, findings }) {
   const confirms = pendingConfirms(root, { card });
   const body = `<h1>완료 리뷰</h1><p class="mute">위에서 아래로 읽습니다. 모든 내용은 기록에서 그대로 가져왔습니다.</p>
-${changedStep(root, { base, card, changed })}${pickedStep(root, card, level, confirms)}${evidenceStep(root, { card, checks, treeHash })}${findingsStep(findings)}${leftStep(card, confirms)}`;
+${changedStep(root, { base, card, changed })}${pickedStep(root, card, level, confirms)}${evidenceStep(root, { card, checks, treeHash })}${step('에이전트가 작업 카드에서 면제한 것', `${list(declaredWaivers(card, root, changed))}${src('작업 카드')}`)}${findingsStep(findings)}${leftStep(card, confirms)}`;
   const file = write(root, 'review.html', shell('완료 리뷰', body, DRAW));
   fs.copyFileSync(path.join(__dirname, MERMAID_FILE), path.join(path.dirname(file), MERMAID_FILE));
   return file;
