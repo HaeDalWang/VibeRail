@@ -195,7 +195,7 @@ function rootFileProblems(root, changed, base, decisions) {
   const atBase = new Set((gitOut(root, ['ls-tree', '--name-only', base]) || '').split('\n'));
   return changed
     // Dotfiles and tool files (lock files, *.config.js) at the top are settings that have to live there.
-    .filter((f) => !f.includes('/') && !f.startsWith('.') && !TOOL_FILE.test(f) && !atBase.has(f) && isPlainFile(root, f) && !OWN_FILES.test(f) && !GLOSSARY_FILE.test(f))
+    .filter((f) => !f.includes('/') && f !== 'index.html' && !f.startsWith('.') && !TOOL_FILE.test(f) && !atBase.has(f) && isPlainFile(root, f) && !OWN_FILES.test(f) && !GLOSSARY_FILE.test(f))
     .filter((f) => !isAllowedBy(decisions, '루트 파일', f))
     .map((f) => `루트 파일: 저장소 맨 위에 새 파일 ${f} → 맞는 폴더로 옮기거나, 맨 위에 둘 이유를 ${DECISIONS_FILE}에 \`루트 파일: ${f} · ${reasonSlot('왜 맨 위여야 하는지')}\``);
 }

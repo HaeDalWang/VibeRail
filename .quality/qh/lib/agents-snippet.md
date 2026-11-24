@@ -19,4 +19,5 @@
 - Never change `.quality/config.json`, `.quality/access.json` (the permission table), or `.quality/probe.mjs` without asking the user. Do not lower a standard to make a check pass.
 - When qh says `환경 오류`, do not change code; report it to the user as it is.
 - Run `qh pr` before opening a PR.
+- For solo work (team answer B), skip opening a PR and merge into the base branch after `qh pr` passes; the person checks open findings in the completion review.
 - When the user wants a quality report, run `qh measure` (for "also measure the last N weeks", run `qh measure --backfill N`) and open the printed report file in the browser (macOS `open`). Past reports are in `.quality/reports/`.

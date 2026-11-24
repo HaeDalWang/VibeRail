@@ -22,6 +22,9 @@ const { answerState, decisions } = require('../lib/card');
 const routesBaseline = require('../lib/routes-baseline');
 const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
+const redCheck = require('../lib/red-check');
+const runEnvError = (root, def, ev, log) => require('../lib/run-env-error').runEnvError(root, def, ev, log, { git, treeHash });
+
 const QH_HOME = path.join(__dirname, '..');
 const EVIDENCE_DIR = '.quality/evidence';
 const CONFIG_FILE = '.quality/config.json';
@@ -33,8 +36,6 @@ const MAX_LISTED_CHANGES = 10;
 const DEFAULT_TIMEOUT_SEC = 300;
 // Stop runs built-in checks inside the host's 120-second hook limit (lib/init.js).
 const BUILTIN_TIMEOUT_SEC = 90;
-// sh: 126 = found but not executable, 127 = not found (e.g. `npm test` without jest installed).
-const SHELL_NO_TOOL = [126, 127];
 const DEFAULT_REVIEW_TIMEOUT_SEC = 900;
 const MAX_BUFFER = 64 * 1024 * 1024;
 const EXIT = { ok: 0, failed: 1, env: 3 };
@@ -61,18 +62,8 @@ function findRoot(cwd) {
 // Tree of the working state, untracked files included, via a throwaway index so the
 // user's index is never touched. Evidence files are excluded or every write would
 // invalidate every other result.
-function treeHash(root) {
-  const index = path.join(os.tmpdir(), `qh-index-${process.pid}-${Date.now()}`);
-  const env = { ...process.env, GIT_INDEX_FILE: index };
-  try {
-    git(root, ['add', '-A'], env);
-    // Measurements are a record about the code, not part of it: writing one keeps evidence current.
-    git(root, ['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', EVIDENCE_DIR, METRICS_FILE, REPORTS_DIR], env);
-    return git(root, ['write-tree'], env);
-  } finally {
-    fs.rmSync(index, { force: true });
-  }
-}
+const coverage = require('../lib/coverage');
+const treeHash = (root) => coverage.treeHash(root, git);
 
 // Git prints nothing when the two have no common ancestor: in CI that is a shallow clone.
 function mergeBase(root, ref) {
@@ -185,8 +176,8 @@ function toolExists(root, cmd) {
   return r.status === 0 ? null : tool;
 }
 
-function spawnCheck(root, def, timeoutSec) {
-  const opts = { cwd: root, encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: MAX_BUFFER };
+function spawnCheck(root, def, timeoutSec, env = process.env) {
+  const opts = { cwd: root, env, encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: MAX_BUFFER };
   if (def.builtin) {
     const runner = path.join(QH_HOME, 'lib', 'run-builtin.js');
     return spawnSync(process.execPath, [runner, def.builtin, root, JSON.stringify(def)], opts);
@@ -207,7 +198,7 @@ function runCheck(root, name, check) {
   const missing = def.builtin ? null : toolExists(root, def.cmd);
   if (missing) return writeEvidence(root, name, { ...base, envError: `도구 없음: ${missing}`, envKind: 'tool' });
 
-  const r = spawnCheck(root, def, timeoutSec);
+  const r = coverage.run(root, def, hash, () => treeHash(root), (env) => spawnCheck(root, def, timeoutSec, env), name);
   const logPath = path.join(EVIDENCE_DIR, `${name}.log`);
   fs.mkdirSync(path.join(root, EVIDENCE_DIR), { recursive: true });
   const log = `${r.stdout || ''}${r.stderr || ''}`;
@@ -217,25 +208,6 @@ function runCheck(root, name, check) {
   if (def.builtin) evidence.result = parseJson(r.stdout);
   writeEvidence(root, name, { ...evidence, ...runEnvError(root, def, evidence, log) });
 }
-
-// Why a finished run says nothing about the code, if it does not: { envError, envKind } or {}.
-function runEnvError(root, def, ev, log) {
-  // Evidence binds the tree it ran on; a check that rewrites tracked files can never be current.
-  const touched = lines(git(root, ['diff', '--name-only', ev.treeHash, treeHash(root)]));
-  if (touched.length) return { envError: `검사가 파일을 바꿨다: ${touched.join(', ')} → .gitignore에 넣거나 출력 경로를 옮긴다`, envKind: 'changed' };
-  if (ev.result?.envError) return { envError: ev.result.envError, envKind: isProbeTodo(root, ev.result.envError) ? 'probe-todo' : 'builtin' };
-  if (def.builtin || ev.exit === 0) return {};
-  if (SHELL_NO_TOOL.includes(ev.exit)) return { envError: `도구 없음 또는 실행 불가 (exit ${ev.exit}, 로그: ${ev.logPath})`, envKind: 'tool' };
-  const down = require('../lib/run-builtin').serviceDown(log);
-  if (down) return { envError: `필요한 서비스(DB·docker 등)에 연결하지 못함: ${down} (로그: ${ev.logPath}) → 코드를 고치지 말고 사용자에게 보고`, envKind: 'service' };
-  return {};
-}
-
-// The probe draft from qh init still throws todo(): a person decides who fills it in.
-const isProbeTodo = (root, envError) => {
-  const file = path.join(root, PROBE_FILE);
-  return envError.includes(PROBE_FILE) && fs.existsSync(file) && /throw todo\(/.test(fs.readFileSync(file, 'utf8'));
-};
 
 function parseJson(text) {
   try {
@@ -392,6 +364,7 @@ function assess(root, phase = 'stop', baseRef) {
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root, base);
+  const red = phase === 'pr' ? redCheck.readRedCheck(root, now) : null;
   const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
   return {
@@ -400,11 +373,13 @@ function assess(root, phase = 'stop', baseRef) {
     base,
     changed,
     checks,
+    redCheck: red,
     allowedFailures: allowedFailures(root),
     later: req.later,
     risks: req.risks,
     docsMissing: req.docsMissing,
     policy: [
+      ...(red?.state === '막음' ? [`TDD RED: ${redCheck.BLOCK} → 기준 코드에서 실패하는 테스트를 추가한다`] : []),
       ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, base, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
       ...cardFormatProblems(card),
       ...(phase === 'pr' ? require('../lib/history-secrets').historySecretProblems(root, base) : []),
@@ -520,6 +495,8 @@ function isPrBlocked(a, t, setup) {
 function cmdPr(root) {
   if (envProblems(root, loadConfig(root)).length) return cmdCheck(root, [], { phase: 'pr' });
   cmdCheck(root, [], { phase: 'pr' });
+  const before = assess(root, 'pr');
+  redCheck.runRedCheck(root, { ...before, card: taskCard(root, before.base).text, tests: workTests(root, before.changed) }, { git, hashTree: treeHash, spawnCheck, runEnvError });
   const reviewExit = runReview(root, loadConfig(root));
   const a = assess(root, 'pr');
   const t = triage(a);
@@ -531,7 +508,8 @@ function cmdPr(root) {
   if (!isBlocked && git(root, ['rev-parse', '--abbrev-ref', 'HEAD']) !== 'HEAD') stopState.markPassed(root, git(root, ['rev-parse', 'HEAD']));
   const found = a.review.findings || [];
   const open = `AI 리뷰 지목 ${found.length}건(높음 ${found.filter((f) => f.severity === '높음').length}건)과 기준 변경 ${a.configChanges.length}건이 열려 있다`;
-  console.log(isBlocked ? '\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)' : `\nqh pr: 통과 (${open}: PR 리뷰어가 확인)`);
+  if (isBlocked) console.log('\nqh pr: 아직 올릴 수 없다 (위 항목 해결 필요)');
+  else require('../lib/measure').finishPr(root, a.config, open);
   return isBlocked ? EXIT.failed : EXIT.ok;
 }
 
@@ -708,7 +686,7 @@ const USAGE = `사용: qh <명령>
   answer < 답          질문 화면에서 복사한 답을 검증해 config.answers와 결정 로그에 저장
   ask                  프로젝트 질문 화면(로컬 HTML)을 만들어 경로를 알려 줌
   cycle                카드가 어느 단계인지, 다음에 사람이 정할 것, 아키텍처 점검 시기를 한 줄로
-  view interface <json> | view architecture <json> | view glossary  선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
+  view interface <json> | view architecture <json> | view spec <md> [--wait [--timeout 초]] | view glossary  선택 화면·용어집을 로컬 HTML로 만들어 경로를 알려 줌
   measure [--backfill 주]  지금 상태를 재서 .quality/metrics.csv에 더하고 결과지를 .quality/reports/에 쌓음
   doctor               qh가 제대로 설치·설정됐는지 전체 점검
   review [--base ref]  변경을 AI로 리뷰 (보고만 함)
@@ -780,9 +758,9 @@ function main(argv) {
   return cmd ? EXIT.failed : EXIT.ok;
 }
 
-try {
-  process.exitCode = main(process.argv.slice(2));
-} catch (err) {
+Promise.resolve().then(() => main(process.argv.slice(2))).then((code) => {
+  process.exitCode = code;
+}).catch((err) => {
   const isHook = process.argv[2] === 'hook';
   if (err instanceof EnvError && !isHook) {
     console.log(`환경 오류 (코드를 고치지 말고 사용자에게 보고)\n  - ${err.message}`);
@@ -793,4 +771,4 @@ try {
     process.stderr.write(`qh 오류 (판정하지 않고 넘어감): ${err.message}\n`);
     process.exitCode = EXIT.failed;
   }
-}
+});
