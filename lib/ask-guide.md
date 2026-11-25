@@ -38,7 +38,8 @@ When: a check fails regardless of this task, and fails for the same reason on th
 
 - Fix it if you can. If you cannot, ask the user: "이 검사는 이 작업 전부터 실패합니다. 따로 고칠 일로 두고 이번에는 막지 않을까요?"
 - Only after asking, and only if the user says yes, write one line in `docs/decisions.md`: `- 날짜 · 기존 실패 허용: <검사 이름> · <user's answer and reason, at least limits.reasonChars> · 고쳐지면`. Never write it without asking.
-- That check's failure then shows only as a warning. When it is fixed, delete the line.
+- After writing the allow line, run `qh baseline` and commit the baseline together with the decision. It records readable failing test names from the current evidence logs, even without structure tools enabled.
+- Failures recorded in that baseline show only as a warning; newly failing tests still block. Unreadable logs or a missing list retain the whole-check warning. When the check is fixed, delete the allow line.
 
 ## Allow lines (허용 줄)
 

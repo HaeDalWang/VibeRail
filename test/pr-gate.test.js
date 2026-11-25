@@ -186,3 +186,13 @@ test('pr keeps its passing exit code when measurement or copying fails', () => {
     assert.match(r.stderr, failure === 'measure' ? /지표.*기록/ : /복사/);
   }
 });
+
+test('pr blocks newly failing tests despite an existing-failure allow line', () => {
+  const root = installed({ ...BASIC, checks: { unit: { cmd: 'node -e "console.log(\'not ok 1 - old\\nnot ok 2 - new\');process.exit(1)"' } }, review: REVIEW_OK });
+  const decisions = fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8');
+  write(root, 'docs/decisions.md', `${decisions}- 2026-11-25 · 기존 실패 허용: unit · 기준에서도 실패하는 검사 · 고쳐지면\n`);
+  write(root, '.quality/baseline.json', JSON.stringify({ failingTests: { unit: ['old'] } }));
+  const r = qh(root, ['pr']);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /new failures: new/);
+});

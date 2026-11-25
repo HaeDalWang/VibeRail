@@ -350,3 +350,23 @@ test('root index.html is allowed while other new root files still need a reason'
   assert.match(out, /루트 파일: [^\n]*other\.html/);
   assert.match(out, /루트 파일: [^\n]*notes\.txt/);
 });
+
+test('syntax errors appear as 검사 못 함 warnings in status without blocking', () => {
+  const root = repo(LIMITS, { '.quality/tasks/work.md': '테스트 불필요: 문법 경고 표시 확인\n문서 영향 없음: 문법 경고 표시 확인\n' }, { eslint: true });
+  write(root, 'src/a.js', 'function ( {');
+  assert.strictEqual(qh(root, ['check']).status, 0);
+  const s = status(root);
+  const t = require('../lib/triage').triage({ ...s, config: BASIC });
+  assert.deepStrictEqual(t.aiFix, []);
+  assert.ok(t.warnings.some((w) => /검사 못 함.*src\/a.js/.test(w.agent)));
+  assert.ok(t.warnings.some((w) => /검사 못 함/.test(w.user) && !/src\/|ESLint|qh/.test(w.user)));
+  assert.match(qh(root, ['status']).stdout, /경고 \(막지 않음\)[\s\S]*검사 못 함.*src\/a.js/);
+});
+
+test('a file unparseable only at base warns instead of comparing against zero', () => {
+  const root = repo(LIMITS, { 'src/a.js': 'function ( {' }, { eslint: true });
+  write(root, 'src/a.js', `function fixed() {\n${body(12)}\n}\n`);
+  const s = status(root);
+  assert.deepStrictEqual(s.structure, []);
+  assert.ok(require('../lib/triage').triage({ ...s, config: BASIC }).warnings.some((w) => /검사 못 함.*src\/a.js/.test(w.agent)));
+});
