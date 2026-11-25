@@ -1,0 +1,25 @@
+{
+  "title": "Rust 같은 파일 테스트를 어디서 알아볼까",
+  "options": [
+    {
+      "id": "A",
+      "name": "Rust 파일을 둘로 나누는 도우미 하나",
+      "summary": "Rust 파일을 '코드 부분'과 '맨 아래 테스트 부분'으로 나누는 도우미를 하나 만든다. 테스트를 썼는지 판정할 때는 이전 판과 테스트 부분이 달라졌는지 본다. 되돌려 보기 검사는 이전 판의 코드 부분에 지금의 테스트 부분을 붙인다. 다른 판정(측정·중복 등)은 지금처럼 파일 이름만 본다.",
+      "mermaid": "flowchart LR\n  F[Rust 파일] --> H[나누는 도우미]\n  H --> T[테스트 판정: 테스트 부분이 바뀌었나]\n  H --> R[되돌려 보기: 옛 코드 + 새 테스트]",
+      "gain": "바뀌는 곳이 두 군데뿐이다. 다른 기능(측정 화면 등)은 그대로다.",
+      "cost": "측정 화면은 같은 파일 Rust 테스트를 아직 테스트로 세지 않는다.",
+      "signature": "splitRustTests(text) → { code, tests }  // tests: 첫 #[cfg(test)] 줄부터 끝까지",
+      "seam": "test/rules-e2e.test.js, test/red-check.test.js, test/init-detect.test.js"
+    },
+    {
+      "id": "B",
+      "name": "'테스트인가' 판정을 전부 함수로 바꿈",
+      "summary": "지금 여러 곳이 파일 이름 모양으로 테스트 파일을 알아본다. 이것을 모두 '이 변경이 테스트를 바꿨나' 함수 하나로 바꾼다. Rust 같은 파일 테스트도 모든 곳에서 똑같이 테스트로 센다.",
+      "mermaid": "flowchart LR\n  F[바뀐 파일] --> J[테스트 변경인가 함수]\n  J --> T[테스트 판정]\n  J --> R[되돌려 보기]\n  J --> M[측정 화면]\n  J --> D[중복·구조 검사]",
+      "gain": "모든 기능이 Rust 테스트를 똑같이 센다.",
+      "cost": "바뀌는 곳이 10군데 가까이 되고, 측정 숫자가 달라질 수 있다. 이번 범위보다 크다.",
+      "signature": "isTestChange(root, base, file) → boolean",
+      "seam": "test/rules-e2e.test.js, test/red-check.test.js, test/init-detect.test.js, test/measure-page.test.js"
+    }
+  ]
+}

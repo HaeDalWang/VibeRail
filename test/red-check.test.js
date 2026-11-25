@@ -174,3 +174,17 @@ for (const state of ['통과', '약한 증거', '막음', '확인 못 함']) {
     assert.ok(html.includes(`<b>${state}</b> &lt;test&gt;`));
   });
 }
+
+// Rust keeps unit tests at the bottom of the code file: reverting the code must keep the new tests.
+test('red check reverts only the code part of a Rust file and keeps its new test part', (t) => {
+  const code = 'pub fn one() -> i32 { 1 }\n';
+  // Stands in for cargo: the tests fail when they call two() and the code part has no two().
+  const fakeCargo = "const s = require('node:fs').readFileSync('src/lib.rs', 'utf8'); const i = s.indexOf('#[cfg(test)]');" +
+    " const [c, x] = i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i)]; process.exit(x.includes('two()') && !c.includes('fn two') ? 1 : 0);\n";
+  const root = project(t, { cmd: 'node fake-cargo.js', extra: { 'src/lib.rs': code, 'fake-cargo.js': fakeCargo } });
+  write(root, 'src/a.js', 'module.exports = 1;\n');
+  fs.rmSync(path.join(root, 'test/a.test.js'));
+  write(root, 'src/lib.rs', `${code}pub fn two() -> i32 { 2 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn two_is_two() { assert_eq!(super::two(), 2); }\n}\n`);
+  const { ev } = result(root);
+  assert.equal(ev.state, '통과', JSON.stringify(ev));
+});

@@ -37,6 +37,21 @@ test('init drafts go test for a Go module', () => {
   assert.strictEqual(config.checks.test.cmd, 'go test ./...');
 });
 
+test('init drafts cargo test for a Rust crate', () => {
+  const { config } = initConfig({ 'Cargo.toml': '[package]\nname = "app"\nversion = "0.1.0"\n', 'src/lib.rs': 'pub fn one() -> i32 { 1 }\n' });
+  assert.deepStrictEqual(config.checks.test, { cmd: 'cargo test', on: ['pr'] });
+});
+
+test('init drafts cargo test for every member of a Rust workspace', () => {
+  const { config } = initConfig({ 'Cargo.toml': '[workspace]\nmembers = ["cli", "core"]\n', 'cli/Cargo.toml': '[package]\nname = "cli"\n' });
+  assert.strictEqual(config.checks.test.cmd, 'cargo test --workspace');
+});
+
+test('init does not look for a Rust crate one folder down', () => {
+  const { config } = initConfig({ 'tool/Cargo.toml': '[package]\nname = "tool"\n' });
+  assert.ok(!config.checks.test || !/cargo/.test(config.checks.test.cmd));
+});
+
 test('init drafts the test scripts of packages one folder down', () => {
   const { config } = initConfig({
     'backend/package.json': JSON.stringify({ scripts: { test: 'node --test' } }),
