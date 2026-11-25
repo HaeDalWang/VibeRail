@@ -284,3 +284,7 @@ test('the same failing test name in two files is counted twice against the failu
   const names = require('../lib/failing-tests').parseFailingTests('FAIL a.test.js\n  ● Suite › works\nFAIL b.test.js\n  ● Suite › works\nTests: 2 failed, 2 total');
   assert.deepStrictEqual(names, ['Suite › works']);
 });
+
+test('a plain log line starting with ERROR is not a pytest collection failure', () => {
+  assert.strictEqual(require('../lib/failing-tests').parseFailingTests('ERROR connection reset, retrying'), null);
+});
