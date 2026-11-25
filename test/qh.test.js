@@ -154,6 +154,16 @@ test('review without a result file is an environment problem', () => {
   assert.strictEqual(statusJson(root).review.state, '환경 오류');
 });
 
+test('a review that writes results and then crashes or times out is not complete', () => {
+  const writeThen = (tail) => `node -e "require('fs').writeFileSync(process.argv[1]+'/result.json','[]');${tail}" {out}`;
+  for (const review of [{ cmd: writeThen('process.exit(1)') }, { cmd: writeThen('setTimeout(()=>{},5000)'), timeoutSec: 1 }]) {
+    const root = repo({ ...BASIC, review });
+    write(root, 'src/a.js', '2');
+    assert.strictEqual(qh(root, ['review']).status, 3, review.cmd);
+    assert.strictEqual(statusJson(root).review.state, '환경 오류', review.cmd);
+  }
+});
+
 test('pr fails while a person still has to decide, even when every check passes', () => {
   const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" } });
   assert.strictEqual(qh(root, ['init', root]).status, 0, 'pr also runs doctor, so qh must be set up');
