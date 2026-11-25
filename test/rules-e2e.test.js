@@ -94,6 +94,39 @@ test('without package files any changed test covers the code change, as before',
   assert.doesNotMatch(policyOf(root), /TDD/);
 });
 
+// ---------- Rust: tests at the bottom of the same file ----------
+
+const RUST_BASE = 'pub fn one() -> i32 { 1 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn one_is_one() { assert_eq!(super::one(), 1); }\n}\n';
+
+test('a changed test part at the bottom of a Rust file covers its code change', () => {
+  const root = repo(BASIC, { 'Cargo.toml': '[package]\nname = "app"\n', 'src/lib.rs': RUST_BASE });
+  write(root, 'src/lib.rs', RUST_BASE.replace('pub fn one', 'pub fn two() -> i32 { 2 }\npub fn one').replace('    #[test]\n    fn one_is_one', '    #[test]\n    fn two_is_two() { assert_eq!(super::two(), 2); }\n    #[test]\n    fn one_is_one'));
+  write(root, '.quality/tasks/work.md', DOCS_OK);
+  assert.doesNotMatch(policyOf(root), /TDD/);
+});
+
+test('a Rust code change with its old test part unchanged still asks for a test', () => {
+  const root = repo(BASIC, { 'Cargo.toml': '[package]\nname = "app"\n', 'src/lib.rs': RUST_BASE });
+  write(root, 'src/lib.rs', RUST_BASE.replace('{ 1 }', '{ 1 + 0 }'));
+  write(root, '.quality/tasks/work.md', DOCS_OK);
+  assert.match(policyOf(root), /TDD: 코드\(src\/lib\.rs\)/);
+});
+
+test('a test-only line near the top of a Rust file does not make the code below it a test', () => {
+  const base = `#[cfg(test)]\nuse std::collections::HashMap;\n\n${RUST_BASE}`;
+  const root = repo(BASIC, { 'Cargo.toml': '[package]\nname = "app"\n', 'src/lib.rs': base });
+  write(root, 'src/lib.rs', base.replace('{ 1 }', '{ 1 + 0 }'));
+  write(root, '.quality/tasks/work.md', DOCS_OK);
+  assert.match(policyOf(root), /TDD: 코드\(src\/lib\.rs\)/);
+});
+
+test('a new Rust file with a test part covers itself', () => {
+  const root = repo(BASIC, { 'Cargo.toml': '[package]\nname = "app"\n' });
+  write(root, 'src/lib.rs', RUST_BASE);
+  write(root, '.quality/tasks/work.md', DOCS_OK);
+  assert.doesNotMatch(policyOf(root), /TDD/);
+});
+
 // ---------- A17 + B9: allow lines in the decision log ----------
 
 test('a duplicate allow line with the placeholder reason does not allow the copy', () => {
