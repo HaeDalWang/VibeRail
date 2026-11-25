@@ -131,3 +131,39 @@ test('a decision the agent already asked about in its last message is not asked 
   const notAsked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '다 만들었습니다.' });
   assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], notAsked)).decision, 'block', 'an answer that asks nothing still gets turned back');
 });
+
+test('unexpected stop errors block once per distinct message and session with a user notice', () => {
+  const root = repo({ ...BASIC, structure: { patterns: [{ name: 'bad', regex: '[', in: 'docs' }] } });
+  write(root, 'src/a.js', '2');
+  const input = JSON.stringify({ session_id: 'unexpected', stop_hook_active: true });
+  const first = stopDecision(qh(root, ['hook', 'stop'], input));
+  assert.strictEqual(first.decision, 'block');
+  assert.match(first.reason, /could not judge[\s\S]*report[\s\S]*Invalid regular expression/i);
+  assert.match(first.systemMessage, /검사|판정/);
+  assert.doesNotMatch(first.systemMessage, /qh|patterns|Invalid|src\//);
+  const second = stopDecision(qh(root, ['hook', 'stop'], input));
+  assert.notStrictEqual(second.decision, 'block');
+  assert.ok(second.systemMessage);
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, structure: { patterns: [{ name: 'bad', regex: '(', in: 'docs' }] } }));
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], input)).decision, 'block');
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, structure: { patterns: [{ name: 'bad', regex: '[', in: 'docs' }] } }));
+  assert.notStrictEqual(stopDecision(qh(root, ['hook', 'stop'], input)).decision, 'block');
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], '{"session_id":"other","stop_hook_active":true}')).decision, 'block');
+  assert.strictEqual(qh(root, ['hook', 'session-start']).status, 0);
+  write(root, '.quality/config.json', JSON.stringify(BASIC));
+  qh(root, ['hook', 'stop'], input);
+  write(root, '.quality/config.json', JSON.stringify({ ...BASIC, structure: { patterns: [{ name: 'bad', regex: '[', in: 'docs' }] } }));
+  assert.notStrictEqual(stopDecision(qh(root, ['hook', 'stop'], input)).decision, 'block');
+});
+
+test('hook input record keeps session_id and presence fields without conversation text', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = repo(BASIC);
+  const input = { session_id: 'private', hook_event_name: 'Stop', stop_hook_active: false, cwd: '/project', last_assistant_message: 'private message', transcript_path: '/private/transcript', other: 'private' };
+  qh(root, ['hook', 'stop'], JSON.stringify(input));
+  const record = () => JSON.parse(fs.readFileSync(path.join(root, '.quality/evidence/last-hook-input.json'), 'utf8'));
+  assert.deepStrictEqual(record(), { session_id: 'private', hook_event_name: 'Stop', stop_hook_active: false, cwd: '/project' });
+  qh(root, ['hook', 'stop'], '{"session_id":"one-shot"}');
+  assert.deepStrictEqual(record(), { session_id: 'one-shot' });
+});

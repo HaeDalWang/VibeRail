@@ -11,11 +11,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { doctor, formatDoctor } = require('../lib/doctor');
-const { policyProblems, relatedTests, isRealReason, loadLimits, LIMITS, DECISIONS_FILE } = require('../lib/policy');
+const { policyProblems, relatedTests, loadLimits, LIMITS, DECISIONS_FILE } = require('../lib/policy');
 const { structureFindings, duplicateTotal } = require('../lib/structure');
 const { codeShapeProblems, ToolMissing } = require('../lib/code-shape');
 const repoTools = require('../lib/repo-tools');
 const stopState = require('../lib/stop-state');
+const { allowedFailures, failureScope, isAllowedFailure, baselineFailures } = require('../lib/failing-tests');
 const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
 const { answerState, decisions } = require('../lib/card');
@@ -227,7 +228,7 @@ function checkStatus(root, name, now) {
   if (ev.timedOut) return { name, state: '환경 오류', envKind: 'timeout', detail: [`시간 초과 (로그: ${ev.logPath}) → 테스트를 고치지 말고 사용자에게: 이 검사의 timeoutSec를 늘리거나, 오래 걸리면 on을 ["pr"]로`] };
   const isCurrent = ev.treeHash === now;
   const detail = describeResult(ev);
-  if (ev.exit !== 0) return { name, state: '실패', isCurrent, detail, logPath: ev.logPath };
+  if (ev.exit !== 0) return { name, state: '실패', isCurrent, detail, logPath: ev.logPath, ...failureScope(root, name, ev.logPath) };
   return { name, state: isCurrent ? '통과' : '이전 상태에서 통과', isCurrent, detail, result: ev.result };
 }
 
@@ -329,15 +330,7 @@ function structureResult(root, { changed, base, phase, tree, structure }) {
   const shape = codeShapeProblems(root, { changed, base, structure });
   const repo = phase === 'pr' ? repoToolResult(root, tree, structure) : { problems: [], env: [] };
   const own = structureFindings(root, { changed, base, structure });
-  return { problems: [...own.problems, ...shape.problems, ...repo.problems], warnings: own.warnings, env: [...shape.env, ...repo.env] };
-}
-
-// Checks the person accepted as failing before this work: `기존 실패 허용: <검사> · 이유`,
-// the reason held to the task-card rule (5 characters, not the hint's <…> placeholder).
-function allowedFailures(root) {
-  const file = path.join(root, DECISIONS_FILE);
-  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  return [...text.matchAll(/기존 실패 허용:\s*`?([^\s`·]+)`?\s*(?:·\s*([^·\n]*))?/g)].filter((m) => isRealReason((m[2] || '').trim())).map((m) => m[1]);
+  return { problems: [...own.problems, ...shape.problems, ...repo.problems], warnings: own.warnings, skipped: shape.skipped, env: [...shape.env, ...repo.env] };
 }
 
 // The person answered "검토 생략" (C): no AI review, nothing to run.
@@ -387,6 +380,7 @@ function assess(root, phase = 'stop', baseRef) {
     structure: shape.problems,
     structureEnv: shape.env,
     structureWarnings: shape.warnings,
+    shapeSkipped: shape.skipped,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: decisions(card.text).open,
     waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...require('../lib/confirm').pendingConfirms(root, { card: card.text })],
@@ -473,7 +467,7 @@ function cmdCheck(root, names, { builtinOnly = false, phase = 'stop' } = {}) {
   for (const n of targets) runCheck(root, n, config.checks?.[n]);
   const after = assess(root, phase);
   if (!builtinOnly) console.log(formatStatus(after));
-  const isAllowed = (c) => c.state === '실패' && after.allowedFailures.includes(c.name);
+  const isAllowed = (c) => isAllowedFailure(c, after.allowedFailures);
   const failing = after.checks.filter((c) => targets.includes(c.name) && c.state !== '통과' && !isAllowed(c));
   if (!failing.length) return EXIT.ok;
   return failing.every((c) => c.state === '환경 오류') ? EXIT.env : EXIT.failed;
@@ -557,12 +551,14 @@ const stuckNote = (items, config) => `품질 검사: AI가 아래 문제를 고�
 // systemMessage (Kiro CLI 3.3.0, /tmp/qh-e2e/B): the agent rechecks itself and carries the words.
 const oneShotTail = (lines) => `\n\nThis host does not call this check again after you fix things. After fixing, run \`qh status\` yourself and end only when nothing is left. If something remains, report what you could not fix to the user.\nWhat to tell the user (this host shows the person no separate notice; put what remains in your response in these words):\n${lines}`;
 
+let stopHost;
 function hookInput() {
+  if (stopHost) return stopHost;
   const raw = readStdin() || '{}';
   const data = parseJson(raw);
   const input = data && typeof data === 'object' ? data : {};
-  return {
-    raw,
+  return stopHost = {
+    raw: JSON.stringify(Object.fromEntries(['session_id', 'hook_event_name', 'stop_hook_active', 'cwd'].filter((k) => Object.hasOwn(input, k)).map((k) => [k, input[k]]))),
     session: typeof input.session_id === 'string' ? input.session_id : '',
     isOneShot: !('stop_hook_active' in input),
     lastMessage: typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '',
@@ -615,7 +611,7 @@ function judgeStop(root, config, host) {
   const forPerson = [...plainFixes(t.aiFix, a.config), ...t.human, ...t.env, ...t.warnings];
   const pending = host.isOneShot ? (forPerson.length ? userLines(forPerson) : null) : undefined;
   if (fresh.length || (askPart !== '' && askPart !== last.askPart)) {
-    stopState.writeSession(root, host.session, { tree: a.treeHash, counts: nextCounts, askPart }, pending);
+    stopState.writeSession(root, host.session, { unexpectedErrors: last.unexpectedErrors, tree: a.treeHash, counts: nextCounts, askPart }, pending);
     // What this block shows the person counts as asked: the routes (waivers are answered on the task card).
     stopState.markAsked(root, a.undeclared);
     if (fresh.length) require('../lib/measure').logStop(root, { aiFix: fresh, human: t.human });
@@ -627,7 +623,7 @@ function judgeStop(root, config, host) {
     askPart && `사람이 판단할 일 (AI에게 이미 전함)\n${userLines([...t.human, ...t.env])}`,
     warningNote(t),
   ].filter(Boolean).join('\n');
-  stopState.writeSession(root, host.session, { tree: last.tree, counts: nextCounts, askPart, notified: note }, pending);
+  stopState.writeSession(root, host.session, { unexpectedErrors: last.unexpectedErrors, tree: last.tree, counts: nextCounts, askPart, notified: note }, pending);
   if (note && note !== last.notified) process.stdout.write(`${JSON.stringify({ systemMessage: note })}\n`);
   return EXIT.ok;
 }
@@ -658,13 +654,15 @@ function cmdRoutesBaseline(root, args) {
 // Records today's tool findings as "already there". Grown entries reach a person through configChanges.
 function cmdBaseline(root) {
   const structure = loadConfig(root).structure;
-  if (!repoTools.enabled(structure).length) {
+  if (!repoTools.enabled(structure).length && !allowedFailures(root).length) {
     console.log(`config structure에 켜진 도구(${repoTools.KINDS.join('·')})가 없다. 기록할 것이 없다.`);
     return EXIT.failed;
   }
   try {
-    const counts = repoTools.writeBaseline(root, structure);
-    console.log(`${repoTools.BASELINE_FILE}: ${Object.entries(counts).map(([k, n]) => `${k} ${n}건`).join(', ')}을 "기존"으로 기록. 커밋한다 (늘어난 항목은 PR에서 사람이 확인).`);
+    const failures = baselineFailures(root);
+    const counts = repoTools.writeBaseline(root, structure, failures);
+    const recorded = [...Object.entries(counts).map(([k, n]) => `${k} ${n}건`), ...Object.entries(failures).map(([k, tests]) => `기존 실패 ${k} ${tests.length}건`)];
+    console.log(recorded.length ? `${repoTools.BASELINE_FILE}: ${recorded.join(', ')}을 "기존"으로 기록. 커밋한다 (늘어난 항목은 PR에서 사람이 확인).` : `${repoTools.BASELINE_FILE}: 갱신할 항목 없음(기존 기준 유지).`);
     return EXIT.ok;
   } catch (err) {
     if (err instanceof repoTools.ToolError || err instanceof ToolMissing) throw new EnvError(err.message);
@@ -768,8 +766,17 @@ Promise.resolve().then(() => main(process.argv.slice(2))).then((code) => {
     process.exitCode = EXIT.env;
   } else if (err instanceof EnvError && isHook) {
     process.exitCode = EXIT.ok; // not a qh project here: stay out of the way
+  } else if (isHook && process.argv[3] === 'stop') {
+    try {
+      const notice = stopState.unexpectedError(findRoot(process.cwd()), hookInput(), err.message);
+      if (notice.reason) block(notice.reason, notice.systemMessage);
+      else process.stdout.write(`${JSON.stringify(notice)}\n`);
+    } catch (noticeErr) {
+      process.stderr.write(`qh 오류 (판정하지 못함): ${err.message} / ${noticeErr.message}\n`);
+    }
+    process.exitCode = EXIT.ok;
   } else {
     process.stderr.write(`qh 오류 (판정하지 않고 넘어감): ${err.message}\n`);
-    process.exitCode = EXIT.failed;
+    process.exitCode = isHook ? EXIT.ok : EXIT.failed;
   }
 });
