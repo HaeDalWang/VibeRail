@@ -767,10 +767,13 @@ Promise.resolve().then(() => main(process.argv.slice(2))).then((code) => {
   } else if (err instanceof EnvError && isHook) {
     process.exitCode = EXIT.ok; // not a qh project here: stay out of the way
   } else if (isHook && process.argv[3] === 'stop') {
-    const host = hookInput();
-    const notice = stopState.unexpectedError(findRoot(process.cwd()), host, err.message);
-    if (notice.reason) block(notice.reason, notice.systemMessage);
-    else process.stdout.write(`${JSON.stringify(notice)}\n`);
+    try {
+      const notice = stopState.unexpectedError(findRoot(process.cwd()), hookInput(), err.message);
+      if (notice.reason) block(notice.reason, notice.systemMessage);
+      else process.stdout.write(`${JSON.stringify(notice)}\n`);
+    } catch (noticeErr) {
+      process.stderr.write(`qh 오류 (판정하지 못함): ${err.message} / ${noticeErr.message}\n`);
+    }
     process.exitCode = EXIT.ok;
   } else {
     process.stderr.write(`qh 오류 (판정하지 않고 넘어감): ${err.message}\n`);

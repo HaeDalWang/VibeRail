@@ -274,3 +274,13 @@ test('baseline reports failing test counts per allowed check without an empty to
   assert.match(unchanged.stdout, /갱신할 항목 없음/);
   assert.doesNotMatch(unchanged.stdout, /: 을|기록할 것이 없다/);
 });
+
+test('a "N failed" phrase outside a summary line is not a failure count', () => {
+  const names = require('../lib/failing-tests').parseFailingTests('✖ old (2ms)\n  retry: 3 failed attempts logged\nℹ fail 1');
+  assert.deepStrictEqual(names, ['old']);
+});
+
+test('the same failing test name in two files is counted twice against the failure count', () => {
+  const names = require('../lib/failing-tests').parseFailingTests('FAIL a.test.js\n  ● Suite › works\nFAIL b.test.js\n  ● Suite › works\nTests: 2 failed, 2 total');
+  assert.deepStrictEqual(names, ['Suite › works']);
+});
