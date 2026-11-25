@@ -27,6 +27,7 @@ test/init-detect.test.js
 - 맨 위 Cargo.toml이면 `cargo test`, workspace면 `cargo test --workspace`, 한 단계 아래는 안 찾음 → test/init-detect.test.js "init drafts cargo test for a Rust crate" 외 2개
 - 같은 파일 테스트 부분이 바뀌면 TDD 통과, 테스트 부분이 그대로면 TDD 막음, 새 파일의 테스트 부분도 인정 → test/rules-e2e.test.js "a changed test part at the bottom of a Rust file covers its code change" 외 2개
 - 되돌려 보기에서 Rust 파일은 코드 부분만 되돌림 → test/red-check.test.js "red check reverts only the code part of a Rust file and keeps its new test part"
+- 위쪽의 테스트 전용 한 줄(`#[cfg(test)] use …`)은 테스트 부분 시작이 아님 → test/rules-e2e.test.js "a test-only line near the top of a Rust file does not make the code below it a test"
 - 기존 동작 유지 → npm test 전체
 - 실제 cargo 프로젝트(scratchpad)에서 init·TDD·되돌려 보기 확인: cargo test 감지, TDD 막음 없음, 되돌려 보기 통과
 

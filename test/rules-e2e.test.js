@@ -112,6 +112,14 @@ test('a Rust code change with its old test part unchanged still asks for a test'
   assert.match(policyOf(root), /TDD: 코드\(src\/lib\.rs\)/);
 });
 
+test('a test-only line near the top of a Rust file does not make the code below it a test', () => {
+  const base = `#[cfg(test)]\nuse std::collections::HashMap;\n\n${RUST_BASE}`;
+  const root = repo(BASIC, { 'Cargo.toml': '[package]\nname = "app"\n', 'src/lib.rs': base });
+  write(root, 'src/lib.rs', base.replace('{ 1 }', '{ 1 + 0 }'));
+  write(root, '.quality/tasks/work.md', DOCS_OK);
+  assert.match(policyOf(root), /TDD: 코드\(src\/lib\.rs\)/);
+});
+
 test('a new Rust file with a test part covers itself', () => {
   const root = repo(BASIC, { 'Cargo.toml': '[package]\nname = "app"\n' });
   write(root, 'src/lib.rs', RUST_BASE);
