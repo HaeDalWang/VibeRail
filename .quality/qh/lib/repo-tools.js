@@ -252,11 +252,12 @@ function readBaseline(root) {
   }
 }
 
-function writeBaseline(root, structure) {
+function writeBaseline(root, structure, failingTests) {
   const now = measureAll(root, structure);
   const sorted = Object.fromEntries(Object.entries(now).map(([k, ids]) => [k, Object.fromEntries(Object.entries(ids).sort(([a], [b]) => a.localeCompare(b)))]));
   fs.mkdirSync(path.dirname(path.join(root, BASELINE_FILE)), { recursive: true });
-  fs.writeFileSync(path.join(root, BASELINE_FILE), `${JSON.stringify(sorted, null, 2)}\n`);
+  const previous = readBaseline(root);
+  fs.writeFileSync(path.join(root, BASELINE_FILE), `${JSON.stringify({ ...previous, ...sorted, ...(failingTests ? { failingTests: { ...previous?.failingTests, ...failingTests } } : {}) }, null, 2)}\n`);
   return Object.fromEntries(Object.entries(now).map(([k, ids]) => [k, Object.values(ids).reduce((a, b) => a + b, 0)]));
 }
 
@@ -292,10 +293,16 @@ function baselineChanges(root, base) {
   if (r.status !== 0) return [`${BASELINE_FILE} 처음 기록: 지금 있는 항목을 "기존"으로 받아들인다 → 파일을 한 번 훑는다`];
   let was;
   try { was = JSON.parse(r.stdout); } catch { was = {}; }
-  return KINDS.flatMap((k) => {
+  const failures = Object.entries(now.failingTests || {}).flatMap(([name, tests]) => {
+    if (!Array.isArray(tests)) return [];
+    const previous = was.failingTests?.[name];
+    const added = tests.filter((t) => !Array.isArray(previous) || !previous.includes(t));
+    return added.length ? [`${BASELINE_FILE} failingTests ${name}: ${added.length} newly accepted failures: ${added.join(', ')}`] : [];
+  });
+  return [...failures, ...KINDS.flatMap((k) => {
     const added = grown(was[k], now[k]);
     return added.length ? [`${BASELINE_FILE} ${LABEL[k]} 기준선에 ${added.length}건 추가(새 문제를 기존으로 받아들임): ${added.slice(0, 3).join(', ')}${added.length > 3 ? ' …' : ''}`] : [];
-  });
+  })];
 }
 
-module.exports = { measureAll, repoToolProblems, writeBaseline, baselineChanges, enabled, toolPath, cycleGroups, namespaceUses, BASELINE_FILE, KINDS, ToolError };
+module.exports = { readBaseline, measureAll, repoToolProblems, writeBaseline, baselineChanges, enabled, toolPath, cycleGroups, namespaceUses, BASELINE_FILE, KINDS, ToolError };

@@ -7,6 +7,7 @@
 // file paths, commands, commit hashes or tool names. aiFix items are the agent's alone;
 // aiFixUser says one in plain words when the agent gave up on it.
 
+const { isAllowedFailure } = require('./failing-tests');
 const { QUESTIONS } = require('./questions');
 
 const ACCESS_FILE = '.quality/access.json';
@@ -154,6 +155,7 @@ const AI_FIX_OTHER = 'AI가 고칠 품질 문제가 하나 남아 있습니다.'
 // "검사 <name>" items: named by what the check does.
 function checkFixUser(name, rest, config) {
   const label = labelOf(config, name);
+  if (rest.startsWith('new failures:')) return `검사(${label})에서 새로 실패한 테스트가 있습니다. AI가 고쳐야 합니다.`;
   if (rest.startsWith('실패')) return `검사(${label})가 실패합니다.`;
   return `검사(${label})를 마지막 변경 뒤에 다시 돌리지 않았습니다.`;
 }
@@ -175,8 +177,10 @@ function checkItems(a, allowed) {
   const warnings = [];
   for (const c of a.checks) {
     if (c.state === '미실행') aiFix.push(`검사 ${c.name}: 미실행 → \`qh check ${c.name}\` 실행`);
-    if (c.state === '실패' && allowed.has(c.name)) {
-      warnings.push(item(`검사 ${c.name}: 실패 (결정 로그의 기존 실패 허용, 막지 않음)\n    ${(c.detail || []).join('\n    ')}`, `검사(${labelOf(a.config, c.name)})는 이 작업 전부터 실패하던 것이라 이번에는 막지 않았습니다. 따로 고칠 일로 남아 있습니다.`));
+    if (isAllowedFailure(c, allowed)) {
+      warnings.push(item(`검사 ${c.name}: 실패 (결정 로그의 기존 실패 허용, 막지 않음)${c.missingFailureBaseline ? '\n    Run `qh baseline` and commit to record the readable failing test names.' : ''}\n    ${(c.detail || []).join('\n    ')}`, `검사(${labelOf(a.config, c.name)})는 이 작업 전부터 실패하던 것이라 이번에는 막지 않았습니다. 따로 고칠 일로 남아 있습니다.`));
+    } else if (c.state === '실패' && allowed.includes(c.name) && c.newFailures?.length) {
+      aiFix.push(`검사 ${c.name}: new failures: ${c.newFailures.join(', ')} → fix and rerun \`qh check ${c.name}\``);
     } else if (c.state === '실패') {
       aiFix.push(`검사 ${c.name}: 실패${c.isCurrent === false ? '(이전 상태)' : ''} → 고친 뒤 \`qh check ${c.name}\` (이 작업 전부터 실패하면 ask-guide.md "기존 실패 허용")\n    ${(c.detail || []).join('\n    ')}`);
     }
@@ -191,7 +195,7 @@ const probeTodoItem = (c) => item(
 );
 
 function triage(a) {
-  const { aiFix, warnings } = checkItems(a, new Set(a.allowedFailures || []));
+  const { aiFix, warnings } = checkItems(a, a.allowedFailures || []);
   for (const d of a.docsMissing) aiFix.push(`문서 미갱신: ${d.doc} (위험 ${d.risk}의 연동 문서) → 같은 작업에서 갱신`);
   aiFix.push(...a.policy, ...a.structure);
   const envChecks = a.checks.filter((c) => c.state === '환경 오류');
@@ -216,6 +220,7 @@ function triage(a) {
     ...envChecks.filter((c) => c.envKind !== 'probe-todo').map((c) => item(`검사 ${c.name}: ${c.detail.join(' ')}`, checkEnvUser(c, a.config))),
     ...(a.phase === 'pr' && a.review?.state === '환경 오류' ? [item(`AI 리뷰: ${a.review.detail.join(' ')}`, 'AI 리뷰를 돌리지 못했습니다. 리뷰를 맡을 도구의 설정을 고칠지, 이번에는 리뷰 없이 갈지 정해 주세요.')] : []),
   ];
+  warnings.push(...(a.shapeSkipped || []).map((f) => item(`검사 못 함: ${f} — current or base JavaScript could not be parsed; shape comparison skipped`, '문법을 읽지 못한 파일이 있어 코드 모양은 검사 못 함 상태입니다. 다른 검사에서 문법 오류를 확인해야 합니다.')));
   warnings.push(...(a.structureWarnings || []).map((w) => item(w, '이번에 만진 파일에 원래부터 있던 중복 코드가 있습니다. 막지는 않았고, 정리할지는 나중에 정해도 됩니다.')));
   warnings.push(...(a.policyWarnings || []).map((w) => item(w, '새로 만든 이름이 용어집에 없습니다. 막지는 않았고, 용어집에 넣을지 나중에 정해도 됩니다.')));
   return { aiFix, human, env, warnings };

@@ -137,7 +137,7 @@ const readAt = (root, base, f) => {
 
 const isTarget = (f) => JS_FILE.test(f) && isOwnCode(f);
 
-// Returns { problems, env }. A file that does not parse now (mid-edit) or at the base is skipped:
+// Returns { problems, env, skipped }. A file that does not parse now (mid-edit) or at the base is skipped:
 // the project's tests and build report syntax, not this rule.
 function codeShapeProblems(root, { changed, base, structure = {} }) {
   const limits = structure.functions || null;
@@ -152,12 +152,14 @@ function codeShapeProblems(root, { changed, base, structure = {} }) {
     throw err;
   }
   const problems = [];
+  const skipped = [];
   for (const f of files) {
     const nowText = readAt(root, null, f);
     if (nowText === null) continue;
     const wasText = readAt(root, base, f);
     const now = lint(nowText, f);
     const was = lint(wasText, f);
+    if (!now || !was) skipped.push(f);
     if (limits && now && was && !TEST_FILE.test(f)) {
       const before = Map.groupBy(shapeItems(was), (x) => x.kind);
       for (const [kind, items] of Map.groupBy(shapeItems(now), (x) => x.kind)) {
@@ -173,7 +175,7 @@ function codeShapeProblems(root, { changed, base, structure = {} }) {
       if (b > a) problems.push(`주석 규칙 "${p.name}": ${f}에서 ${a}개 → ${b}개${p.fix ? ` → ${p.fix}` : ''}`);
     }
   }
-  return { problems, env: [] };
+  return { problems, env: [], skipped };
 }
 
 module.exports = { codeShapeProblems, loadEslint, ToolMissing };
