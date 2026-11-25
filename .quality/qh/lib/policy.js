@@ -201,10 +201,27 @@ function packageOf(root, f, cache) {
   return cache.get(dir);
 }
 
+// Rust keeps unit tests in the code file: the test part runs from the first `#[cfg(test)]` on an
+// inline `mod … {` to the end (a `#[cfg(test)]` on a `use` or a `mod x;` line is not it).
+// ponytail: assumes the test module comes last (the Rust convention); code after it counts as test.
+function splitRustTests(text) {
+  const i = text.search(/^[ \t]*#\[cfg\(test\)\]\s*(pub(\([^)]*\))?\s+)?mod\s+\w+\s*\{/m);
+  return i < 0 ? { code: text, tests: '' } : { code: text.slice(0, i), tests: text.slice(i) };
+}
+
+// A Rust file whose test part differs from the base one (a new file with a test part included).
+function hasChangedRustTests(root, base, f) {
+  if (!f.endsWith('.rs')) return false;
+  const now = splitRustTests(readSmall(root, f) || '').tests;
+  if (!now) return false;
+  const was = base ? spawnSync('git', ['show', `${base}:${f}`], { cwd: root, encoding: 'utf8' }).stdout || '' : '';
+  return now !== splitRustTests(was).tests;
+}
+
 // Code that this work changed (not deleted, not tool files) with no changed test in its package.
-function untestedCode(root, code) {
+function untestedCode(root, code, isTest) {
   const cache = new Map();
-  const tested = new Set(code.filter((f) => TEST_FILE.test(f)).map((f) => packageOf(root, f, cache)));
+  const tested = new Set(code.filter(isTest).map((f) => packageOf(root, f, cache)));
   return code.filter((f) => !TEST_FILE.test(f) && !TOOL_FILE.test(f) && fs.existsSync(path.join(root, f)) && !tested.has(packageOf(root, f, cache)));
 }
 
@@ -213,9 +230,9 @@ const stemOf = (f) => path.basename(f).replace(/\.[^.]+$/, '').replace(/\.(test|
 const isSeamTest = (t, s) => t === s || t.startsWith(`${s}/`) || stemOf(t) === path.basename(s).replace(/\.[^.]+$/, '');
 
 // With seams in the card, the code this work changed when no changed test belongs to a seam.
-function seamUntested(root, code, seams) {
+function seamUntested(root, code, seams, isTest) {
   const prod = code.filter((f) => !TEST_FILE.test(f) && !TOOL_FILE.test(f) && fs.existsSync(path.join(root, f)));
-  const tested = code.some((f) => TEST_FILE.test(f) && seams.some((s) => isSeamTest(f, s)));
+  const tested = code.some((f) => isTest(f) && seams.some((s) => isSeamTest(f, s)));
   return tested ? [] : prod;
 }
 
@@ -258,7 +275,8 @@ function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPat
   const prod = code.filter((f) => !TEST_FILE.test(f) && !TOOL_FILE.test(f));
   const has = (re) => changed.some((f) => re.test(f) && !OWN_FILES.test(f));
   const seams = seamPaths(card);
-  const untested = seams.length ? seamUntested(root, code, seams) : untestedCode(root, code);
+  const isTest = (f) => TEST_FILE.test(f) || hasChangedRustTests(root, base, f);
+  const untested = seams.length ? seamUntested(root, code, seams, isTest) : untestedCode(root, code, isTest);
   if (untested.length && !declared(card, '테스트 불필요')) {
     const where = seams.length ? `카드의 테스트 위치(seam: ${seams.join(', ')})에 ` : code.some((f) => TEST_FILE.test(f)) ? '같은 패키지(가장 가까운 package.json·go.mod 등의 폴더)의 ' : '';
     out.push(`TDD: 코드(${untested.slice(0, 3).join(', ')}${untested.length > 3 ? ' …' : ''})가 바뀌었는데 ${where}테스트 변경이 없다 → 실패하는 테스트를 먼저 쓰고 고친다${seams.length ? ' (seam이 틀렸으면 사용자와 다시 정해 카드에 적는다)' : ''}. 정말 필요 없으면 ${cardPath}에 \`테스트 불필요: ${NO_NEED}\`${shortHint(card, '테스트 불필요')}`);
@@ -281,4 +299,4 @@ function policyProblems(root, { changed, risks, isCriteriaChanged, card, cardPat
   return [...out, ...conflictProblems(root, changed), ...secretProblems(root, changed)];
 }
 
-module.exports = { policyProblems, secretWaivers, piiWaivers, isOwnCode, isAllowedBy, declared, declaredReason, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };
+module.exports = { policyProblems, secretWaivers, piiWaivers, isOwnCode, isAllowedBy, declared, declaredReason, DEFAULT_LIMITS, LIMITS, loadLimits, relatedTests, splitRustTests, secretKind, isRealReason, reasonSlot, DECISIONS_FILE, TEST_FILE, TOOL_FILE, OWN_FILES, MAX_SCAN_BYTES, VENDORED };

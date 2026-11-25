@@ -61,6 +61,8 @@ function detectTest(root) {
   }
   if (PYTEST_CONFIG.some(([f, re]) => re.test(read(root, f) || '')) || fs.existsSync(path.join(root, 'conftest.py'))) cmds.push('pytest -q');
   if (fs.existsSync(path.join(root, 'go.mod'))) cmds.push('go test ./...');
+  const cargo = read(root, 'Cargo.toml');
+  if (cargo !== null) cmds.push(/^\s*\[workspace\]/m.test(cargo) ? 'cargo test --workspace' : 'cargo test');
   return cmds.length ? cmds.join(' && ') : null;
 }
 
@@ -313,7 +315,7 @@ function report(root, d, log, notes, mapDone, isFreshInstall) {
   const next = [];
   if (log.some((l) => l.rel === '.quality/probe.mjs')) next.push('.quality/probe.mjs를 채운다 (앱 만들기·로그인·테스트 DB).');
   if (d.express && read(root, '.quality/access.json') === null) next.push('권한 표 첫 버전: `node .quality/qh/bin/qh.js routes --baseline --levels <비로그인>,<…>,<최고> --labels <수준마다 한국어 이름>` 후 사람이 훑는다.');
-  if (!d.test) next.push('테스트 검사가 없다: 테스트를 돌리는 명령(npm test·pytest·go test)을 찾지 못했다 → 사용자에게 테스트 실행 방법을 묻고, 허락을 받아 .quality/config.json checks에 test 검사({ "cmd": "…", "on": ["pr"] })와 common에 넣는다.');
+  if (!d.test) next.push('테스트 검사가 없다: 테스트를 돌리는 명령(npm test·pytest·go test·cargo test)을 찾지 못했다 → 사용자에게 테스트 실행 방법을 묻고, 허락을 받아 .quality/config.json checks에 test 검사({ "cmd": "…", "on": ["pr"] })와 common에 넣는다.');
   if (!d.test && packageFiles(root).length) next.push('Node 프로젝트(package.json 있음)라면 Node 내장 테스트(`node --test`)를 제안한다. 사용자와 정한 뒤 테스트 명령을 넣는다.');
   if (!d.hasKiroRun && !d.hasClaude) next.push('AI 리뷰를 쓰려면 .quality/config.json에 review.cmd를 넣는다.');
   next.push('품질 기준 정하기: 에이전트에게 "품질 기준을 같이 정하자"라고 말한다 (몇 가지 질문에 고른 답대로 검사가 켜진다).');
