@@ -434,8 +434,9 @@ function runReview(root, config, baseArg) {
   fs.writeFileSync(path.join(outDir, 'run.log'), `${r.stdout || ''}${r.stderr || ''}`);
   const findings = readFindings(path.join(outDir, 'result.json'));
   const done = { ...evidence, exit: r.status ?? 124, elapsedSec: Math.round((Date.now() - started) / 1000), logPath: path.join(EVIDENCE_DIR, 'review', 'run.log') };
-  if (!findings) {
-    writeEvidence(root, 'review', { ...done, envError: `리뷰 결과(result.json)가 없거나 형식이 틀림 (exit ${done.exit}, 로그 ${done.logPath})` });
+  if (!findings || done.exit !== 0) {
+    const why = findings ? (done.exit === 124 ? '리뷰가 시간 초과로 멈춤' : '리뷰가 정상 종료하지 않음') : '리뷰 결과(result.json)가 없거나 형식이 틀림';
+    writeEvidence(root, 'review', { ...done, envError: `${why} (exit ${done.exit}, 로그 ${done.logPath})` });
     return EXIT.env;
   }
   writeEvidence(root, 'review', { ...done, findings });
