@@ -11,3 +11,4 @@ node_modules/
 *.bak
 # 개발용 에이전트 지침: 로컬에만
 CLAUDE.local.md
+.quality/me.md
