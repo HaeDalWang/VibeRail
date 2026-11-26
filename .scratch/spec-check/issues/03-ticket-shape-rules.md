@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] A ticket with no acceptance box shows a policy problem naming the ticket (visible: `qh check` output)
-- [ ] A blocker that names no existing ticket shows a policy problem
-- [ ] A missing linked ticket file shows a policy problem
-- [ ] Well-formed tickets and cards without tickets show none
+- [x] A ticket with no acceptance box shows a policy problem naming the ticket (visible: `qh check` output)
+- [x] A blocker that names no existing ticket shows a policy problem
+- [x] A missing linked ticket file shows a policy problem
+- [x] Well-formed tickets and cards without tickets show none

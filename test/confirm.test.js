@@ -196,3 +196,35 @@ test('a fresh pick after an earlier answer is bound', () => {
   assert.notStrictEqual(fresh, number);
   assert.deepStrictEqual(confirms(root), []);
 });
+
+// Ticket shape (명세 대조 rules): problems with the tickets a card links show in the normal check.
+const TK = (n, { blocked = 'None (can start immediately)', box = '- [ ] it works' } = {}) => `# ${n}: t\n\n**Blocked by:** ${blocked}\n\n**Status:** ready-for-agent\n\n${box}\n`;
+function ticketed(tickets) {
+  const rels = Object.keys(tickets);
+  const root = repo(BASIC, { '.scratch/f/spec.md': '# Spec\n' });
+  for (const [rel, body] of Object.entries(tickets)) if (body !== null) write(root, rel, body);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\nx\n\n## interface 결정\n안: A\n이유: 쉽다\n명세: .scratch/f/spec.md\n작업: ${rels.join(' ')}\n\n## 판단 필요\n`);
+  return root;
+}
+const shape = (root) => statusJson(root).policy.filter((p) => /작업 파일/.test(p));
+
+test('ticket shape problems show in the normal check, naming the ticket', () => {
+  const T1 = '.scratch/f/issues/01-a.md';
+  const T2 = '.scratch/f/issues/02-b.md';
+  assert.deepStrictEqual(shape(ticketed({ [T1]: TK('01'), [T2]: TK('02', { blocked: '01' }) })), [], 'well-formed tickets show nothing');
+  const noBox = shape(ticketed({ [T1]: TK('01', { box: '' }) }));
+  assert.strictEqual(noBox.length, 1);
+  assert.match(noBox[0], /01-a\.md.*완료 조건/);
+  const badBlocker = shape(ticketed({ [T1]: TK('01'), [T2]: TK('02', { blocked: '01, 05' }) }));
+  assert.strictEqual(badBlocker.length, 1);
+  assert.match(badBlocker[0], /02-b\.md.*05/);
+  const gone = shape(ticketed({ [T1]: TK('01'), [T2]: null }));
+  assert.strictEqual(gone.length, 1);
+  assert.match(gone[0], /02-b\.md.*없/);
+});
+
+test('a card with no linked tickets shows no ticket shape problem', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\nx\n`);
+  assert.deepStrictEqual(shape(root), []);
+});

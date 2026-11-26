@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] `--task` writes a task naming the card, spec, ticket files and result path, and prints what to do next (visible: the command output and the task file)
-- [ ] `--result` with a well-formed file records it with the content number and `checker: agent-declared`
-- [ ] `--result` with a malformed file (missing array, wrong item shape, not JSON) is refused with the reason; nothing is recorded
-- [ ] A recorded result with missing items or tickets with no visible result counts one round for the card
+- [x] `--task` writes a task naming the card, spec, ticket files and result path, and prints what to do next (visible: the command output and the task file)
+- [x] `--result` with a well-formed file records it with the content number and `checker: agent-declared`
+- [x] `--result` with a malformed file (missing array, wrong item shape, not JSON) is refused with the reason; nothing is recorded
+- [x] A recorded result with missing items or tickets with no visible result counts one round for the card
