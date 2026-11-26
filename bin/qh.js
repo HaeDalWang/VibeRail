@@ -675,7 +675,8 @@ function hookSessionStart(root) {
   const pending = stopState.takePending(root);
   const left = pending ? `\n(qh) The last session ended with quality problems left (that host does not show notices). If the status above still has them, tell the user:\n${pending}` : '';
   const cycle = require('../lib/cycle').cycleLines(root, taskCard(root).text).map((l) => `\n(qh) ${l}`).join('');
-  console.log(`${formatStatus(assess(root))}${unasked}${cycle}${left}\n\n(qh) Before ending a response, run the needed checks with \`qh check\` to leave evidence. \`qh status\` shows their state.`);
+  const words = require('../lib/me').wordsLine(root);
+  console.log(`${formatStatus(assess(root))}${unasked}${words ? `\n(qh) ${words}` : ''}${cycle}${left}\n\n(qh) Before ending a response, run the needed checks with \`qh check\` to leave evidence. \`qh status\` shows their state.`);
   return EXIT.ok;
 }
 
@@ -720,7 +721,8 @@ function main(argv) {
       console.log(['저장하지 않음:', ...r.errors.map((e) => `  - ${e}`)].join('\n'));
       return EXIT.failed;
     }
-    console.log(r.log.length ? `저장: .quality/config.json answers, docs/decisions.md에 ${r.log.length}줄\n${r.log.join('\n')}` : '바뀐 답 없음');
+    const bg = r.background ? `배경: ${require('../lib/me').ME_FILE}에 저장 (이 컴퓨터에만, 저장소에 올리지 않음)` : '';
+    console.log([r.log.length ? `저장: .quality/config.json answers, docs/decisions.md에 ${r.log.length}줄\n${r.log.join('\n')}` : bg ? '' : '바뀐 답 없음', bg].filter(Boolean).join('\n'));
     return EXIT.ok;
   }
   if (cmd === 'measure') {

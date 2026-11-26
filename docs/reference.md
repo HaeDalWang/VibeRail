@@ -84,6 +84,7 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | 카드 3개 / 7일 | 지난 아키텍처 점검 뒤 이만큼 지나면 점검 시기를 알린다 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(ADR 0001에서 정한 주기) | `limits.architectureCards` / `limits.architectureDays` |
 | 10초 | `qh doctor`가 Stop에서 도는 검사의 마지막 실행이 이보다 길면 경고 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(경고만 하고 막지 않는다) | `limits.stopSeconds` |
 | 2번 | 같은 종류의 항목으로 AI를 연속으로 돌려보내는 횟수. 넘으면 그 항목은 막지 않고 사용자에게 한 번 알린다 | 같은 항목으로 연속 두 번 말해도 못 고치면 세 번째에도 못 고칠 가능성이 크고, 계속 막으면 같은 호출이 반복되어 비용만 든다(gureumi 시범에서 8번 넘게 반복한 일이 있었다). 2라는 숫자 자체는 근거 없음: 프로젝트가 바꿀 수 있는 기본값 | `limits.sameBlocks` |
+| 500자 | 질문 화면 배경 칸에 쓸 수 있는 길이 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(직책·하는 일·걸어온 길을 한 문단으로 쓰기에 넉넉한 길이로 잡음) | `limits.backgroundChars` |
 | 티켓 3개 | `## 루프` 한 묶음에 담을 수 있는 티켓 수 | 근거 없음: 프로젝트가 바꿀 수 있는 기본값(한 묶음의 리뷰를 사람이 한 번에 읽을 수 있는 크기로 잡음) | `limits.loopTickets` |
 | 90초 / 300초 / 900초 | 내장 검사 / 프로젝트 검사 / AI 리뷰 한 번이 이 시간을 넘으면 시간 초과(환경 오류)로 본다 | 근거 없음: 고정값. 90초는 호스트의 Stop hook 제한 120초 안에 내장 검사를 끝내려는 값이다. 검사는 검사마다 `timeoutSec`, 리뷰는 `review.timeoutSec`로 바꾼다 | `checks.<이름>.timeoutSec` / `review.timeoutSec` |
 
@@ -92,8 +93,8 @@ cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git com
 | 명령 | 하는 일 |
 |---|---|
 | `qh init [경로]` | 설치·연결 |
-| `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달 |
-| `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장 |
+| `qh ask` | 프로젝트 질문 화면(로컬 HTML)을 만든다. 고른 답을 "프롬프트 복사"로 에이전트에 전달. 사용자 수준 질문 아래에 하는 일·배경 칸(선택)이 있다 |
+| `qh answer` | 붙여 넣은 답을 검증해 `.quality/config.json`과 결정 로그에 저장. `배경:` 줄은 `.quality/me.md`(이 컴퓨터에만, `.gitignore`에 넣음)에만 적고 결정 로그에는 남기지 않는다. 같은 파일의 `## 단어집`(개발 말 → 내 분야 말)은 AI가 세션 시작 안내에 따라 만들고 늘리며, 사람이 직접 고쳐도 된다 |
 | `qh view interface <json> [--wait [--timeout 초]]` | interface 안(JSON)을 로컬 HTML로 만든다(`.quality/reports/`). 안마다 이유 칸과 `안: <id>`·`이유: …` 두 줄 복사 버튼(이유 5자 미만이면 복사 거부). 선택 `questions`(`[{text, choices 2~4개, recommended?}]`)는 맨 위에 두면 공통 질문, 안 안에 두면 그 안의 질문이다. 질문마다 하나 고르기·추천 표시·기타 칸이 붙고, 공통 질문과 고른 안의 질문에 답해야 복사되며, 답은 `- [x] 질문 · 답` 줄로 함께 복사된다(카드 `## 판단 필요`에 그대로 적는다). `안:` 줄 끝에는 고른 안의 확인 번호(`· 확인 번호 NNNN`, 공백 무시)가 붙고, 고른 뒤 그 안이 바뀌면 qh가 바뀐 칸(예전 → 지금, git 기록에서)을 보이며 다시 묻는다. 카드 `## 루프`에 작업이 생기면 `명세:` 파일에도 같은 확인 질문을 한다. 사용자 수준 B(`qh ask`의 사용자 수준)는 signature·seam도 보인다. Mermaid는 함께 넣은 로컬 사본으로 그리고, 못 그리면 원본 글이 보인다 |
 | `qh view architecture <json> [--wait [--timeout 초]]` | 아키텍처 점검 후보(JSON: `title`, `candidates[{id, name, problem, solution, gain, cost, strength, mermaidBefore?, mermaidAfter?, detail?, questions?}]`, 선택 `questions`)를 한국어 로컬 HTML로 만든다. 후보마다 이유 칸·복사 버튼·질문 칸은 interface 화면과 같고, `detail`은 사용자 수준 B에만 보인다. 외부 주소를 부르지 않는다(Mermaid도 로컬 사본). improve-codebase-architecture skill의 HTML 보고서 단계(CDN·영어) 대신 쓴다 |
 | `qh view spec <spec.md> [--wait [--timeout 초]]` | 명세 Markdown의 제목·문단·목록 항목마다 선택적 주석 칸을 붙인다. 고르는 질문 없이 주석만 복사하거나 보낸다. 기존 Markdown 표시와 HTML 이스케이프를 재사용한다 |

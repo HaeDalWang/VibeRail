@@ -1,0 +1,25 @@
+{
+  "title": "배경과 단어집을 누가 받아 적고, AI가 어떻게 잊지 않을까",
+  "options": [
+    {
+      "id": "A",
+      "name": "검사기가 받아 적고, 세션 시작에 한 줄로 알려 줌",
+      "summary": "질문 화면에서 복사한 답에 '배경:' 줄이 생깁니다. 검사기가 그 줄을 읽어 내 컴퓨터에만 있는 파일에 배경을 적어요(단어집 부분은 건드리지 않음). 세션을 시작할 때마다 검사기가 '단어집 있음 → 그 말로 말한다' 또는 '배경만 있음 → 첫 그릴링 전에 초안'을 한 줄로 알려 줍니다.",
+      "mermaid": "flowchart LR\n  P[질문 화면 배경 칸] --> C[복사한 답]\n  C --> Q[검사기가 받아 적음]\n  Q --> F[(내 컴퓨터 파일: 배경 + 단어집)]\n  F --> S[세션 시작 한 줄 알림]\n  S --> AI[AI가 단어집 말로 질문]",
+      "gain": "AI가 규칙을 잊어도 세션마다 알림이 다시 떠서 단어집을 빼먹지 않아요. 배경은 항상 같은 자리, 같은 모양으로 저장돼요.",
+      "cost": "검사기 쪽에 만들 것이 두 개(받아 적기, 알림 한 줄) 늘어요. 세션 시작 글이 한 줄 길어져요.",
+      "signature": "answer(root, text)  // '배경: …' 줄 허용, .quality/me.md의 ## 배경만 교체\nwordsLine(root) -> string|null  // cycleLines 끝에 붙음",
+      "seam": "test/criteria-answers.test.js (qh answer 배경 줄)\ntest/cycle-policy.test.js (세션 시작 한 줄)\ntest/init-gitignore.test.js (.gitignore에 .quality/me.md)"
+    },
+    {
+      "id": "B",
+      "name": "AI가 받아 적고, 규칙 글로만 기억",
+      "summary": "질문 화면에서 복사한 답에 '배경:' 줄이 생기는 것은 같아요. 검사기는 그 줄을 그냥 넘기고, AI가 규칙에 따라 내 컴퓨터 파일에 직접 적습니다. 세션 시작 알림은 없고, AI는 규칙 글을 읽고 단어집을 찾아 써요.",
+      "mermaid": "flowchart LR\n  P[질문 화면 배경 칸] --> C[복사한 답]\n  C --> AI1[AI가 받아 적음]\n  AI1 --> F[(내 컴퓨터 파일: 배경 + 단어집)]\n  R[AI 규칙 한 줄] --> AI2[AI가 단어집 말로 질문]\n  F --> AI2",
+      "gain": "검사기에 만들 것이 가장 적어요(배경 칸, 줄 넘기기, 저장소 제외 한 줄).",
+      "cost": "AI가 규칙을 놓치면 단어집 없이 예전처럼 말해요. 파일 모양이 AI마다 조금씩 달라질 수 있어요.",
+      "signature": "answer(root, text)  // '배경: …' 줄을 오류 없이 건너뜀\n규칙: lib/agents-snippet.md, skills/qh-cycle/SKILL.md 한 줄씩",
+      "seam": "test/criteria-answers.test.js (배경 줄이 오류가 아님)\ntest/init-gitignore.test.js (.gitignore에 .quality/me.md)"
+    }
+  ]
+}
