@@ -28,7 +28,12 @@
 test/spec-check.test.js
 test/confirm.test.js
 
+## 루프
+.scratch/spec-check/issues/01-spec-check-command.md
+.scratch/spec-check/issues/03-ticket-shape-rules.md
+
 ## 판단 필요
+- [x] 명세(확인 번호 0982)대로 작업을 시작할까요? · 돌려
 - [x] 이 범위로 진행할까요? · 진행
 - [x] 테스트 위치: 명세 대조 명령과 "돌려" 질문 두 곳만 · 이대로
 - [x] 뜻을 대조한 AI가 명세를 쓴 AI와 다른지 기계가 확인 못 하는 빈틈 · 빈틈 인정, 완료 리뷰에 표시
