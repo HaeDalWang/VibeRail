@@ -357,6 +357,7 @@ function assess(root, phase = 'stop', baseRef) {
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root, base);
+  const specGate = require('../lib/spec-check').gate(root, card);
   const red = phase === 'pr' ? redCheck.readRedCheck(root, now) : null;
   const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
@@ -376,6 +377,7 @@ function assess(root, phase = 'stop', baseRef) {
       ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, base, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
       ...cardFormatProblems(card),
       ...require('../lib/spec-check').shapeProblems(root, card),
+      ...specGate.agent,
       ...(phase === 'pr' ? require('../lib/history-secrets').historySecretProblems(root, base) : []),
     ],
     structure: shape.problems,
@@ -384,7 +386,7 @@ function assess(root, phase = 'stop', baseRef) {
     shapeSkipped: shape.skipped,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: decisions(card.text).open,
-    waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...require('../lib/confirm').pendingConfirms(root, { card: card.text })],
+    waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...specGate.person, ...require('../lib/confirm').pendingConfirms(root, { card: card.text, isSpecChecked: specGate.passed })],
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],

@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] Tickets linked, no record → agent item present, spec confirmation absent (visible: `qh check` output)
-- [ ] Pass for the current content → spec confirmation asked
-- [ ] Content changed after a pass → agent item again
-- [ ] Unrequested item → person question; once answered yes it does not return on rerun; a non-yes answer becomes an agent item to remove it
-- [ ] After 2 failing rounds, remaining missing / no-visible items become person questions
-- [ ] A card with no linked tickets gets none of these
+- [x] Tickets linked, no record → agent item present, spec confirmation absent (visible: `qh check` output)
+- [x] Pass for the current content → spec confirmation asked
+- [x] Content changed after a pass → agent item again
+- [x] Unrequested item → person question; once answered yes it does not return on rerun; a non-yes answer becomes an agent item to remove it
+- [x] After 2 failing rounds, remaining missing / no-visible items become person questions
+- [x] A card with no linked tickets gets none of these
