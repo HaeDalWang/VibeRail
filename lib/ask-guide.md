@@ -14,6 +14,7 @@ When: tell the user when `qh doctor` or session start says "프로젝트 질문�
    QH
    ```
 3. If the output says `저장하지 않음:`, show that line to the user and have them choose again on the page. Never edit the block yourself.
+   A `배경:` line in the block is the person's background: qh saves it only to `.quality/me.md` (gitignored), never to the config or the decision log. Do not repeat it in a commit, log, or report.
 4. When saved, run `qh doctor`. If it prints a `[실패]` saying something the answers require (a check, risk area, or doc) is missing, translate each doctor failure into one plain sentence (what is missing and what it would protect, with no file names, keys or commands) and ask the user what to do. Do not change `.quality/config.json` without the user's confirmation.
 
 ## Task question (작업 질문)

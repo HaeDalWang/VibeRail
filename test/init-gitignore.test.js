@@ -39,3 +39,17 @@ test('INSTALL.md does not tell the agent to commit the map settings that hold an
   assert.doesNotMatch(install, /코드 지도가 만든 `\.mcp\.json`/);
   assert.match(install, /\.mcp\.json[^\n]*커밋하지 않/);
 });
+
+test('init gitignores the per-person background and word list file, once', () => {
+  const root = repo(BASIC);
+  qh(root, ['init', root]);
+  qh(root, ['init', root]);
+  assert.strictEqual(fs.readFileSync(path.join(root, '.gitignore'), 'utf8').split('\n').filter((l) => l === '.quality/me.md').length, 1);
+});
+
+test('the agent rules and qh-cycle say to speak with the word list, not only easy words', () => {
+  const snippet = fs.readFileSync(path.join(ROOT, 'lib/agents-snippet.md'), 'utf8');
+  const cycle = fs.readFileSync(path.join(ROOT, 'skills/qh-cycle/SKILL.md'), 'utf8');
+  for (const text of [snippet, cycle]) assert.match(text, /\.quality\/me\.md[\s\S]{0,300}word list|word list[\s\S]{0,300}\.quality\/me\.md/);
+  assert.doesNotMatch(cycle, /only glossary words/);
+});

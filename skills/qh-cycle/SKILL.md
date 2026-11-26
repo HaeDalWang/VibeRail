@@ -55,8 +55,8 @@ Where any vendored skill says to call `code-review`, run `qh review` instead. qh
 
 Read the person's level from `.quality/config.json` `answers.level`:
 
-- **A** (not a developer): Korean, one idea per sentence, only glossary words, short. Draw instead of explaining. Say what changes if they pick each option.
-- **B** (developer): the A text, plus interface signatures, seam locations, test names and the dependency category.
+- **A** (not a developer): Korean, one idea per sentence, short. Project terms from the glossary; development words from the person's word list in `.quality/me.md` when it has them, not generic easy words. Draw instead of explaining. Say what changes if they pick each option.
+- **B** (developer): the A text (word list included), plus interface signatures, seam locations, test names and the dependency category.
 
 This applies only to what the person reads. Files you or other agents read (skills, specs, tickets, ADRs) stay in the language they were written in. Never translate the vendored skills.
 

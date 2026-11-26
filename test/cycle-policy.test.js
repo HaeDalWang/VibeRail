@@ -316,3 +316,32 @@ test('scope stays at intent until the exact question has a positive answer in de
   card(root, `${intent}## 판단 필요\n- [x] 이 범위로 진행할까요? · 네\n- [x] 이 범위로 진행할까요? · 아니요\n`);
   assert.match(stage(root), /단계: 의도/, 'the latest answer applies');
 });
+
+// The word list line comes from the per-person file, in every project (no qh-cycle skill here).
+const ME = '.quality/me.md';
+const meFile = (bg, rows = '') => `# 나\n\n## 배경\n${bg}\n\n## 단어집\n| 개발 말 | 내 말 |\n|---|---|\n${rows}`;
+const wordLine = (root) => qh(root, ['hook', 'session-start']).stdout.split('\n').filter((l) => /word list/.test(l));
+
+test('SessionStart says nothing about a word list when there is no background and no rows', () => {
+  const root = repo(BASIC);
+  assert.deepStrictEqual(wordLine(root), []);
+  write(root, ME, meFile(''));
+  assert.deepStrictEqual(wordLine(root), []);
+});
+
+test('SessionStart asks for a word-list draft when there is a background and no rows', () => {
+  const root = repo(BASIC);
+  write(root, ME, meFile('클라우드 운영 엔지니어'));
+  const [line] = wordLine(root);
+  for (const re of [/^\(qh\) .*background.*no word list/, /before the first grilling/, /draft about ten rows/, /show them once/]) assert.match(line, re);
+});
+
+test('SessionStart tells the agent to speak with the word list when it has rows', () => {
+  const root = repo(BASIC);
+  write(root, ME, meFile('클라우드 운영 엔지니어', '| 커밋 | 작업 저장 지점 |\n'));
+  const [line] = wordLine(root);
+  assert.match(line, /^\(qh\) .*\.quality\/me\.md.*speak to the person with the word list/);
+  assert.match(line, /short gloss in brackets/);
+  assert.match(line, /unclear.*add a row/);
+  assert.match(line, /GLOSSARY\.md/);
+});

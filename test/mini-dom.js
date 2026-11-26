@@ -17,9 +17,15 @@ class El {
     this.dataset = Object.fromEntries(Object.entries(attrs).filter(([k]) => k.startsWith('data-')).map(([k, v]) => [k.slice(5).replace(/-(\w)/g, (_, c) => c.toUpperCase()), v]));
   }
   hasAttribute(name) { return name in this.attrs; }
+  get id() { return this.attrs.id || ''; }
+  get classList() { return { toggle: (c, on) => { const set = new Set(this.className.split(/\s+/).filter(Boolean)); if (on ?? !set.has(c)) set.add(c); else set.delete(c); this.className = [...set].join(' '); } }; }
+  set innerHTML(html) { this.text = ''; this.children = parse(html).children.map((c) => Object.assign(c, { parent: this })); }
+  getElementById(id) { return this.querySelectorAll('*').find((e) => e.attrs.id === id) || null; }
+  addEventListener() {}
   get textContent() { return this.text + this.children.map((c) => c.textContent).join(''); }
   set textContent(t) { this.text = t; this.children = []; }
   matches(sel) {
+    if (sel === '*') return this.tag !== '#text';
     const m = sel.match(/^(\w+)?((?:\.[\w-]+)*)((?:\[[^\]]+\])*)(:checked)?$/);
     if (!m) throw new Error(`mini-dom: unsupported selector ${sel}`);
     const [, tag, classes, attrs, checked] = m;
@@ -58,11 +64,13 @@ function parse(html) {
 // Runs every inline script of the page; returns the document and what the page copied.
 function load(html) {
   const document = parse(html);
+  for (const t of document.querySelectorAll('textarea')) t.value = t.textContent;
   const copied = [];
   const ctx = {
     document,
     navigator: { clipboard: { writeText: async (t) => { copied.push(t); } } },
     matchMedia: () => ({ matches: false }),
+    IntersectionObserver: class { observe() {} },
   };
   vm.createContext(ctx);
   for (const [, attrs, body] of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) if (!/\bsrc=/.test(attrs)) vm.runInContext(body, ctx);
