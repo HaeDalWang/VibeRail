@@ -21,6 +21,7 @@
 안: B · 확인 번호 2521
 설계안: .scratch/spec-check/interface.json
 명세: .scratch/spec-check/spec.md
+작업: .scratch/spec-check/issues/01-spec-check-command.md .scratch/spec-check/issues/02-loop-start-gate.md .scratch/spec-check/issues/03-ticket-shape-rules.md .scratch/spec-check/issues/04-cycle-text-and-review-line.md
 이유: 빠르게 가능하다는것
 
 ## 테스트 위치(seam)
