@@ -17,6 +17,15 @@
 ## 용어
 - [명세 대조, 빠진 말, 끼어든 말, 끝나면 볼 것](../../../GLOSSARY.md)
 
+## interface 결정
+안: B · 확인 번호 2521
+설계안: .scratch/spec-check/interface.json
+이유: 빠르게 가능하다는것
+
+## 테스트 위치(seam)
+test/spec-check.test.js
+test/confirm.test.js
+
 ## 판단 필요
 - [x] 이 범위로 진행할까요? · 진행
 

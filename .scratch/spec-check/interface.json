@@ -1,0 +1,25 @@
+{
+  "title": "명세 대조를 어떻게 돌릴까",
+  "options": [
+    {
+      "id": "A",
+      "name": "검사 명령 하나에 다 넣기",
+      "summary": "새 검사 명령 하나가 규칙 검사와 AI 대조를 차례로 돌립니다. AI는 코드 리뷰를 돌리는 설정을 그대로 씁니다. 결과는 명세·작업·카드 내용에 묶여 남습니다. \"돌려\" 질문은 이 결과가 지금 내용으로 통과했을 때만 나옵니다.",
+      "mermaid": "flowchart LR\n  T[작업 파일 쓰기] --> C[명세 대조 명령]\n  C --> R{규칙 검사}\n  R -- 빈칸 --> F[AI가 고침]\n  R -- 통과 --> AI{새 AI 대조}\n  AI -- 빠진 말 / 볼 것 없음 --> F\n  F -->|최대 2번| C\n  AI -- 끼어든 말 --> Q[사람에게 한 줄 질문]\n  AI -- 통과 --> G[\"돌려\" 질문]\n  F -->|2번 넘음| Q",
+      "gain": "검사를 언제, 몇 번 했는지 기계가 기록하고 지킵니다. Claude Code든 Kiro든 똑같이 돕니다. 테스트는 명령 하나와 \"돌려\" 질문이 나오는지만 보면 됩니다.",
+      "cost": "AI 대조 한 번이 코드 리뷰만큼 깁니다(수 분). 리뷰 설정이 없으면 환경 오류로 멈춥니다.",
+      "signature": "qh spec-check  →  lib/spec-check.js specCheck(root, card, runAi) → { pass, number, round, shape[], missing[], extra[], noVisible[] }; confirm.js specConfirm은 지금 번호로 통과한 기록이 없으면 '명세 대조 먼저'만 낸다",
+      "seam": "qh spec-check 명령(가짜 리뷰 명령으로 AI 자리 바꿈), pendingConfirms의 \"돌려\" 질문 유무"
+    },
+    {
+      "id": "B",
+      "name": "있는 흐름에 나눠 얹기",
+      "summary": "규칙 검사는 평소 품질 검사에 하나 더 붙어 매번 돕니다. AI 대조는 qh가 돌리지 않습니다. 에이전트가 qh가 준 지시문으로 새 하위 AI를 띄우고, qh는 그 결과 파일 모양만 확인합니다.",
+      "mermaid": "flowchart LR\n  T[작업 파일 쓰기] --> K[평소 품질 검사]\n  K -- 규칙 빈칸 --> F[AI가 고침]\n  K -- 통과 --> S[에이전트가 하위 AI 띄움]\n  S --> J[결과 파일]\n  J --> V{qh가 모양 확인}\n  V -- 빠진 말 --> F\n  V -- 끼어든 말 --> Q[사람에게 한 줄 질문]\n  V -- 통과 --> G[\"돌려\" 질문]",
+      "gain": "규칙 빈칸은 쓰는 즉시 잡힙니다. AI 대조가 빠르고 쌉니다(하위 AI가 바로 돕니다).",
+      "cost": "\"명세를 쓰지 않은 새 AI\"인지 qh가 확인할 수 없습니다. 같은 AI가 스스로 채점해도 결과 파일 모양만 맞으면 통과합니다. Kiro와 Claude Code에서 하위 AI 띄우는 법이 달라 두 갈래 지시가 필요합니다. 재검사 횟수(2번)도 에이전트가 지켜야 합니다.",
+      "signature": "qh check에 내장 검사 spec-shape 추가; qh spec-check --task 로 지시문 출력, qh spec-check --result <file> 로 결과 검증·기록",
+      "seam": "qh check의 spec-shape 결과, qh spec-check --result 검증, pendingConfirms"
+    }
+  ]
+}
