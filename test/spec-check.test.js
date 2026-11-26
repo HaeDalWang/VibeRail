@@ -73,3 +73,24 @@ test('a result with missing items or tickets with no visible result counts one r
   assert.doesNotMatch(round({ missing: [], extra: [], noVisible: [] }), /번째/, 'a pass is not a fix round');
   assert.strictEqual(records(root)['.quality/tasks/work.md'].filter((x) => x.round).length, 2);
 });
+
+test('--task with no linked tickets stops without writing a task', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\nx\n`);
+  const r = qh(root, ['spec-check', '--task']);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stdout, /대조할 작업이 없다/);
+  assert.ok(!fs.existsSync(path.join(root, '.quality/evidence/spec-check/task.md')));
+});
+
+test('fix rounds count again from 1 after a pass', () => {
+  const root = setup();
+  const send = (result) => {
+    write(root, RESULT, JSON.stringify(result));
+    return qh(root, ['spec-check', '--result']).stdout;
+  };
+  const gap = { missing: [{ from: '의도', text: '없음' }], extra: [], noVisible: [] };
+  send(gap);
+  send({ missing: [], extra: [], noVisible: [] });
+  assert.match(send(gap), /고치기 1번째/);
+});

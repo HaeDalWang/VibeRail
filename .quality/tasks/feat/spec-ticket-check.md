@@ -29,10 +29,12 @@ test/spec-check.test.js
 test/confirm.test.js
 
 ## 루프
-.scratch/spec-check/issues/01-spec-check-command.md
-.scratch/spec-check/issues/03-ticket-shape-rules.md
+.scratch/spec-check/issues/02-loop-start-gate.md
 
 ## 판단 필요
+- [x] 리뷰: 카드에 작업이 없으면 명세 대조 지시문을 만들지 않고 멈출까요? · 멈추게 하기
+- [x] 리뷰: 고치기 횟수를 언제 새로 셀까요? · 통과하면 새로
+- [x] 다음 묶음으로 "돌려" 앞 관문을 돌릴까요? · 돌려
 - [x] 명세(확인 번호 0982)대로 작업을 시작할까요? · 돌려
 - [x] 이 범위로 진행할까요? · 진행
 - [x] 테스트 위치: 명세 대조 명령과 "돌려" 질문 두 곳만 · 이대로
