@@ -1,6 +1,6 @@
 # 02: The confirmation number, the review page and the cycle read the pick from the card module
 
-**What to build:** The confirmation number check, the review page's "picked option" step and the cycle's reason check use the card module's pick, so `- 안: B`, `**이유**: …` and indented field lines mean the same everywhere. The card module also returns a section's list lines without markers (`items`), and the section names `성공 조건 → 검사` and `미확인` join its section names; the review page reads success conditions and unconfirmed items through it. The per-section line splitters copied in the confirm module and the review page are removed. See the spec's module interface (`pick`, `items`, `SECTIONS`).
+**What to build:** The confirmation number check, the review page's "picked option" step and the cycle's reason check use the card module's pick, so `- 안: B`, `**이유**: …` and indented field lines mean the same everywhere. The card module also returns a section's list lines without markers (`items`), and the section names `성공 조건 → 검사` and `미확인` join its section names; the review page reads success conditions through it, and unconfirmed items through `lines` (every non-empty line, so free sentences still show). The per-section line splitters copied in the confirm module and the review page are removed. See the spec's module interface (`pick`, `items`, `SECTIONS`).
 
 **Blocked by:** 01
 

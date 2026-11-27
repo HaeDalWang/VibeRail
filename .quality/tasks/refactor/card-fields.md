@@ -59,6 +59,7 @@ test/card.test.js
 - [x] 명세가 확인한 뒤 바뀌었습니다(확인 번호 2714 → 5204). 바뀐 명세대로 계속할까요? · 돌려
 - [x] 같은 칸(예: 이유)에 비어 있는 줄이 먼저 있고 뒤에 값이 있는 줄이 있으면, 빈 줄을 건너뛰고 값이 있는 줄을 읽을까요? · 그대로 둠(첫 줄이 이김)
 - [x] On the completion review page, should sentences written under '미확인' without a list mark (-) still show? (They used to show; after this change only lines with the mark appear.) · 표시 없어도 보여줌
+- [x] 명세가 확인한 뒤 바뀌었습니다(확인 번호 5204 → 7525). 바뀐 명세대로 계속할까요? · 네
 - [x] 작업 세 개가 모두 끝났습니다. 이 카드를 여기서 끝낼까요? · 끝냄
 
 ## 미확인
