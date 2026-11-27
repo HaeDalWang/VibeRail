@@ -92,6 +92,7 @@ test('init fills a read-only Claude Code review command when kiro-run is absent 
   assert.match(cmd, /^claude -p "\$\(cat \{task\}\)"/);
   assert.match(cmd, / --tools Read,Grep,Glob /, 'no tool that edits files or runs commands');
   assert.doesNotMatch(cmd, /bypassPermissions|acceptEdits|Edit|Write|Bash/);
+  assert.match(cmd, / --settings '\{"disableAllHooks":true\}' /, 'the reviewer session must not run this project\'s hooks (a Stop hook rewrote its answer, 2026-11-27)');
   assert.match(cmd, /> \{out\}\/result\.json$/);
 });
 

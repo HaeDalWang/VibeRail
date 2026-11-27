@@ -164,6 +164,29 @@ test('a review that writes results and then crashes or times out is not complete
   }
 });
 
+test('a failed review runs the same-AI command once and records why', () => {
+  const ok = "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}";
+  const root = repo({ ...BASIC, review: { cmd: 'exit 7', sameAiCmd: ok } });
+  write(root, 'src/a.js', '2');
+  assert.strictEqual(qh(root, ['review']).status, 0);
+  assert.strictEqual(statusJson(root).review.state, '완료');
+  const ev = JSON.parse(fs.readFileSync(path.join(root, '.quality/evidence/review.json'), 'utf8'));
+  assert.match(ev.sameAi.why, /정상 종료하지 않음.*exit 7/);
+  assert.match(ev.cmd, /result\.json/, 'the record names the command that produced the findings');
+});
+
+test('when the same-AI review also fails (crash, timeout, missing tool) the review is an environment problem naming both', () => {
+  for (const sameAi of [{ sameAiCmd: 'exit 5' }, { sameAiCmd: 'sleep 5', timeoutSec: 1 }, { sameAiCmd: 'no-such-reviewer-tool {out}' }]) {
+    const root = repo({ ...BASIC, review: { cmd: 'exit 7', ...sameAi } });
+    write(root, 'src/a.js', '2');
+    assert.strictEqual(qh(root, ['review']).status, 3, sameAi.sameAiCmd);
+    const s = statusJson(root).review;
+    assert.strictEqual(s.state, '환경 오류');
+    assert.match(s.detail[0], /exit 7[\s\S]*(exit 5|시간 초과|도구 없음)/, sameAi.sameAiCmd);
+    assert.match(fs.readFileSync(path.join(root, '.quality/evidence/review/run.log'), 'utf8'), /\$ exit 7[\s\S]*\$ /, 'the log the message points to holds both attempts');
+  }
+});
+
 test('pr fails while a person still has to decide, even when every check passes', () => {
   const root = repo({ ...BASIC, review: { cmd: "node -e \"require('fs').writeFileSync(process.argv[1]+'/result.json','[]')\" {out}" } });
   assert.strictEqual(qh(root, ['init', root]).status, 0, 'pr also runs doctor, so qh must be set up');

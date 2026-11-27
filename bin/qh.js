@@ -21,7 +21,8 @@ const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
 const { answerState, decisions, pick } = require('../lib/card');
 const routesBaseline = require('../lib/routes-baseline');
-const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
+const { shellQuote, fillReviewCmd, toolExists } = require('../lib/shell-words');
+const { runReviewCmd } = require('../lib/review-run');
 
 const redCheck = require('../lib/red-check');
 const runEnvError = (root, def, ev, log) => require('../lib/run-env-error').runEnvError(root, def, ev, log, { git, treeHash });
@@ -165,17 +166,6 @@ function requirements(config, changed, phase, root) {
 }
 
 // ---------- running checks ----------
-
-// The command word the shell runs: past VAR=value prefixes, without its quotes.
-const COMMAND_WORD = /^\s*(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s+)*(?:"([^"]+)"|'([^']+)'|(\S+))/;
-
-function toolExists(root, cmd) {
-  const m = cmd.match(COMMAND_WORD);
-  const tool = m && (m[1] || m[2] || m[3]);
-  if (!tool || tool.includes('$')) return null; // only the shell can resolve it; let the run say
-  const r = spawnSync('sh', ['-c', 'command -v "$1" >/dev/null', '_', tool], { cwd: root });
-  return r.status === 0 ? null : tool;
-}
 
 function spawnCheck(root, def, timeoutSec, env = process.env) {
   const opts = { cwd: root, env, encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: MAX_BUFFER };
@@ -418,41 +408,32 @@ function runReview(root, config, baseArg) {
   fs.writeFileSync(diffFile, `${git(root, ['diff', base, hash])}\n`);
   const card = taskCard(root, base);
   const spec = pick(card.text).spec || '없음';
+  const startedAt = new Date().toISOString();
   const taskFile = path.join(outDir, 'task.md');
   const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base).replaceAll('{{CARD}}', card.text ? card.rel : '없음').replaceAll('{{SPEC}}', spec);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));
 
-  const cmd = fillReviewCmd(config.review.cmd, { workdir: root, task: taskFile, out: outDir });
-  const evidence = { check: 'review', cmd, treeHash: hash, base, startedAt: new Date().toISOString() };
-  const missing = toolExists(root, cmd);
-  if (missing) return writeEvidence(root, 'review', { ...evidence, envError: `도구 없음: ${missing}` }) || EXIT.env;
-  const started = Date.now();
-  const r = spawnSync('sh', ['-c', cmd], { cwd: root, encoding: 'utf8', timeout: (config.review.timeoutSec || DEFAULT_REVIEW_TIMEOUT_SEC) * 1000, maxBuffer: MAX_BUFFER });
-  fs.writeFileSync(path.join(outDir, 'run.log'), `${r.stdout || ''}${r.stderr || ''}`);
-  const findings = readFindings(path.join(outDir, 'result.json'));
-  const done = { ...evidence, exit: r.status ?? 124, elapsedSec: Math.round((Date.now() - started) / 1000), logPath: path.join(EVIDENCE_DIR, 'review', 'run.log') };
-  if (!findings || done.exit !== 0) {
-    const why = findings ? (done.exit === 124 ? '리뷰가 시간 초과로 멈춤' : '리뷰가 정상 종료하지 않음') : '리뷰 결과(result.json)가 없거나 형식이 틀림';
-    writeEvidence(root, 'review', { ...done, envError: `${why} (exit ${done.exit}, 로그 ${done.logPath})` });
+  const logPath = path.join(EVIDENCE_DIR, 'review', 'run.log');
+  // Decision 2026-11-27: any failure → one review by a fresh session of the coding AI (sameAiCmd).
+  const attempt = (template) => runReviewCmd(root, fillReviewCmd(template, { workdir: root, task: taskFile, out: outDir }), { outDir, logPath, timeoutSec: config.review.timeoutSec || DEFAULT_REVIEW_TIMEOUT_SEC });
+  const first = attempt(config.review.cmd);
+  const second = first.findings || !config.review.sameAiCmd ? null : attempt(config.review.sameAiCmd);
+  const { why, findings, ...run } = second || first;
+  const evidence = { check: 'review', ...run, treeHash: hash, base, startedAt, logPath, ...(second && { sameAi: { why: first.why } }) };
+  if (!findings) {
+    writeEvidence(root, 'review', { ...evidence, envError: `${[first.why, second?.why].filter(Boolean).join(' → 대신 돌린 리뷰: ')} (로그 ${logPath})` });
     return EXIT.env;
   }
-  writeEvidence(root, 'review', { ...done, findings });
-  return reviewPage(root, config, base, findings);
+  writeEvidence(root, 'review', { ...evidence, findings });
+  return reviewPage(root, config, base, findings, evidence.sameAi);
 }
 
-function reviewPage(root, config, base, findings) {
+function reviewPage(root, config, base, findings, sameAi) {
   const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
   const card = taskCard(root, base);
-  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: card.text, cardPath: card.rel, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
+  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: card.text, cardPath: card.rel, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings, sameAi });
   console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
-}
-
-function readFindings(file) {
-  const data = fs.existsSync(file) ? parseJson(fs.readFileSync(file, 'utf8')) : null;
-  if (!Array.isArray(data)) return null;
-  const isValid = (f) => f && typeof f.file === 'string' && Number.isInteger(f.line) && typeof f.reason === 'string';
-  return data.every(isValid) ? data : null;
 }
 
 // ---------- commands ----------
