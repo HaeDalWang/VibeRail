@@ -6,10 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] A card whose 명세 line sits outside `## interface 결정` gives a null spec (first test, reproduces the drift)
-- [ ] `- 안: B (설명) · 확인 번호 1234` gives id `B`, number `1234`, and the whole value as text
-- [ ] `**이유**：…`, an indented `이유:` and a list-marked `- 이유:` are all read as the reason
-- [ ] Backticks around the 설계안 and 명세 paths are removed
-- [ ] A card without `## interface 결정`, or without a field, gives null for that field
-- [ ] The spec check, the AI review start and the spec confirmation take the spec only from the card module; all existing tests pass
-- [ ] Visible: the spec check task text built from a card with the 명세 line outside the section says 없음 for the spec
+- [x] A card whose 명세 line sits outside `## interface 결정` gives a null spec (first test, reproduces the drift)
+- [x] `- 안: B (설명) · 확인 번호 1234` gives id `B`, number `1234`, and the whole value as text
+- [x] `**이유**：…`, an indented `이유:` and a list-marked `- 이유:` are all read as the reason
+- [x] Backticks around the 설계안 and 명세 paths are removed
+- [x] A card without `## interface 결정`, or without a field, gives null for that field
+- [x] The spec check, the AI review start and the spec confirmation take the spec only from the card module; all existing tests pass
+- [x] Visible: the spec check task text built from a card with the 명세 line outside the section says 없음 for the spec

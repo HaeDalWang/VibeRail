@@ -168,3 +168,43 @@ test('an indented or star open question reaches the PR gate and the format check
   assert.match(policyOf(root), /체크박스 없는 항목[\s\S]*"체크 없는 항목"/);
   assert.doesNotMatch(policyOf(root), /참고 설명/);
 });
+
+// The picked option and its links, read only inside `## interface 결정` (card-fields spec).
+const pickCard = (body, rest = '') => `# 카드\n## 의도\n고친다\n${rest}\n## interface 결정\n${body}\n\n## 테스트 위치(seam)\ntest/a.test.js\n`;
+
+test('a 명세 line outside the interface section is no spec', () => {
+  const { pick } = require('../lib/card');
+  assert.strictEqual(pick(pickCard('안: A\n이유: 고른 이유입니다', '명세: .scratch/x/spec.md\n')).spec, null);
+  assert.strictEqual(pick(pickCard('안: A\n명세: .scratch/x/spec.md')).spec, '.scratch/x/spec.md');
+});
+
+test('the 안 line gives its id, confirmation number and whole value', () => {
+  const { pick } = require('../lib/card');
+  const p = pick(pickCard('- 안: B (설명 — f(x)) · 확인 번호 1234'));
+  assert.strictEqual(p.id, 'B');
+  assert.strictEqual(p.number, '1234');
+  assert.strictEqual(p.text, 'B (설명 — f(x)) · 확인 번호 1234');
+  assert.strictEqual(pick(pickCard('안: C')).number, null);
+});
+
+test('field lines are read in common markdown shapes', () => {
+  const { pick } = require('../lib/card');
+  for (const line of ['**이유**：고른 이유입니다', '  이유: 고른 이유입니다', '- 이유: 고른 이유입니다', '> 이유: 고른 이유입니다', '1. 이유: 고른 이유입니다', '- [x] 이유: 고른 이유입니다', '**이유:** 고른 이유입니다']) {
+    assert.strictEqual(pick(pickCard(`안: A\n${line}`)).reason, '고른 이유입니다', line);
+  }
+});
+
+test('backticks around the 설계안 and 명세 paths are removed', () => {
+  const { pick } = require('../lib/card');
+  const p = pick(pickCard('안: A\n설계안: `.scratch/x/interface.json`\n- 명세: `.scratch/x/spec.md`'));
+  assert.strictEqual(p.design, '.scratch/x/interface.json');
+  assert.strictEqual(p.spec, '.scratch/x/spec.md');
+});
+
+test('a missing section or field is null', () => {
+  const { pick } = require('../lib/card');
+  const none = { text: null, id: null, number: null, reason: null, design: null, spec: null };
+  assert.deepStrictEqual(pick('# 카드\n## 의도\n고친다\n'), none);
+  assert.deepStrictEqual(pick(pickCard('이유:\n<!-- 안: Z -->')), none);
+  assert.deepStrictEqual(pick(''), none);
+});

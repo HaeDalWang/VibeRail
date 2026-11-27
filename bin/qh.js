@@ -19,7 +19,7 @@ const stopState = require('../lib/stop-state');
 const { allowedFailures, failureScope, isAllowedFailure, baselineFailures } = require('../lib/failing-tests');
 const { formatStatus } = require('../lib/status-format');
 const waivers = require('../lib/waivers');
-const { answerState, decisions } = require('../lib/card');
+const { answerState, decisions, pick } = require('../lib/card');
 const routesBaseline = require('../lib/routes-baseline');
 const { shellQuote, fillReviewCmd } = require('../lib/shell-words');
 
@@ -417,7 +417,7 @@ function runReview(root, config, baseArg) {
   const diffFile = path.join(outDir, 'change.diff');
   fs.writeFileSync(diffFile, `${git(root, ['diff', base, hash])}\n`);
   const card = taskCard(root, base);
-  const spec = (card.text.match(/^명세:\s*`?([^`\n]+?)`?\s*$/m) || [])[1] || '없음';
+  const spec = pick(card.text).spec || '없음';
   const taskFile = path.join(outDir, 'task.md');
   const fill = (s) => s.replaceAll('{{ROOT}}', root).replaceAll('{{DIFF}}', diffFile).replaceAll('{{OUT}}', outDir).replaceAll('{{BASE}}', base).replaceAll('{{CARD}}', card.text ? card.rel : '없음').replaceAll('{{SPEC}}', spec);
   fs.writeFileSync(taskFile, fill(fs.readFileSync(path.join(QH_HOME, 'lib', 'review-task.md'), 'utf8')));

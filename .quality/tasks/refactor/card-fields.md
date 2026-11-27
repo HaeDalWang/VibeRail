@@ -34,6 +34,13 @@ test/card.test.js
 .scratch/card-fields/issues/01-pick-and-spec-link.md
 .scratch/card-fields/issues/03-card-without-sections.md
 
+## 성공 조건 → 검사
+- 칸 밖 명세 줄은 명세 없음 → test/card.test.js "a 명세 line outside the interface section is no spec"
+- 안 줄에서 id·확인 번호·전체 값 → test/card.test.js "the 안 line gives its id, confirmation number and whole value"
+- 여러 모양의 줄을 같게 읽음 → test/card.test.js "field lines are read in common markdown shapes"
+- 경로의 백틱 제거 → test/card.test.js "backticks around the 설계안 and 명세 paths are removed"
+- 없는 칸·줄은 null → test/card.test.js "a missing section or field is null"
+
 ## 판단 필요
 - [x] 명세 연결 줄('명세: 파일')을 카드의 어디에서 찾을까요? · 설계 결정 칸 안만
 - [x] '안:'·'이유:'·'설계안:'·'명세:' 줄의 모양을 어디까지 받을까요? · 너그럽게 통일
