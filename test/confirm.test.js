@@ -83,13 +83,13 @@ test('only a yes approves: a no stops and tells the agent to fix it', () => {
   const { root, number } = picked();
   write(root, DESIGN, design({ ...OPTION_A, gain: '찾기 아주 쉽다' }));
   const [q] = confirms(root);
-  for (const no of ['아니요', '아니요, 예전 안으로 돌려 주세요', '잠깐만요', '진행하지 마세요']) {
+  for (const no of ['아니요', '아니요, 예전 안으로 돌려 주세요', '잠깐만요', '진행하지 마세요', 'ㅇ', 'ㅇㅇㅇ', 'ㅇㅇ아님']) {
     write(root, '.quality/tasks/work.md', card(`안: A (한 모듈) · 확인 번호 ${number}`, `- [x] ${q.user} · ${no}`));
     const [still] = confirms(root);
     assert.ok(still, `"${no}" is not an approval`);
     assert.match(still.agent, new RegExp(`사용자가 "${no}"라고 답했다`));
   }
-  for (const yes of ['예', '네, 계속하세요', '진행해', '돌려']) {
+  for (const yes of ['예', '네, 계속하세요', '진행해', '돌려', 'ㅇㅇ', 'ㅇㅇ 진행', 'ㅇㅋ']) {
     write(root, '.quality/tasks/work.md', card(`안: A (한 모듈) · 확인 번호 ${number}`, `- [x] ${q.user} · ${yes}`));
     assert.deepStrictEqual(confirms(root), [], `"${yes}" approves`);
   }
