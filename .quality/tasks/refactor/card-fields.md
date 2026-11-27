@@ -42,6 +42,7 @@ test/card.test.js
 - 이름 준 칸만 빼고 나머지는 그대로 → test/card.test.js "without removes exactly the named sections and leaves the rest unchanged"
 - 실제 카드 모두에서 옛 자르기와 같은 결과 → test/card.test.js "without matches the old spec check cutter on every real task card"
 - 칸의 목록 줄을 표시 빼고 돌려줌 → test/card.test.js "items gives the list lines of a section without markers, at any indentation"
+- 미확인 칸은 목록 표시 없는 줄도 보여 줌 → test/card.test.js "lines gives every non-empty line of a section, list markers removed"
 - 성공 조건·미확인 칸 이름이 카드 모듈에 → test/card.test.js "the section names include success conditions and unconfirmed"
 
 ## 판단 필요
@@ -57,6 +58,7 @@ test/card.test.js
 - [x] 명세가 확인한 뒤 바뀌었습니다(확인 번호 2714 → 5204). 바뀐 명세대로 계속할까요? · 계속
 - [x] 명세가 확인한 뒤 바뀌었습니다(확인 번호 2714 → 5204). 바뀐 명세대로 계속할까요? · 돌려
 - [x] 같은 칸(예: 이유)에 비어 있는 줄이 먼저 있고 뒤에 값이 있는 줄이 있으면, 빈 줄을 건너뛰고 값이 있는 줄을 읽을까요? · 그대로 둠(첫 줄이 이김)
+- [x] On the completion review page, should sentences written under '미확인' without a list mark (-) still show? (They used to show; after this change only lines with the mark appear.) · 표시 없어도 보여줌
 - [x] 작업 세 개가 모두 끝났습니다. 이 카드를 여기서 끝낼까요? · 끝냄
 
 ## 미확인

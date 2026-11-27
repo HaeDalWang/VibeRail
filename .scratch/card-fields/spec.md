@@ -47,12 +47,13 @@ The card module answers three questions, and every place that read these section
     - `reason`, `design`, `spec`: the trimmed values of `이유`, `설계안`, `명세`; backticks removed from `design` and `spec`.
     - Any field not written, or written with an empty value, is null. The first matching line wins.
   - `items(card, name) → string[]`: the lines of `section(card, name)` that are list items (`-`, `*`, `+`, any indentation), with the marker removed and trimmed. Non-list lines are dropped.
+  - `lines(card, name) → string[]`: every non-empty line of `section(card, name)`, list markers removed and trimmed (for free text; completion review 2026-11-27: "표시 없어도 보여줌").
   - `without(card, names) → string`: the card text with the `## <name>` sections listed in `names` removed (heading through the line before the next `## `), everything else byte-for-byte unchanged. A section is removed only when its heading is exactly the name (the same rule as the section reader), so `## 판단 필요 메모` stays; the old cutter also removed such headings. On every real card in this repository it gives the old cutter's output, so existing spec check confirmation numbers stay valid.
 - Callers:
   - Spec check: the spec path comes from `pick(card).spec`; the card part of its confirmation number comes from `without(card, [decisions, loop])`; the task text says 없음 when `spec` is null.
   - AI review start: the spec placeholder comes from `pick(card).spec`, 없음 when null.
   - Confirmation numbers: the picked option comes from `pick(card)` (`id`, `number`, `design`); the spec confirmation reads `pick(card).spec`. The loop-has-tickets test keeps reading the 루프 section.
-  - Review page: the picked option step shows `안: <text>` and `이유: <reason>` from `pick(card)`; success conditions come from `items(card, SECTIONS.success)`; unconfirmed from `items(card, SECTIONS.unsure)`.
+  - Review page: the picked option step shows `안: <text>` and `이유: <reason>` from `pick(card)`; success conditions come from `items(card, SECTIONS.success)`; unconfirmed from `lines(card, SECTIONS.unsure)`, so a sentence written without a list marker still shows.
   - Cycle stage and cycle problems: the reason check uses `pick(card).reason` instead of scanning the interface section with the reason reader.
   - The copied per-section line splitters in the confirm module and the review page go away.
 - Behaviour that changes on purpose: a 명세 line outside `## interface 결정` is no longer seen by the spec check or the AI review start; the review page and the confirmation number check now read list-marked, bold, indented or full-width-colon field lines.

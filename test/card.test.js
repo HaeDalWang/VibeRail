@@ -241,3 +241,10 @@ test('the section names include success conditions and unconfirmed', () => {
   assert.strictEqual(SECTIONS.success, '성공 조건 → 검사');
   assert.strictEqual(SECTIONS.unsure, '미확인');
 });
+
+test('lines gives every non-empty line of a section, list markers removed', () => {
+  const { lines, SECTIONS } = require('../lib/card');
+  const card = `# 카드\n## ${SECTIONS.unsure}\n그냥 문장으로 적은 것\n- 목록으로 적은 것\n\n  * 들여 쓴 것\n## 다음\n- 아님\n`;
+  assert.deepStrictEqual(lines(card, SECTIONS.unsure), ['그냥 문장으로 적은 것', '목록으로 적은 것', '들여 쓴 것']);
+  assert.deepStrictEqual(lines(card, SECTIONS.loop), []);
+});
