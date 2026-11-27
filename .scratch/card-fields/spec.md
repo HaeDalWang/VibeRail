@@ -47,7 +47,7 @@ The card module answers three questions, and every place that read these section
     - `reason`, `design`, `spec`: the trimmed values of `이유`, `설계안`, `명세`; backticks removed from `design` and `spec`.
     - Any field not written, or written with an empty value, is null. The first matching line wins.
   - `items(card, name) → string[]`: the lines of `section(card, name)` that are list items (`-`, `*`, `+`, any indentation), with the marker removed and trimmed. Non-list lines are dropped.
-  - `without(card, names) → string`: the card text with the `## <name>` sections listed in `names` removed (heading through the line before the next `## `), everything else byte-for-byte unchanged. Must give exactly what the spec check's current section cutter gives for the same names, so existing spec check confirmation numbers stay valid.
+  - `without(card, names) → string`: the card text with the `## <name>` sections listed in `names` removed (heading through the line before the next `## `), everything else byte-for-byte unchanged. A section is removed only when its heading is exactly the name (the same rule as the section reader), so `## 판단 필요 메모` stays; the old cutter also removed such headings. On every real card in this repository it gives the old cutter's output, so existing spec check confirmation numbers stay valid.
 - Callers:
   - Spec check: the spec path comes from `pick(card).spec`; the card part of its confirmation number comes from `without(card, [decisions, loop])`; the task text says 없음 when `spec` is null.
   - AI review start: the spec placeholder comes from `pick(card).spec`, 없음 when null.

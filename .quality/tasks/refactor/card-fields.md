@@ -31,8 +31,7 @@
 test/card.test.js
 
 ## 루프
-.scratch/card-fields/issues/01-pick-and-spec-link.md
-.scratch/card-fields/issues/03-card-without-sections.md
+.scratch/card-fields/issues/02-picked-option-everywhere.md
 
 ## 성공 조건 → 검사
 - 칸 밖 명세 줄은 명세 없음 → test/card.test.js "a 명세 line outside the interface section is no spec"
@@ -51,6 +50,8 @@ test/card.test.js
 - [x] 이 범위로 진행할까요? · 진행
 - [x] 명세에 '인용·번호 목록·체크박스 줄도 받기'가 들어갔습니다. 원하신 건가요? · 네, 원함
 - [x] 명세(확인 번호 2714)대로 작업을 시작할까요? · 돌려
+- [x] 명세 대조용 카드를 만들 때 '판단 필요 메모'처럼 이름이 이어지는 칸도 뺄까요, 제목이 정확히 같은 칸만 뺄까요? · 정확한 제목만
+- [x] 남은 작업 하나(확인 번호·완료 리뷰 화면·순서 안내도 고른 안 읽기로)를 다음 루프로 돌릴까요? · 다음 루프로
 
 ## 미확인
 - 명세 줄을 칸 밖에 적으면 시작 확인이 빠지는지: 옛 코드로 직접 재현하지 않음(바꾼 뒤에는 세 곳 모두 '명세 없음'으로 봄, 테스트와 안내 글로 확인)
