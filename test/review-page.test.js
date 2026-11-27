@@ -22,12 +22,13 @@ const CARD = `# 일
 - 느린 컴퓨터에서 속도
 `;
 
-function reviewed({ findings = [], card = CARD, config = {} } = {}) {
+function reviewed({ findings = [], card = CARD, config = {}, before = () => {} } = {}) {
   const root = repo({ ...BASIC, review: resultCmd(findings), ...config });
   if (card !== null) write(root, '.quality/tasks/work.md', card);
   write(root, 'src/a.js', '2');
   sh(root, 'git', ['add', '-A']);
   sh(root, 'git', ['commit', '-qm', '마감일 <b>추가</b>']);
+  before(root);
   const r = qh(root, ['review']);
   const file = path.join(root, PAGE);
   return { r, root, html: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null };
@@ -256,4 +257,17 @@ test('review groups all declared waiver reasons in one escaped section', () => {
   for (const reason of reasons.slice(1)) assert.ok(section.includes(reason));
   assert.match(section, /출처: 작업 카드/);
   assert.doesNotMatch(section, /<한 개>/);
+});
+
+test('the page shows the spec check result with the checker limit, and nothing without a record', () => {
+  assert.doesNotMatch(reviewed().html, /명세 대조/);
+  const { html } = reviewed({
+    before: (root) => {
+      write(root, '.quality/evidence/spec-check/result.json', JSON.stringify({ missing: [], extra: [{ where: 'spec', text: '정렬' }], noVisible: [] }));
+      qh(root, ['spec-check', '--result']);
+    },
+  });
+  assert.match(html, /명세 대조/);
+  assert.match(html, /끼어든 말 1/);
+  assert.match(html, /검사자: 에이전트 신고\(기계 확인 아님\)/);
 });

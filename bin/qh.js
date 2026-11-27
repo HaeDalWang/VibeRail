@@ -442,7 +442,8 @@ function runReview(root, config, baseArg) {
 
 function reviewPage(root, config, base, findings) {
   const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
-  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root, base).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
+  const card = taskCard(root, base);
+  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: card.text, cardPath: card.rel, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
   console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
 }

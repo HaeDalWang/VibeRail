@@ -6,6 +6,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] The review page shows the spec check line with the checker limit when a record exists, and nothing when none (visible: the review page)
-- [ ] The qh-cycle skill text carries the announcement, the run step and the summary line
-- [ ] Reference doc and decision log updated
+- [x] The review page shows the spec check line with the checker limit when a record exists, and nothing when none (visible: the review page)
+- [x] The qh-cycle skill text carries the announcement, the run step and the summary line
+- [x] Reference doc and decision log updated

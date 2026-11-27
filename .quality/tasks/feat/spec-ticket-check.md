@@ -27,11 +27,14 @@
 ## 테스트 위치(seam)
 test/spec-check.test.js
 test/confirm.test.js
+test/review-page.test.js
 
 ## 루프
-.scratch/spec-check/issues/02-loop-start-gate.md
+.scratch/spec-check/issues/04-cycle-text-and-review-line.md
 
 ## 판단 필요
+- [x] 완료 리뷰 화면 테스트를 테스트 위치에 더할까요? · 완료 리뷰 화면 더하기
+- [x] 남은 작업(순서 안내 글, 완료 리뷰의 "검사자: 에이전트 신고" 한 줄)을 돌릴까요? · 돌려
 - [x] 리뷰: 카드에 작업이 없으면 명세 대조 지시문을 만들지 않고 멈출까요? · 멈추게 하기
 - [x] 리뷰: 고치기 횟수를 언제 새로 셀까요? · 통과하면 새로
 - [x] 다음 묶음으로 "돌려" 앞 관문을 돌릴까요? · 돌려
