@@ -37,11 +37,12 @@ Missing items and tickets with no visible result are the agent's to fix: it edit
 
 ## Implementation Decisions
 
-- The picked option is B ("있는 흐름에 나눠 얹기", 확인 번호 2521): qh does not launch the meaning check; the agent starts a sub-agent with qh's task and qh validates the result. Reason given: speed.
+- The picked option is B ("있는 흐름에 나눠 얹기", 확인 번호 2521): qh does not launch the meaning check; the agent starts a sub-agent with qh's task and qh validates the result. Reason given: speed. This replaces the grilling scope's "the AI uses the configured review command": with B the meaning check does not run through the review command.
 - New module: spec check. Interface: `qh spec-check --task` writes the task file for the sub-agent (inputs: card, spec and the card's ticket files, all relative paths; output: the result path) and prints how to run it; `qh spec-check --result [file]` validates the result and records it as evidence under the evidence directory (not committed).
 - Result shape (JSON): `{ "missing": [{ "from": "<card line or section>", "text": "<Korean one line>" }], "extra": [{ "where": "<spec or ticket location>", "text": "<Korean one line>" }], "noVisible": [{ "ticket": "<ticket path>", "text": "<Korean one line>" }] }`. All three arrays required; empty arrays mean pass on that axis. Anything else is refused.
 - The record holds: the content number (same 4-digit confirmation number scheme as 확인 번호, over the card's checked sections, the spec and every linked ticket file, whitespace ignored), the result, the round count, and `checker: agent-declared`.
-- Round counting: a recorded result with missing items or tickets with no visible result counts one round for its card. After 2 such rounds, the remaining items become person questions instead of agent instructions.
+- Round counting: a recorded result with missing items or tickets with no visible result counts one round for its card. A pass starts the count again (review answer "통과하면 새로").
+- `--task` on a card that links no ticket files writes no task and stops with a message (review answer "멈추게 하기"). After 2 such rounds, the remaining items become person questions instead of agent instructions.
 - Gate: the existing spec confirmation (loop start) is preceded by the spec check items in the same blocking question list (waivers/confirms):
   - no record for the current content number → agent item: run `qh spec-check --task`, then the sub-agent, then `--result`;
   - missing / noVisible within 2 rounds → agent item: fix spec or tickets, rerun;
@@ -59,6 +60,7 @@ Missing items and tickets with no visible result are the agent's to fix: it edit
 - Test only behaviour visible at the two agreed seams; internals (number computation, rule details) may change without breaking tests.
 - Seam 1, the spec-check command (`test/spec-check.test.js`): `--task` writes a task naming the card, spec and tickets and the result path; `--result` accepts a well-formed file and records it, refuses a malformed one with the reason and records nothing.
 - Seam 2, the pending question list (`test/confirm.test.js`): with tickets and no record, the spec confirmation is absent and an agent item to run the check is present; a shape problem (ticket with no acceptance box, missing blocker) shows as a policy problem; a pass for the current content brings the spec confirmation; changed content brings the agent item back; unrequested items become person questions and answered ones do not return; after 2 failing rounds missing items become person questions; a card without tickets gets nothing.
+- Seam 3, the completion review page (`test/review-page.test.js`, added by the person's answer "완료 리뷰 화면 더하기"): the spec check line with the checker limit when a record exists, nothing when none.
 - Prior art: `test/confirm.test.js` (confirmation numbers bound to content, questions from the card), `test/pr-gate.test.js` (fake review command writing result.json).
 
 ## Out of Scope

@@ -33,6 +33,7 @@ test('--task writes a task naming the card, spec, tickets and result path, and s
   const task = fs.readFileSync(path.join(root, taskRel), 'utf8');
   for (const rel of ['.quality/tasks/work.md', SPEC, T1, T2, RESULT]) assert.ok(task.includes(rel), `task names ${rel}`);
   assert.match(r.stdout, /spec-check --result/, 'the output says how to record the result');
+  assert.match(task, /명세에 'OO'가 들어갔습니다\. 원하신 건가요\?/, 'the task shows the question each text goes into, so it is a short name');
 });
 
 const RECORDS = '.quality/evidence/spec-check/records.json';

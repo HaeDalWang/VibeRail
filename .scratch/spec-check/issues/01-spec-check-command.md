@@ -10,3 +10,5 @@
 - [x] `--result` with a well-formed file records it with the content number and `checker: agent-declared`
 - [x] `--result` with a malformed file (missing array, wrong item shape, not JSON) is refused with the reason; nothing is recorded
 - [x] A recorded result with missing items or tickets with no visible result counts one round for the card
+- [x] `--task` on a card with no linked tickets writes no task and stops (visible: the message)
+- [x] Fix rounds count again from 1 after a pass (visible: `--result` output)
