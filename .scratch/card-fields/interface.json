@@ -1,0 +1,25 @@
+{
+  "title": "카드 읽기 모으기 — 카드 모듈 모양",
+  "options": [
+    {
+      "id": "A",
+      "name": "칸별로 묻는 함수 세 개 추가",
+      "summary": "카드 모듈에 함수 세 개를 더합니다. ① 고른 안 읽기: 안·확인 번호·이유·설계안·명세를 한 번에 돌려줌 ② 칸 목록 읽기: 성공 조건·미확인 같은 칸의 목록 줄을 돌려줌 ③ 비교용 카드: 판단 필요·루프 칸을 뺀 카드. 부르는 곳은 지금처럼 카드 글을 넘기고, 직접 자르던 부분만 이 함수로 바꿉니다.",
+      "mermaid": "flowchart LR\n  T[카드 글] --> K[카드 모듈]\n  K -->|고른 안 읽기| C[확인 질문]\n  K -->|고른 안 읽기| S[명세 대조]\n  K -->|고른 안 읽기| Q[AI 리뷰 시작]\n  K -->|고른 안 읽기 + 칸 목록| R[완료 리뷰 화면]\n  K -->|고른 안 읽기| Y[순서 안내]\n  K -->|비교용 카드| S",
+      "gain": "바뀌는 곳이 작습니다. 이미 카드 모듈로 옮긴 '판단 필요' 읽기와 테스트 위치 읽기는 그대로 둡니다. 줄 모양 규칙(목록 표시·굵게·들여쓰기)이 '고른 안 읽기' 한 곳에만 있습니다.",
+      "cost": "카드 모듈에 함수가 여럿 나란히 있게 됩니다(지금 것 + 세 개). 부르는 곳이 어느 함수를 쓸지 골라야 합니다.",
+      "signature": "pick(card) → { id, number|null, reason|null, design|null, spec|null }\nitems(card, sectionName) → string[]   // 목록 표시 뺀 줄\nwithout(card, sectionNames) → string   // 명세 대조 확인 번호용\nSECTIONS += { success: '성공 조건 → 검사', unsure: '미확인' }",
+      "seam": "test/card.test.js"
+    },
+    {
+      "id": "B",
+      "name": "카드를 한 번에 읽는 함수 하나",
+      "summary": "카드 모듈에 '카드 읽기' 하나만 둡니다. 카드 글을 넣으면 고른 안·이유·설계안·명세·성공 조건·미확인·판단 필요·테스트 위치·루프·비교용 카드가 모두 든 묶음 하나를 돌려줍니다. 부르는 곳은 모두 이 묶음에서 꺼내 씁니다. 지금 있는 '판단 필요 읽기'·'테스트 위치 읽기'도 이 묶음 안으로 들어갑니다.",
+      "mermaid": "flowchart LR\n  T[카드 글] --> K[카드 읽기: 묶음 하나]\n  K --> C[확인 질문]\n  K --> S[명세 대조]\n  K --> Q[AI 리뷰 시작]\n  K --> R[완료 리뷰 화면]\n  K --> Y[순서 안내]\n  K --> P[PR 막기·면제]",
+      "gain": "부르는 곳이 배울 것이 함수 하나입니다. 카드 모양에 관한 모든 것이 한 묶음에 있습니다.",
+      "cost": "바뀌는 곳이 큽니다. 지난 점검에서 이미 옮긴 '판단 필요' 읽기를 쓰는 곳(PR 막기·면제·형식 검사)까지 다시 고쳐야 해서, 정한 범위를 넘습니다. 필요 없는 칸까지 매번 읽습니다.",
+      "signature": "readCard(card) → { pick: { id, number, reason, design, spec }, success: string[], unsure: string[], decisions: { open, plain, answered }, seams: string[], loop: string[], checked: string }",
+      "seam": "test/card.test.js"
+    }
+  ]
+}

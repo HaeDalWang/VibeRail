@@ -168,3 +168,83 @@ test('an indented or star open question reaches the PR gate and the format check
   assert.match(policyOf(root), /체크박스 없는 항목[\s\S]*"체크 없는 항목"/);
   assert.doesNotMatch(policyOf(root), /참고 설명/);
 });
+
+// The picked option and its links, read only inside `## interface 결정` (card-fields spec).
+const pickCard = (body, rest = '') => `# 카드\n## 의도\n고친다\n${rest}\n## interface 결정\n${body}\n\n## 테스트 위치(seam)\ntest/a.test.js\n`;
+
+test('a 명세 line outside the interface section is no spec', () => {
+  const { pick } = require('../lib/card');
+  assert.strictEqual(pick(pickCard('안: A\n이유: 고른 이유입니다', '명세: .scratch/x/spec.md\n')).spec, null);
+  assert.strictEqual(pick(pickCard('안: A\n명세: .scratch/x/spec.md')).spec, '.scratch/x/spec.md');
+});
+
+test('the 안 line gives its id, confirmation number and whole value', () => {
+  const { pick } = require('../lib/card');
+  const p = pick(pickCard('- 안: B (설명 — f(x)) · 확인 번호 1234'));
+  assert.strictEqual(p.id, 'B');
+  assert.strictEqual(p.number, '1234');
+  assert.strictEqual(p.text, 'B (설명 — f(x)) · 확인 번호 1234');
+  assert.strictEqual(pick(pickCard('안: C')).number, null);
+});
+
+test('field lines are read in common markdown shapes', () => {
+  const { pick } = require('../lib/card');
+  for (const line of ['**이유**：고른 이유입니다', '  이유: 고른 이유입니다', '- 이유: 고른 이유입니다', '> 이유: 고른 이유입니다', '1. 이유: 고른 이유입니다', '- [x] 이유: 고른 이유입니다', '**이유:** 고른 이유입니다']) {
+    assert.strictEqual(pick(pickCard(`안: A\n${line}`)).reason, '고른 이유입니다', line);
+  }
+});
+
+test('backticks around the 설계안 and 명세 paths are removed', () => {
+  const { pick } = require('../lib/card');
+  const p = pick(pickCard('안: A\n설계안: `.scratch/x/interface.json`\n- 명세: `.scratch/x/spec.md`'));
+  assert.strictEqual(p.design, '.scratch/x/interface.json');
+  assert.strictEqual(p.spec, '.scratch/x/spec.md');
+});
+
+test('a missing section or field is null', () => {
+  const { pick } = require('../lib/card');
+  const none = { text: null, id: null, number: null, reason: null, design: null, spec: null };
+  assert.deepStrictEqual(pick('# 카드\n## 의도\n고친다\n'), none);
+  assert.deepStrictEqual(pick(pickCard('이유:\n<!-- 안: Z -->')), none);
+  assert.deepStrictEqual(pick(''), none);
+});
+
+test('without removes exactly the named sections and leaves the rest unchanged', () => {
+  const { without } = require('../lib/card');
+  const card = '# 카드\n## 의도\n고친다\n\n## 판단 필요\n- [x] 질문 · 네\n\n## 판단 필요 메모\n남는다\n## 루프\n.scratch/a/issues/01-a.md\n## 미확인\n- 없음';
+  assert.strictEqual(without(card, ['판단 필요', '루프']), '# 카드\n## 의도\n고친다\n\n## 판단 필요 메모\n남는다\n## 미확인\n- 없음');
+  assert.strictEqual(without(card, []), card);
+});
+
+test('without matches the old spec check cutter on every real task card', () => {
+  const { without } = require('../lib/card');
+  const old = (card) => card.split(/^(?=## )/m).filter((s) => !s.startsWith('## 판단 필요') && !s.startsWith('## 루프')).join('');
+  const dir = path.join(__dirname, '..', '.quality', 'tasks');
+  const cards = fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.md'));
+  assert.ok(cards.length > 10);
+  for (const f of cards) {
+    const card = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.strictEqual(without(card, ['판단 필요', '루프']), old(card), f);
+  }
+});
+
+test('items gives the list lines of a section without markers, at any indentation', () => {
+  const { items, SECTIONS } = require('../lib/card');
+  const card = `# 카드\n## ${SECTIONS.success}\n- 첫째 → test/a.test.js "a"\n  * 둘째\n+ 셋째\n그냥 글\n\n## ${SECTIONS.unsure}\n- 모름\n`;
+  assert.deepStrictEqual(items(card, SECTIONS.success), ['첫째 → test/a.test.js "a"', '둘째', '셋째']);
+  assert.deepStrictEqual(items(card, SECTIONS.unsure), ['모름']);
+  assert.deepStrictEqual(items(card, SECTIONS.loop), []);
+});
+
+test('the section names include success conditions and unconfirmed', () => {
+  const { SECTIONS } = require('../lib/card');
+  assert.strictEqual(SECTIONS.success, '성공 조건 → 검사');
+  assert.strictEqual(SECTIONS.unsure, '미확인');
+});
+
+test('lines gives every non-empty line of a section, list markers removed', () => {
+  const { lines, SECTIONS } = require('../lib/card');
+  const card = `# 카드\n## ${SECTIONS.unsure}\n그냥 문장으로 적은 것\n- 목록으로 적은 것\n\n  * 들여 쓴 것\n## 다음\n- 아님\n`;
+  assert.deepStrictEqual(lines(card, SECTIONS.unsure), ['그냥 문장으로 적은 것', '목록으로 적은 것', '들여 쓴 것']);
+  assert.deepStrictEqual(lines(card, SECTIONS.loop), []);
+});
