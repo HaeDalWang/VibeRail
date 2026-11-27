@@ -95,3 +95,13 @@ test('fix rounds count again from 1 after a pass', () => {
   send({ missing: [], extra: [], noVisible: [] });
   assert.match(send(gap), /고치기 1번째/);
 });
+
+test('--result does not overwrite a records file it cannot read', () => {
+  const root = setup();
+  write(root, RECORDS, '{ broken');
+  write(root, RESULT, JSON.stringify({ missing: [], extra: [], noVisible: [] }));
+  const r = qh(root, ['spec-check', '--result']);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stdout, /기록 파일/);
+  assert.strictEqual(fs.readFileSync(path.join(root, RECORDS), 'utf8'), '{ broken', 'left as it was');
+});
