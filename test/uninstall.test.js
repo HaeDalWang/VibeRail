@@ -21,6 +21,9 @@ function project(files) {
 }
 
 const exists = (root, rel) => fs.existsSync(path.join(root, rel));
+// The gitignore lines that still protect a file after uninstall (the code map's settings, when it is installed).
+const { IGNORED } = require('../lib/init');
+const stillProtected = (root) => IGNORED.filter((l) => exists(root, l)).map((l) => `${l}\n`).join('');
 const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 function commitAll(root, msg) {
@@ -47,11 +50,22 @@ test('uninstall removes what init added and keeps the person\'s own content', ()
   }
   assert.strictEqual(read(root, 'AGENTS.md'), '# My rules\n\nBe kind.\n');
   assert.strictEqual(read(root, 'CLAUDE.md'), '@AGENTS.md\n\nMy note.\n');
-  assert.strictEqual(read(root, '.gitignore'), 'node_modules/\n');
+  assert.strictEqual(read(root, '.gitignore'), `node_modules/\n${stillProtected(root)}`);
   const settings = JSON.parse(read(root, '.claude/settings.json'));
   assert.deepStrictEqual(settings, JSON.parse(MINE['.claude/settings.json']), 'only the person\'s hook is left');
   assert.ok(exists(root, '.quality/config.json'), 'the person\'s criteria stay');
   assert.match(r.stdout, /code-review-graph uninstall/, 'the code map has its own uninstall: one step is printed');
+});
+
+test('uninstall keeps the gitignore lines of files it leaves behind (map settings, word list, measurements)', () => {
+  const root = project(MINE);
+  assert.strictEqual(qh(root, ['init', root]).status, 0);
+  commitAll(root, 'chore: qh 설치');
+  for (const rel of ['.mcp.json', '.kiro/settings/mcp.json', '.quality/me.md', '.quality/metrics.csv', '.quality/reports/a.html']) write(root, rel, 'x\n');
+  assert.strictEqual(qh(root, ['uninstall']).status, 0);
+  const lines = read(root, '.gitignore').split('\n');
+  for (const kept of ['.mcp.json', '.kiro/settings/mcp.json', '.quality/me.md', '.quality/metrics.csv', '.quality/reports/']) assert.ok(lines.includes(kept), `${kept} still protects a file that stays`);
+  assert.ok(!lines.includes('.quality/evidence/'), 'the evidence cache is deleted, so its line goes');
 });
 
 test('uninstall removes the files init created from nothing, and is safe to run twice', () => {
@@ -59,7 +73,10 @@ test('uninstall removes the files init created from nothing, and is safe to run 
   assert.strictEqual(qh(root, ['init', root]).status, 0);
   commitAll(root, 'chore: qh 설치');
   assert.strictEqual(qh(root, ['uninstall']).status, 0);
-  for (const gone of ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', '.gitignore']) assert.ok(!exists(root, gone), `${gone} was created by init`);
+  for (const gone of ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json']) assert.ok(!exists(root, gone), `${gone} was created by init`);
+  const left = stillProtected(root);
+  if (left) assert.strictEqual(read(root, '.gitignore'), left);
+  else assert.ok(!exists(root, '.gitignore'), '.gitignore was created by init');
   assert.strictEqual(qh(root, ['uninstall']).status, 0);
 });
 
