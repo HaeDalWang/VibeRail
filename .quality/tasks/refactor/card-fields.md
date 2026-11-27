@@ -20,6 +20,14 @@
 
 ## 용어
 
+## interface 결정
+안: A (칸별로 묻는 함수 세 개 추가 — lib/card.js pick(card)·items(card, name)·without(card, names)) · 확인 번호 0056
+이유: 읽는 장소가 한곳이므로
+설계안: .scratch/card-fields/interface.json
+
+## 테스트 위치(seam)
+test/card.test.js
+
 ## 판단 필요
 - [x] 명세 연결 줄('명세: 파일')을 카드의 어디에서 찾을까요? · 설계 결정 칸 안만
 - [x] '안:'·'이유:'·'설계안:'·'명세:' 줄의 모양을 어디까지 받을까요? · 너그럽게 통일
