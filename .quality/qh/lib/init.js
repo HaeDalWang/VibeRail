@@ -114,6 +114,7 @@ const FINDINGS_SCHEMA = JSON.stringify({
 });
 const TO_RESULT = "let s='';process.stdin.on('data',(d)=>{s+=d}).on('end',()=>process.stdout.write(JSON.stringify(JSON.parse(s).structured_output.findings)))";
 const CLAUDE_REVIEW_CMD = `claude -p "$(cat {task})" --tools Read,Grep,Glob --strict-mcp-config --permission-mode dontAsk --no-session-persistence`
+  + ` --settings '{"disableAllHooks":true}'`
   + ` --append-system-prompt '파일 도구는 읽기 전용이다. result.json을 쓰지 말고, 그 배열을 findings에 담아 답한다.'`
   + ` --output-format json --json-schema '${FINDINGS_SCHEMA}' | node -e "${TO_RESULT}" > {out}/result.json`;
 
