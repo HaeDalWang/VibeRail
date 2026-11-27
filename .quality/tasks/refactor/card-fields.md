@@ -24,6 +24,7 @@
 안: A (칸별로 묻는 함수 세 개 추가 — lib/card.js pick(card)·items(card, name)·without(card, names)) · 확인 번호 0056
 이유: 읽는 장소가 한곳이므로
 설계안: .scratch/card-fields/interface.json
+명세: .scratch/card-fields/spec.md
 
 ## 테스트 위치(seam)
 test/card.test.js
