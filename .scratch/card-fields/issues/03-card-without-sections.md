@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] `without` removes exactly the named sections (heading up to the next `## `) and leaves the rest unchanged
-- [ ] On every real task card in this repository, `without(card, [판단 필요, 루프])` equals the old cutter's output
-- [ ] The spec check no longer cuts the card itself; all existing tests pass
-- [ ] Visible: the spec check confirmation number of this repository's last passed card is the same before and after
+- [x] `without` removes exactly the named sections (heading up to the next `## `) and leaves the rest unchanged
+- [x] On every real task card in this repository, `without(card, [판단 필요, 루프])` equals the old cutter's output
+- [x] The spec check no longer cuts the card itself; all existing tests pass
+- [x] Visible: the spec check confirmation number of this repository's last passed card is the same before and after

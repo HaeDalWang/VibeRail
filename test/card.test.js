@@ -208,3 +208,22 @@ test('a missing section or field is null', () => {
   assert.deepStrictEqual(pick(pickCard('이유:\n<!-- 안: Z -->')), none);
   assert.deepStrictEqual(pick(''), none);
 });
+
+test('without removes exactly the named sections and leaves the rest unchanged', () => {
+  const { without } = require('../lib/card');
+  const card = '# 카드\n## 의도\n고친다\n\n## 판단 필요\n- [x] 질문 · 네\n\n## 판단 필요 메모\n남는다\n## 루프\n.scratch/a/issues/01-a.md\n## 미확인\n- 없음';
+  assert.strictEqual(without(card, ['판단 필요', '루프']), '# 카드\n## 의도\n고친다\n\n## 판단 필요 메모\n남는다\n## 미확인\n- 없음');
+  assert.strictEqual(without(card, []), card);
+});
+
+test('without matches the old spec check cutter on every real task card', () => {
+  const { without } = require('../lib/card');
+  const old = (card) => card.split(/^(?=## )/m).filter((s) => !s.startsWith('## 판단 필요') && !s.startsWith('## 루프')).join('');
+  const dir = path.join(__dirname, '..', '.quality', 'tasks');
+  const cards = fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.md'));
+  assert.ok(cards.length > 10);
+  for (const f of cards) {
+    const card = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.strictEqual(without(card, ['판단 필요', '루프']), old(card), f);
+  }
+});

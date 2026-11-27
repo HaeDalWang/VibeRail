@@ -40,6 +40,8 @@ test/card.test.js
 - 여러 모양의 줄을 같게 읽음 → test/card.test.js "field lines are read in common markdown shapes"
 - 경로의 백틱 제거 → test/card.test.js "backticks around the 설계안 and 명세 paths are removed"
 - 없는 칸·줄은 null → test/card.test.js "a missing section or field is null"
+- 이름 준 칸만 빼고 나머지는 그대로 → test/card.test.js "without removes exactly the named sections and leaves the rest unchanged"
+- 실제 카드 모두에서 옛 자르기와 같은 결과 → test/card.test.js "without matches the old spec check cutter on every real task card"
 
 ## 판단 필요
 - [x] 명세 연결 줄('명세: 파일')을 카드의 어디에서 찾을까요? · 설계 결정 칸 안만
@@ -51,4 +53,4 @@ test/card.test.js
 - [x] 명세(확인 번호 2714)대로 작업을 시작할까요? · 돌려
 
 ## 미확인
-- 명세 줄을 칸 밖에 적으면 시작 확인이 빠지는지: 재현 전
+- 명세 줄을 칸 밖에 적으면 시작 확인이 빠지는지: 옛 코드로 직접 재현하지 않음(바꾼 뒤에는 세 곳 모두 '명세 없음'으로 봄, 테스트와 안내 글로 확인)
