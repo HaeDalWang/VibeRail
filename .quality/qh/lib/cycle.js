@@ -110,4 +110,4 @@ function cycleLines(root, card, { always = false } = {}) {
   return [...lines, architectureDue(root)].filter(Boolean);
 }
 
-module.exports = { cycleLines };
+module.exports = { cycleLines, ticketPaths };

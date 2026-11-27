@@ -142,6 +142,7 @@ test('the spec is asked once the loop lists tickets', () => {
   const root = specRepo();
   assert.deepStrictEqual(confirms(root), [], 'no loop paths yet');
   write(root, '.quality/tasks/work.md', specCard(LOOP));
+  checkResult(root, {});
   const [q] = confirms(root);
   assert.match(q.user, /^명세\(확인 번호 \d{4}\)대로 작업을 시작할까요\?$/);
   write(root, '.quality/tasks/work.md', specCard(LOOP, `- [x] ${q.user} · 돌려`));
@@ -157,6 +158,7 @@ test('the spec is asked once the loop lists tickets', () => {
 test('a changed spec asks again with the changed lines', () => {
   const root = specRepo();
   write(root, '.quality/tasks/work.md', specCard(LOOP));
+  checkResult(root, {});
   const [start] = confirms(root);
   write(root, '.quality/tasks/work.md', specCard(LOOP, `- [x] ${start.user} · 돌려`));
   sh(root, 'git', ['add', '-A']);
@@ -195,4 +197,113 @@ test('a fresh pick after an earlier answer is bound', () => {
   write(root, '.quality/tasks/work.md', card(`안: A · 확인 번호 ${fresh}`, `- [x] ${q.user} · 네`));
   assert.notStrictEqual(fresh, number);
   assert.deepStrictEqual(confirms(root), []);
+});
+
+// Ticket shape (명세 대조 rules): problems with the tickets a card links show in the normal check.
+const TK = (n, { blocked = 'None (can start immediately)', box = '- [ ] it works' } = {}) => `# ${n}: t\n\n**Blocked by:** ${blocked}\n\n**Status:** ready-for-agent\n\n${box}\n`;
+function ticketed(tickets) {
+  const rels = Object.keys(tickets);
+  const root = repo(BASIC, { '.scratch/f/spec.md': '# Spec\n' });
+  for (const [rel, body] of Object.entries(tickets)) if (body !== null) write(root, rel, body);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\nx\n\n## interface 결정\n안: A\n이유: 쉽다\n명세: .scratch/f/spec.md\n작업: ${rels.join(' ')}\n\n## 판단 필요\n`);
+  return root;
+}
+const shape = (root) => statusJson(root).policy.filter((p) => /작업 파일/.test(p));
+
+test('ticket shape problems show in the normal check, naming the ticket', () => {
+  const T1 = '.scratch/f/issues/01-a.md';
+  const T2 = '.scratch/f/issues/02-b.md';
+  assert.deepStrictEqual(shape(ticketed({ [T1]: TK('01'), [T2]: TK('02', { blocked: '01' }) })), [], 'well-formed tickets show nothing');
+  const noBox = shape(ticketed({ [T1]: TK('01', { box: '' }) }));
+  assert.strictEqual(noBox.length, 1);
+  assert.match(noBox[0], /01-a\.md.*완료 조건/);
+  const badBlocker = shape(ticketed({ [T1]: TK('01'), [T2]: TK('02', { blocked: '01, 05' }) }));
+  assert.strictEqual(badBlocker.length, 1);
+  assert.match(badBlocker[0], /02-b\.md.*05/);
+  const gone = shape(ticketed({ [T1]: TK('01'), [T2]: null }));
+  assert.strictEqual(gone.length, 1);
+  assert.match(gone[0], /02-b\.md.*없/);
+});
+
+test('a card with no linked tickets shows no ticket shape problem', () => {
+  const root = repo(BASIC);
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\nx\n`);
+  assert.deepStrictEqual(shape(root), []);
+});
+
+// The spec check gate (명세 대조): "돌려" is asked only after the check passed for the current content.
+const G1 = '.scratch/f/issues/01-a.md';
+const gateCard = (answers = '') => `${DECLARED}## 의도\n\n할 일을 지운다\n\n## interface 결정\n명세: ${SPEC}\n작업: ${G1}\n\n## 루프\n${G1}\n\n## 판단 필요\n${answers}\n`;
+function gated(answers) {
+  const root = repo(BASIC, { [SPEC]: SPEC_TEXT });
+  write(root, G1, TK('01'));
+  write(root, '.quality/tasks/work.md', gateCard(answers));
+  return root;
+}
+const checkResult = (root, result) => {
+  write(root, '.quality/evidence/spec-check/result.json', JSON.stringify({ missing: [], extra: [], noVisible: [], ...result }));
+  const r = qh(root, ['spec-check', '--result']);
+  assert.strictEqual(r.status, 0, r.stdout);
+};
+const gateOf = (root) => {
+  const s = statusJson(root);
+  return { agent: s.policy.filter((p) => /명세 대조/.test(p)), start: s.waivers.filter((w) => /^명세\(확인 번호/.test(w.user)), asked: s.waivers.filter((w) => /명세·작업에 없습니다|끝나도 확인할 것이 없습니다|들어갔습니다/.test(w.user)).map((w) => w.user) };
+};
+
+test('with tickets and no spec check record, the agent is told to run it and "돌려" is not asked', () => {
+  const g = gateOf(gated());
+  assert.strictEqual(g.agent.length, 1, 'one agent item');
+  assert.deepStrictEqual(g.start, [], 'no spec confirmation before the check');
+});
+
+test('a pass for the current content brings "돌려"; changed content brings the check back', () => {
+  const root = gated();
+  checkResult(root, {});
+  let g = gateOf(root);
+  assert.deepStrictEqual(g.agent, []);
+  assert.strictEqual(g.start.length, 1, 'the spec confirmation is asked');
+  write(root, G1, TK('01', { box: '- [x] it works' }).replace('ready-for-agent', 'ready-for-human'));
+  assert.deepStrictEqual(gateOf(root).agent, [], 'ticking a box or setting the status is not a content change');
+  write(root, G1, TK('01', { box: '- [ ] it works\n- [ ] it also sorts' }));
+  g = gateOf(root);
+  assert.strictEqual(g.agent.length, 1, 'a changed ticket needs the check again');
+  assert.deepStrictEqual(g.start, []);
+});
+
+test('an unrequested item is asked once; yes settles it on rerun, another answer tells the agent to remove it', () => {
+  const root = gated();
+  checkResult(root, { extra: [{ where: 'spec', text: '정렬' }] });
+  const g = gateOf(root);
+  assert.deepStrictEqual(g.asked, ["명세에 '정렬'가 들어갔습니다. 원하신 건가요?"]);
+  assert.deepStrictEqual(g.start, [], 'not before it is answered');
+  write(root, '.quality/tasks/work.md', gateCard(`- [x] ${g.asked[0]} · 네`));
+  checkResult(root, { extra: [{ where: 'spec', text: '정렬' }] });
+  assert.deepStrictEqual(gateOf(root).asked, [], 'the answer survives a rerun');
+  assert.strictEqual(gateOf(root).start.length, 1);
+  write(root, '.quality/tasks/work.md', gateCard(`- [x] ${g.asked[0]} · 아니요 빼 주세요`));
+  const no = gateOf(root);
+  assert.deepStrictEqual(no.asked, []);
+  assert.strictEqual(no.agent.length, 1);
+  assert.match(no.agent[0], /아니요 빼 주세요.*빼고/);
+});
+
+test('missing items and tickets with nothing to see are the agent\'s for 2 rounds, then the person\'s', () => {
+  const root = gated();
+  const gap = { missing: [{ from: '의도', text: '지우기' }], noVisible: [{ ticket: G1, text: '볼 것 없음' }] };
+  checkResult(root, gap);
+  let g = gateOf(root);
+  assert.strictEqual(g.agent.length, 1, 'round 1: the agent fixes');
+  assert.deepStrictEqual(g.asked, []);
+  write(root, SPEC, `${SPEC_TEXT}\nround 2\n`);
+  checkResult(root, gap);
+  g = gateOf(root);
+  assert.deepStrictEqual(g.agent, []);
+  assert.deepStrictEqual(g.asked, ["작업 카드의 '지우기'가 명세·작업에 없습니다. 빼고 진행할까요?", "작업 '01'은 끝나도 확인할 것이 없습니다. 그대로 진행할까요?"]);
+  assert.deepStrictEqual(g.start, []);
+});
+
+test('a card with no linked tickets gets no spec check item', () => {
+  const root = repo(BASIC, { [SPEC]: SPEC_TEXT });
+  write(root, '.quality/tasks/work.md', `${DECLARED}## 의도\n\nx\n\n## interface 결정\n명세: ${SPEC}\n\n## 판단 필요\n`);
+  assert.deepStrictEqual(gateOf(root), { agent: [], start: [], asked: [] });
 });

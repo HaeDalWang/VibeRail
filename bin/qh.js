@@ -357,6 +357,7 @@ function assess(root, phase = 'stop', baseRef) {
   const checks = req.names.map((n) => (config.checks?.[n] ? checkStatus(root, n, now) : { name: n, state: '실패', detail: ['config.checks에 정의가 없다'] }));
   const undeclared = [...new Set(checks.filter((c) => c.isCurrent && c.result?.undeclared).flatMap((c) => c.result.undeclared))];
   const card = taskCard(root, base);
+  const specGate = require('../lib/spec-check').gate(root, card);
   const red = phase === 'pr' ? redCheck.readRedCheck(root, now) : null;
   const criteria = changed.length ? configChanges(root, base, config, card.text) : [];
   const shape = structureResult(root, { changed, base, phase, tree: now, structure: config.structure });
@@ -375,6 +376,8 @@ function assess(root, phase = 'stop', baseRef) {
       ...(red?.state === '막음' ? [`TDD RED: ${redCheck.BLOCK} → 기준 코드에서 실패하는 테스트를 추가한다`] : []),
       ...(changed.length ? policyProblems(root, { changed, risks: req.risks, isCriteriaChanged: criteria.length > 0, card: card.text, cardPath: card.rel, base, answers: require('../lib/questions').effectiveAnswers(root, config) }) : []),
       ...cardFormatProblems(card),
+      ...require('../lib/spec-check').shapeProblems(root, card),
+      ...specGate.agent,
       ...(phase === 'pr' ? require('../lib/history-secrets').historySecretProblems(root, base) : []),
     ],
     structure: shape.problems,
@@ -383,7 +386,7 @@ function assess(root, phase = 'stop', baseRef) {
     shapeSkipped: shape.skipped,
     policyWarnings: changed.length ? require('../lib/glossary-check').glossaryWarnings(root, { changed, base }) : [],
     decisions: decisions(card.text).open,
-    waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...require('../lib/confirm').pendingConfirms(root, { card: card.text })],
+    waivers: [...waivers.pendingWaivers(root, { card: card.text, changed }), ...specGate.person, ...require('../lib/confirm').pendingConfirms(root, { card: card.text, isSpecChecked: specGate.passed })],
     taskQuestions: require('../lib/questions').pendingTaskQuestions(req.risks, card.text),
     undeclared,
     accessLevels: readJsonAt(root, null, ACCESS_FILE).levels || [],
@@ -439,7 +442,8 @@ function runReview(root, config, baseArg) {
 
 function reviewPage(root, config, base, findings) {
   const level = config.answers?.level?.choice === 'B' ? 'B' : 'A';
-  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: taskCard(root, base).text, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
+  const card = taskCard(root, base);
+  const file = require('../lib/review-page').writeReviewPage(root, { base, treeHash: treeHash(root), level, card: card.text, cardPath: card.rel, changed: changedFiles(root, base), checks: Object.keys(config.checks || {}), findings });
   console.log(`완료 리뷰 화면: ${file}\n◆③ 때 사용자에게 경로를 주지 말고 ${require('../lib/view').OPEN_HINT}.`);
   return EXIT.ok;
 }
@@ -696,6 +700,7 @@ const USAGE = `사용: qh <명령>
   uninstall            qh가 init으로 더한 것(복사본·hook·규칙 블록·skill)을 걷어내고 사용자의 내용은 둠
   confirm              사용자가 지금 품질 기준(설정·권한 표)을 확인했다고 결정 로그에 기록 (바뀌면 다시 물음)
   baseline             구조 도구(미사용·순환 참조·유사 함수)의 지금 항목을 ${repoTools.BASELINE_FILE}에 기록
+  spec-check --task | --result [파일]  명세 대조: 하위 AI 지시문을 쓰고, 그 결과를 확인해 기록
   hook session-start | hook stop`;
 
 function main(argv) {
@@ -707,6 +712,7 @@ function main(argv) {
   if (cmd === 'routes' && rest.includes('--baseline')) return cmdRoutesBaseline(root, rest);
   if (cmd === 'check') return cmdCheck(root, rest.filter((x) => x !== '--pr'), { phase: rest.includes('--pr') ? 'pr' : 'stop' });
   if (cmd === 'baseline') return cmdBaseline(root);
+  if (cmd === 'spec-check') return require('../lib/spec-check').run(root, rest, taskCard(root));
   if (cmd === 'confirm') return cmdConfirm(root);
   if (cmd === 'doctor') {
     const problems = doctor(root);
