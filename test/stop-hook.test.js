@@ -118,18 +118,16 @@ test('stop hands the agent a plain sentence for the person, and shows the person
   assert.doesNotMatch(repeat.systemMessage, DEVELOPER_WORDS);
 });
 
-test('a decision the agent already asked about in its last message is not asked again', () => {
+test('a decision is asked only when the last message holds its question text', () => {
   const root = repo(BASIC);
-  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 범위 확인\n');
+  write(root, '.quality/tasks/work.md', '## 판단 필요\n- [ ] 이 범위로 만들어도 될까요?\n');
   qh(root, ['check']);
-  const asked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '이 범위로 만들어도 될까요?' });
+  const asked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '정리했습니다.\n이 범위로  만들어도 될까요?' });
   const out = stopDecision(qh(root, ['hook', 'stop'], asked));
-  assert.notStrictEqual(out?.decision, 'block', 'the agent asked: handing it back makes the person read the same question twice');
-  assert.doesNotMatch(out?.systemMessage || '', /범위 확인/);
-  const askedPolitely = JSON.stringify({ stop_hook_active: false, last_assistant_message: '고른 안과 이유를 이 창에 붙여 넣어 주세요.' });
-  assert.notStrictEqual(stopDecision(qh(root, ['hook', 'stop'], askedPolitely))?.decision, 'block', 'a Korean request without "?" is still a question (seen in the sandbox run)');
-  const notAsked = JSON.stringify({ stop_hook_active: false, last_assistant_message: '다 만들었습니다.' });
-  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], notAsked)).decision, 'block', 'an answer that asks nothing still gets turned back');
+  assert.notStrictEqual(out?.decision, 'block', 'the agent asked the card question: handing it back makes the person read it twice');
+  assert.doesNotMatch(out?.systemMessage || '', /범위로/);
+  const otherQuestion = JSON.stringify({ stop_hook_active: false, last_assistant_message: '다른 것도 고칠까요? 붙여 넣어 주세요.' });
+  assert.strictEqual(stopDecision(qh(root, ['hook', 'stop'], otherQuestion)).decision, 'block', 'a "?" or "주세요" alone is not asking the card question (decision 2026-11-27)');
 });
 
 test('unexpected stop errors block once per distinct message and session with a user notice', () => {
