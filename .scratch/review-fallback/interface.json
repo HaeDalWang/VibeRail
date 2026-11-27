@@ -1,0 +1,25 @@
+{
+  "title": "대신 돌릴 리뷰 — 설정 모양",
+  "options": [
+    {
+      "id": "A",
+      "name": "대신 돌릴 명령 칸 하나 추가",
+      "summary": "리뷰 설정에 '대신 돌릴 명령(sameAiCmd)' 칸을 하나 더합니다. 첫 명령이 실패하면 이 명령을 한 번 돌립니다. 이 칸으로 돈 리뷰는 늘 '같은 AI가 봄'으로 표시합니다.",
+      "mermaid": "flowchart LR\n  R[리뷰 시작] --> K[첫 명령: Kiro]\n  K -->|성공| D[완료]\n  K -->|실패| C[대신 명령: 새 Claude]\n  C -->|성공| S[완료 + 같은 AI가 봄 + Kiro 실패 이유]\n  C -->|실패| E[멈춤: 두 이유 기록]",
+      "gain": "칸 이름이 뜻을 말해 줍니다. '같은 AI가 봄' 표시가 설정에서 바로 나옵니다. 지금 설정은 그대로 둬도 됩니다.",
+      "cost": "대신 돌릴 명령은 하나뿐입니다. 셋째 후보가 필요하면 다시 고쳐야 합니다.",
+      "signature": "config.review = { cmd, sameAiCmd?, timeoutSec }\nevidence.review += { fallback?: { why } }",
+      "seam": "test/qh.test.js (qh review를 실제로 돌림), test/review-page.test.js"
+    },
+    {
+      "id": "B",
+      "name": "명령을 순서대로 늘어놓기",
+      "summary": "리뷰 명령 칸에 명령 여러 개를 순서대로 적을 수 있게 합니다. 앞의 것이 실패하면 다음 것을 돌립니다. 두 번째부터 돈 리뷰를 '같은 AI가 봄'으로 표시합니다.",
+      "mermaid": "flowchart LR\n  R[리뷰 시작] --> A1[명령 1]\n  A1 -->|실패| A2[명령 2]\n  A2 -->|실패| A3[명령 3 ...]\n  A1 -->|성공| D[완료]\n  A2 -->|성공| S[완료 + 같은 AI가 봄]\n  A3 -->|전부 실패| E[멈춤]",
+      "gain": "후보를 몇 개든 늘릴 수 있습니다.",
+      "cost": "두 번째 명령이 정말 같은 AI인지 설정이 말해 주지 않습니다(다른 AI를 둘째로 둬도 '같은 AI'로 보임). 지금 필요한 후보는 하나뿐입니다. 칸이 글 또는 목록 두 모양이 됩니다.",
+      "signature": "config.review = { cmd: string | string[], timeoutSec }\nevidence.review += { tried: [{ cmd, why }] }",
+      "seam": "test/qh.test.js, test/review-page.test.js"
+    }
+  ]
+}

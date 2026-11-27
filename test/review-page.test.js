@@ -271,3 +271,10 @@ test('the page shows the spec check result with the checker limit, and nothing w
   assert.match(html, /끼어든 말 1/);
   assert.match(html, /검사자: 에이전트 신고\(기계 확인 아님\)/);
 });
+
+test('a review done by the same-AI command says so and why on the page', () => {
+  const { html } = reviewed({ config: { review: { cmd: 'exit 7', sameAiCmd: resultCmd([]).cmd } } });
+  assert.match(html, /같은 AI가 봄/);
+  assert.match(html, /정상 종료하지 않음/);
+  assert.doesNotMatch(reviewed().html, /같은 AI가 봄/);
+});

@@ -11,7 +11,7 @@ git clone https://github.com/HaeDalWang/VibeRail.git ~/VibeRail
 cd 내-프로젝트 && node ~/VibeRail/bin/qh.js init . && git add -A && git commit -m "chore: qh 설치"
 ```
 
-`init`은 테스트 실행 명령을 못 찾고 `package.json`이 있으면 Node 내장 테스트(`node --test`)를 제안한다. 제안만 하며 테스트 설정은 자동으로 바꾸지 않는다. `init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 있으면 함께 연결한다. 그다음 `node .quality/qh/bin/qh.js ask`로 질문 화면, `measure`로 리포트를 만든다. PR의 AI 리뷰는 `.quality/config.json`의 `review.cmd`로 돈다. `init`은 `kiro-run`이 있으면 그것을, 없고 `claude`가 있으면 Claude Code headless(`claude -p`, 읽기 도구 Read·Grep·Glob만, 답은 구조화 출력으로 받아 `result.json`에 씀)를 채운다.
+`init`은 테스트 실행 명령을 못 찾고 `package.json`이 있으면 Node 내장 테스트(`node --test`)를 제안한다. 제안만 하며 테스트 설정은 자동으로 바꾸지 않는다. `init`은 사람이 쓴 파일을 덮어쓰지 않는다. 커밋하지 않은 변경이 있는 파일을 바꿔야 하거나 같은 규칙·hook이 이미 두 곳에 있으면 아무것도 바꾸지 않고 멈춘다. 코드 지도([code-review-graph](https://github.com/tirth8205/code-review-graph))가 있으면 함께 연결한다. 그다음 `node .quality/qh/bin/qh.js ask`로 질문 화면, `measure`로 리포트를 만든다. PR의 AI 리뷰는 `.quality/config.json`의 `review.cmd`로 돈다. `init`은 `kiro-run`이 있으면 그것을, 없고 `claude`가 있으면 Claude Code headless(`claude -p`, 읽기 도구 Read·Grep·Glob만, 답은 구조화 출력으로 받아 `result.json`에 씀)를 채운다. `review.sameAiCmd`를 넣으면 `review.cmd` 리뷰가 어떤 이유로든 실패할 때(비정상 종료·시간 초과·결과 없음·도구 없음) 그 명령으로 한 번 더 돌리고, 완료 리뷰 화면에 "같은 AI가 봄"과 첫 실패 이유를 보인다. 둘 다 실패하면 환경 오류다. 다른 AI(예: Kiro)의 크레딧이 떨어졌을 때 코드를 쓴 AI의 새 대화로 리뷰를 받으려는 칸이다. Claude Code 리뷰 명령은 `--settings '{"disableAllHooks":true}'`로 이 프로젝트의 hook을 끈다(켜 두면 Stop hook이 리뷰어의 답을 바꾼다).
 
 ## 하는 일
 
