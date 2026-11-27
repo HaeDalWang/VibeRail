@@ -7,7 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { confirmNumber } = require('./confirm');
-const { SECTIONS, decisions, isYes, answerTo } = require('./card');
+const { SECTIONS, pick, without, decisions, isYes, answerTo } = require('./card');
 const { ticketPaths } = require('./cycle');
 
 const DIR = '.quality/evidence/spec-check';
@@ -16,12 +16,12 @@ const RESULT = `${DIR}/result.json`;
 const RECORDS = `${DIR}/records.json`;
 const AXES = { missing: 'from', extra: 'where', noVisible: 'ticket' };
 
-const specOf = (card) => (card.match(/^명세:\s*`?([^`\n]+?)`?\s*$/m) || [])[1] || null;
+const specOf = (card) => pick(card).spec;
 const readText = (root, rel) => (fs.existsSync(path.join(root, rel)) ? fs.readFileSync(path.join(root, rel), 'utf8') : '');
 
 // The card without the sections that change because of the check itself (answers, the loop round).
 // ponytail: a grilling answer added after a pass does not trigger a rerun; bind 판단 필요 too if that bites.
-const checkedCard = (card) => card.split(/^(?=## )/m).filter((s) => !s.startsWith(`## ${SECTIONS.decisions}`) && !s.startsWith(`## ${SECTIONS.loop}`)).join('');
+const checkedCard = (card) => without(card, [SECTIONS.decisions, SECTIONS.loop]);
 
 // A ticket without its progress: ticked boxes and the AFK/HITL status are set during the loop, not new content.
 const ticketContent = (text) => text.replace(/^(\s*[-*] )\[[xX]\]/gm, '$1[ ]').replace(/^\*\*Status:\*\*.*$/gm, '');
