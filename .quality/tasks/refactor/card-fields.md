@@ -25,6 +25,7 @@
 이유: 읽는 장소가 한곳이므로
 설계안: .scratch/card-fields/interface.json
 명세: .scratch/card-fields/spec.md
+작업: .scratch/card-fields/issues/01-pick-and-spec-link.md, .scratch/card-fields/issues/02-picked-option-everywhere.md, .scratch/card-fields/issues/03-card-without-sections.md
 
 ## 테스트 위치(seam)
 test/card.test.js
