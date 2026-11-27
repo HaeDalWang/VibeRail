@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] `items` returns the list lines of a section with markers removed and drops non-list lines, for `-`, `*`, `+` at any indentation
-- [ ] The section names include success conditions and unconfirmed
-- [ ] The confirmation number check, the review page and the cycle's reason check get 안 and 이유 only from the card module; no copied line splitter remains; all existing tests pass
-- [ ] Visible: the review page for a card written with `- 안:` and `- 이유:` shows that 안 and 이유 in the picked option step
+- [x] `items` returns the list lines of a section with markers removed and drops non-list lines, for `-`, `*`, `+` at any indentation
+- [x] The section names include success conditions and unconfirmed
+- [x] The confirmation number check, the review page and the cycle's reason check get 안 and 이유 only from the card module; no copied line splitter remains; all existing tests pass
+- [x] Visible: the review page for a card written with `- 안:` and `- 이유:` shows that 안 and 이유 in the picked option step

@@ -41,6 +41,8 @@ test/card.test.js
 - 없는 칸·줄은 null → test/card.test.js "a missing section or field is null"
 - 이름 준 칸만 빼고 나머지는 그대로 → test/card.test.js "without removes exactly the named sections and leaves the rest unchanged"
 - 실제 카드 모두에서 옛 자르기와 같은 결과 → test/card.test.js "without matches the old spec check cutter on every real task card"
+- 칸의 목록 줄을 표시 빼고 돌려줌 → test/card.test.js "items gives the list lines of a section without markers, at any indentation"
+- 성공 조건·미확인 칸 이름이 카드 모듈에 → test/card.test.js "the section names include success conditions and unconfirmed"
 
 ## 판단 필요
 - [x] 명세 연결 줄('명세: 파일')을 카드의 어디에서 찾을까요? · 설계 결정 칸 안만

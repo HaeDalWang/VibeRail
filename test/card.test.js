@@ -227,3 +227,17 @@ test('without matches the old spec check cutter on every real task card', () => 
     assert.strictEqual(without(card, ['판단 필요', '루프']), old(card), f);
   }
 });
+
+test('items gives the list lines of a section without markers, at any indentation', () => {
+  const { items, SECTIONS } = require('../lib/card');
+  const card = `# 카드\n## ${SECTIONS.success}\n- 첫째 → test/a.test.js "a"\n  * 둘째\n+ 셋째\n그냥 글\n\n## ${SECTIONS.unsure}\n- 모름\n`;
+  assert.deepStrictEqual(items(card, SECTIONS.success), ['첫째 → test/a.test.js "a"', '둘째', '셋째']);
+  assert.deepStrictEqual(items(card, SECTIONS.unsure), ['모름']);
+  assert.deepStrictEqual(items(card, SECTIONS.loop), []);
+});
+
+test('the section names include success conditions and unconfirmed', () => {
+  const { SECTIONS } = require('../lib/card');
+  assert.strictEqual(SECTIONS.success, '성공 조건 → 검사');
+  assert.strictEqual(SECTIONS.unsure, '미확인');
+});
