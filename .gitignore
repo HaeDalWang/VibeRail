@@ -1,14 +1,9 @@
 node_modules/
-.quality/evidence/
 # Added by code-review-graph
 .code-review-graph/
 # 코드 지도 MCP 설정: 내 절대 경로가 들어가 로컬에만 둔다
 .mcp.json
 .kiro/settings/mcp.json
-# 측정 결과는 로컬에만
-.quality/metrics.csv
-.quality/reports/
 *.bak
 # 개발용 에이전트 지침: 로컬에만
 CLAUDE.local.md
-.quality/me.md

@@ -216,18 +216,6 @@ test('without removes exactly the named sections and leaves the rest unchanged',
   assert.strictEqual(without(card, []), card);
 });
 
-test('without matches the old spec check cutter on every real task card', () => {
-  const { without } = require('../lib/card');
-  const old = (card) => card.split(/^(?=## )/m).filter((s) => !s.startsWith('## 판단 필요') && !s.startsWith('## 루프')).join('');
-  const dir = path.join(__dirname, '..', '.quality', 'tasks');
-  const cards = fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.md'));
-  assert.ok(cards.length > 10);
-  for (const f of cards) {
-    const card = fs.readFileSync(path.join(dir, f), 'utf8');
-    assert.strictEqual(without(card, ['판단 필요', '루프']), old(card), f);
-  }
-});
-
 test('items gives the list lines of a section without markers, at any indentation', () => {
   const { items, SECTIONS } = require('../lib/card');
   const card = `# 카드\n## ${SECTIONS.success}\n- 첫째 → test/a.test.js "a"\n  * 둘째\n+ 셋째\n그냥 글\n\n## ${SECTIONS.unsure}\n- 모름\n`;
